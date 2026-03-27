@@ -16,16 +16,6 @@ import Link from "next/link";
 
 const slidesData = [
   {
-    video: "/videos/video-3.mp4",
-    image:
-      "https://images.unsplash.com/photo-1564507592333-c60657eea523?q=80&w=3871&auto=format&fit=crop",
-    titleKey: "hero_title_taj",
-    subtitleKey: "hero_subtitle_taj",
-    categoryKey: "hero_category_taj",
-    location: "Agra, India",
-    stats: { tours: "100+", guides: "2000+", rating: "4.9" },
-  },
-  {
     video: "/videos/video-1.mp4",
     image:
       "https://images.unsplash.com/photo-1587474260584-136574528ed5?q=80&w=3870&auto=format&fit=crop",
@@ -44,16 +34,6 @@ const slidesData = [
     categoryKey: "hero_category_kerala",
     location: "Kerala, India",
     stats: { tours: "100+", guides: "2000+", rating: "4.9" },
-  },
-  {
-    video: "/videos/video-3.mp4",
-    image:
-      "https://images.unsplash.com/photo-1532664189809-02133fee698d?q=80&w=3870&auto=format&fit=crop",
-    titleKey: "hero_title_varanasi",
-    subtitleKey: "hero_subtitle_varanasi",
-    categoryKey: "hero_category_varanasi",
-    location: "Varanasi, India",
-    stats: { tours: "100+", guides: "2000+", rating: "4.7" },
   },
   {
     video: "/videos/video-1.mp4",

@@ -80,6 +80,3 @@ test-results.xml
 *.orig
 *.rej
 *.map
-
-*.mp4
-videos/
