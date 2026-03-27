@@ -1,0 +1,261 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* --- Red / Black / White Theme Palette --- */
+  --background: #ffffff; /* White background */
+  --foreground: #121212; /* Near black text */
+
+  --card: #f8f8f8; /* Light card background */
+  --card-foreground: #121212;
+
+  --popover: #ffffff;
+  --popover-foreground: oklch(0.18 0 0);
+
+  --primary: oklch(0.6 0.25 25); /* Strong Red */
+  --primary-foreground: oklch(1 0 0); /* White text on red */
+
+  --secondary: oklch(0.25 0 0); /* Dark black/gray */
+  --secondary-foreground: oklch(1 0 0);
+
+  --muted: #ffffff; /* Light gray background */
+  --muted-foreground: oklch(0.35 0 0);
+
+  --accent: #f4acb6; /* Red accent */
+  --accent-foreground: oklch(1 0 0);
+
+  --destructive: oklch(0.55 0.22 25); /* Slightly darker red */
+  --destructive-foreground: oklch(1 0 0);
+
+  --border: oklch(0.9 0 0);
+  --input: oklch(0.98 0 0);
+  --ring: oklch(0.6 0.25 25);
+
+  --chart-1: oklch(0.6 0.25 25);
+  --chart-2: oklch(0.3 0 0);
+  --chart-3: oklch(0.85 0 0);
+  --chart-4: oklch(0.2 0 0);
+  --chart-5: oklch(0.95 0 0);
+
+  --radius: 0.5rem;
+
+  --sidebar: oklch(0.98 0 0);
+  --sidebar-foreground: oklch(0.18 0 0);
+  --sidebar-primary: oklch(0.6 0.25 25);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.25 0 0);
+  --sidebar-accent-foreground: oklch(1 0 0);
+  --sidebar-border: oklch(0.9 0 0);
+  --sidebar-ring: oklch(0.6 0.25 25);
+}
+
+.dark {
+  --background: oklch(0.1 0 0); /* Deep black */
+  --foreground: oklch(0.98 0 0); /* White text */
+
+  --card: oklch(0.15 0 0);
+  --card-foreground: oklch(0.98 0 0);
+
+  --popover: oklch(0.15 0 0);
+  --popover-foreground: oklch(0.98 0 0);
+
+  --primary: oklch(0.65 0.25 25); /* Vibrant red */
+  --primary-foreground: oklch(1 0 0);
+
+  --secondary: oklch(0.2 0 0); /* Dark gray/black */
+  --secondary-foreground: oklch(0.98 0 0);
+
+  --muted: oklch(0.2 0 0);
+  --muted-foreground: oklch(0.7 0 0);
+
+  --accent: oklch(0.65 0.25 25);
+  --accent-foreground: oklch(1 0 0);
+
+  --destructive: oklch(0.45 0.2 25);
+  --destructive-foreground: oklch(1 0 0);
+
+  --border: oklch(0.25 0 0);
+  --input: oklch(0.25 0 0);
+  --ring: oklch(0.65 0.25 25);
+
+  --chart-1: oklch(0.65 0.25 25);
+  --chart-2: oklch(0.85 0 0);
+  --chart-3: oklch(0.3 0 0);
+  --chart-4: oklch(0.2 0 0);
+  --chart-5: oklch(0.95 0 0);
+
+  --sidebar: oklch(0.15 0 0);
+  --sidebar-foreground: oklch(0.98 0 0);
+  --sidebar-primary: oklch(0.65 0.25 25);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.25 0 0);
+  --sidebar-accent-foreground: oklch(1 0 0);
+  --sidebar-border: oklch(0.25 0 0);
+  --sidebar-ring: oklch(0.65 0.25 25);
+}
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* --- Custom Animations --- */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.8s ease-out forwards;
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.8s ease-out forwards;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.8s ease-out forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.6s ease-out forwards;
+}
+
+.animate-delay-200 { animation-delay: 0.2s; }
+.animate-delay-400 { animation-delay: 0.4s; }
+.animate-delay-600 { animation-delay: 0.6s; }
+.animate-delay-800 { animation-delay: 0.8s; }
+
+/* --- Red / Black / White Themed Gradients --- */
+.red-gradient {
+  background: linear-gradient(135deg, oklch(0.6 0.25 25) 0%, oklch(0.25 0 0) 100%);
+}
+
+.black-gradient {
+  background: linear-gradient(135deg, oklch(0.25 0 0) 0%, oklch(0.1 0 0) 100%);
+}
+
+.white-gradient {
+  background: linear-gradient(135deg, oklch(1 0 0) 0%, oklch(0.9 0 0) 100%);
+}
+
+.rdp-day_today:not(.rdp-day_selected) {
+  background-color: transparent !important;
+  font-weight: 600;
+  color: hsl(var(--primary)) !important; /* Use your primary color for the text */
+  border: 1.5px solid hsl(var(--primary) / 0.5) !important; /* Outline with a semi-transparent primary color */
+}
+
+/* Style for the selected date(s): solid red background */
+.rdp-day_selected, .rdp-day_selected:focus-visible, .rdp-day_selected:hover {
+  background-color: hsl(var(--destructive)) !important; /* Use destructive (red) for background */
+  color: hsl(var(--destructive-foreground)) !important; /* White text for contrast */
+}
+
+/* Style for dates within a selected range */
+.rdp-day_range_middle {
+    background-color: hsl(var(--destructive) / 0.1) !important; /* A very light red for the in-between dates */
+    border-radius: 0 !important;
+    color: hsl(var(--foreground));
+}
+.rdp-day_range_middle.rdp-day_today {
+    background-color: hsl(var(--destructive) / 0.1) !important;
+    color: hsl(var(--primary)) !important;
+    border-color: transparent !important;
+}
+
+
+/* Style for the start of the range */
+.rdp-day_range_start {
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+}
+
+/* Style for the end of the range */
+.rdp-day_range_end {
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+}

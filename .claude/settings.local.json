@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /c/Users/nites/OneDrive/Desktop/Tour/frontend/components -type f \\\\\\(-name *.ts -o -name *.tsx -o -name *.js -o -name *.jsx \\\\\\))",
+      "Bash(grep -r \"RAZORPAY\\\\|API_KEY\\\\|SECRET\\\\|TOKEN\" /c/Users/nites/OneDrive/Desktop/Tour/frontend --include=*.ts --include=*.tsx --include=*.js --include=*.jsx --include=.env* -n)",
+      "Bash(xargs grep:*)",
+      "Bash(grep -r \"unavailableDates\\\\|availability\" /c/Users/nites/OneDrive/Desktop/Tour/backend/src --include=*.ts)",
+      "Bash(grep -r /api/guides /c/Users/nites/OneDrive/Desktop/Tour/backend/src --include=*.ts)"
+    ]
+  }
+}
