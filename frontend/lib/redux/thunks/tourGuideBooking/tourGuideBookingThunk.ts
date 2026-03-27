@@ -32,7 +32,7 @@ export const createAndVerifyBooking = createAsyncThunk<
     // Step 1: Create the Razorpay order from our backend
     console.log("Creating Razorpay order for amount:", bookingData.totalPrice);
     const orderResponse = await apiService.post<{ id: string; amount: number }>(
-      "/api/tourguide/create-order",
+      "/tourguide/create-order",
       { totalPrice: bookingData.totalPrice }
     );
 
@@ -62,7 +62,7 @@ export const createAndVerifyBooking = createAsyncThunk<
             };
 
             const finalApiResponse = await apiService.post<Booking>(
-              "/api/tourguide/verify-and-create",
+              "/tourguide/verify-and-create",
               verificationPayload
             );
             
@@ -105,7 +105,7 @@ export const createFinalPaymentOrder = createAsyncThunk(
     try {
       // The backend response is { success: true, data: { ...order_details } }
       const response = await apiService.post<{ data: any }>(
-        `/api/tourguide/${bookingId}/create-final-order`
+        `/tourguide/${bookingId}/create-final-order`
       );
       if (response.success && response.data) {
         return response.data; // This will be the Razorpay order object
@@ -127,7 +127,7 @@ export const verifyFinalPayment = createAsyncThunk<
     try {
       const { bookingId, ...verificationDetails } = paymentData;
       const response = await apiService.post<{ data: Booking }>(
-        `/api/tourguide/${bookingId}/verify-final-payment`,
+        `/tourguide/${bookingId}/verify-final-payment`,
         verificationDetails
       );
       if (response.success && response.data) {

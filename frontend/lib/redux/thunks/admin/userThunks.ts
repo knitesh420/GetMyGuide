@@ -34,7 +34,7 @@ export const adminGetAllTourists = createAsyncThunk<
   "admin/getAllTourists",
   async ({ page = 1, limit = 10, search = "" }, { rejectWithValue }) => {
     try {
-      const response = await apiService.get<TouristsResponse>("/api/user/tourists", {
+      const response = await apiService.get<TouristsResponse>("/user/tourists", {
         params: { page, limit, search },
       });
       return response.data!;
@@ -49,7 +49,7 @@ export const deleteTourist = createAsyncThunk<string, string>(
   "admin/deleteTourist",
   async (touristId, { rejectWithValue }) => {
     try {
-      await apiService.delete(`/api/user/${touristId}`);
+      await apiService.delete(`/user/${touristId}`);
       return touristId;
     } catch (err: any) {
       return rejectWithValue(handleError(err));

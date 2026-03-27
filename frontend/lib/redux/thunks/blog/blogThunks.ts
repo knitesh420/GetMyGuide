@@ -5,7 +5,7 @@ import { apiService } from "@/lib/service/api";
 import { Blog, BlogListResponse } from "@/lib/data";
 
 // The resource path for the blog API. The base URL is handled by apiService.
-const RESOURCE_PATH = "/api/blog";
+const RESOURCE_PATH = "/blog";
 
 /**
  * Fetches a paginated list of all blogs.

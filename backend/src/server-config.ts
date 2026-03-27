@@ -10,9 +10,8 @@ import { IS_PRODUCTION, IS_WINDOWS, Path } from './config/const';
 const allowlist = [
 	'http://localhost:5173',
 	'http://localhost:3000',
-	'https://keethjewels.com',
-	'https://www.keethjewels.com',
-	'https://admin.keethjewels.com',
+	'https://getmyguide.in',
+	'https://www.getmyguide.in',
 ];
 
 const corsOptionsDelegate = (req: any, callback: any) => {
@@ -74,7 +73,7 @@ export default function (app: Express) {
 		next();
 	});
 
-	app.use('/api', routes);
+	app.use('/', routes);
 
 	app.route('/media/:path/:filename').get((req, res, next) => {
 		try {

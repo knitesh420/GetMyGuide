@@ -5,14 +5,14 @@ import { apiService } from "@/lib/service/api";
 /**
  * @desc    Dashboard statistics fetch karne ke liye ek asynchronous thunk.
  *          Yeh user ke role ke hisaab se (admin, guide, user) data laata hai.
- * @route   GET /api/dashboard/stats
+ * @route   GET /dashboard/stats
  */
 export const fetchDashboardStats = createAsyncThunk(
   "dashboard/fetchStats",
   async (_, { rejectWithValue }) => {
     try {
       // API endpoint ko call karein
-      const response = await apiService.get("/api/dashboard/stats");
+      const response = await apiService.get("/dashboard/stats");
 
       // Agar response successful hai aur data maujood hai, to data return karein
       if (response.success && response.data) {

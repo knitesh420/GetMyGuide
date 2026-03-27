@@ -48,7 +48,7 @@ export const fetchCustomTourFormData = createAsyncThunk<FormDataPayload>(
   async (_, { rejectWithValue }) => {
     try {
       const response = await apiService.get<FormDataPayload>(
-        "/api/custom-tour-requests/form-data"
+        "/custom-tour-requests/form-data"
       );
       if (response.success && response.data) {
         return response.data;
@@ -65,7 +65,7 @@ export const submitCustomTourRequest = createAsyncThunk(
   async (requestData: SubmitPayload, { rejectWithValue }) => {
     try {
       const response = await apiService.post(
-        "/api/custom-tour-requests",
+        "/custom-tour-requests",
         requestData
       );
       if (response.success && response.data) {
@@ -82,7 +82,7 @@ export const fetchAllCustomTourRequests = createAsyncThunk(
   "customTour/fetchAll",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiService.get("/api/custom-tour-requests");
+      const response = await apiService.get("/custom-tour-requests");
       if (response.success && response.data) {
         return response.data;
       }
@@ -98,7 +98,7 @@ export const fetchCustomTourRequestById = createAsyncThunk(
   async (requestId: string, { rejectWithValue }) => {
     try {
       const response = await apiService.get(
-        `/api/custom-tour-requests/${requestId}`
+        `/custom-tour-requests/${requestId}`
       );
       if (response.success && response.data) {
         return response.data;
@@ -119,7 +119,7 @@ export const updateCustomTourRequestStatus = createAsyncThunk(
   ) => {
     try {
       const response = await apiService.patch(
-        `/api/custom-tour-requests/${requestId}/status`,
+        `/custom-tour-requests/${requestId}/status`,
         { status, quoteAmount, adminComment }
       );
       if (response.success && response.data) {
@@ -137,7 +137,7 @@ export const deleteCustomTourRequest = createAsyncThunk(
   async (requestId: string, { rejectWithValue }) => {
     try {
       const response = await apiService.delete(
-        `/api/custom-tour-requests/${requestId}`
+        `/custom-tour-requests/${requestId}`
       );
       if (response.success) {
         return requestId;
@@ -152,7 +152,7 @@ export const fetchMyCustomRequests = createAsyncThunk(
   "customTour/fetchMy",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiService.get("/api/custom-tour-requests/my-requests");
+      const response = await apiService.get("/custom-tour-requests/my-requests");
       if (response.success && response.data) return response.data;
       throw new Error(response.message || "Failed to fetch your requests");
     } catch (error: any) {

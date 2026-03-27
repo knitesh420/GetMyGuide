@@ -22,7 +22,7 @@ interface Language {
 
 async function getLocation(id: string): Promise<Location | null> {
     try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/locations/${id}`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/locations/${id}`, {
             cache: "no-store",
         });
 
@@ -40,7 +40,7 @@ async function getLocation(id: string): Promise<Location | null> {
 
 async function getLanguages(): Promise<Language[]> {
     try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/languages`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/languages`, {
             cache: "no-store",
         });
 

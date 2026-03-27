@@ -7,7 +7,7 @@ export const fetchAdminLocations = createAsyncThunk<AdminLocation[]>(
   'admin/fetchLocations',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiService.get<AdminLocation[]>('/api/locations');
+      const response = await apiService.get<AdminLocation[]>('/locations');
       return response.data || [];
     } catch (error: any) {
       return rejectWithValue(error.message || 'Failed to fetch locations');
@@ -19,7 +19,7 @@ export const deleteAdminLocation = createAsyncThunk<string, string>(
   'admin/deleteLocation',
   async (locationId, { rejectWithValue }) => {
     try {
-      await apiService.delete(`/api/locations/${locationId}`);
+      await apiService.delete(`/locations/${locationId}`);
       return locationId;
     } catch (error: any) {
       return rejectWithValue(error.message || 'Failed to delete location');
@@ -35,7 +35,7 @@ export const addAdminLocation = createAsyncThunk<AdminLocation, FormData>(
   async (locationData, { rejectWithValue }) => {
     try {
       const response = await apiService.post<AdminLocation>(
-        '/api/locations',
+        '/locations',
         locationData,
         {
           headers: {
@@ -56,7 +56,7 @@ export const updateAdminLocation = createAsyncThunk<AdminLocation, { id: string;
   async ({ id, locationData }, { rejectWithValue }) => {
     try {
       const response = await apiService.put<AdminLocation>(
-        `/api/locations/${id}`,
+        `/locations/${id}`,
         locationData,
         {
           headers: {

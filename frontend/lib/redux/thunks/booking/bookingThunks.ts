@@ -41,7 +41,7 @@ export const createRazorpayOrder = createAsyncThunk(
   async (orderData: CreateRazorpayOrderData, { rejectWithValue }) => {
     try {
       const response = await apiService.post(
-        "/api/bookings/create-order",
+        "/bookings/create-order",
         orderData
       );
       if (response.success && response.data) {
@@ -59,7 +59,7 @@ export const verifyPaymentAndCreateBooking = createAsyncThunk(
   async (verificationData: VerifyPaymentData, { rejectWithValue }) => {
     try {
       const response = await apiService.post(
-        "/api/bookings/verify",
+        "/bookings/verify",
         verificationData
       );
       if (response.success && response.data) {
@@ -77,7 +77,7 @@ export const createRemainingPaymentOrder = createAsyncThunk(
   async (bookingId: string, { rejectWithValue }) => {
     try {
       const response = await apiService.post(
-        `/api/bookings/${bookingId}/create-remaining-order`
+        `/bookings/${bookingId}/create-remaining-order`
       );
       if (response.success && response.data) {
         return response.data;
@@ -96,7 +96,7 @@ export const verifyRemainingPayment = createAsyncThunk(
   async (paymentData: VerifyRemainingPaymentData, { rejectWithValue }) => {
     try {
       const response = await apiService.post(
-        `/api/bookings/${paymentData.bookingId}/verify-remaining-payment`,
+        `/bookings/${paymentData.bookingId}/verify-remaining-payment`,
         paymentData
       );
       if (response.success && response.data) {
@@ -114,7 +114,7 @@ export const fetchMyBookings = createAsyncThunk<Booking[]>(
   async (_, { rejectWithValue }) => {
     try {
       const response = await apiService.get<Booking[]>(
-        "/api/bookings/my-bookings"
+        "/bookings/my-bookings"
       );
       return response.data || [];
     } catch (error: any) {
@@ -129,7 +129,7 @@ export const fetchAllBookings = createAsyncThunk<Booking[]>(
   async (_, { rejectWithValue }) => {
     try {
       // Assuming you have an admin endpoint to get all bookings
-      const response = await apiService.get<Booking[]>("/api/bookings/all");
+      const response = await apiService.get<Booking[]>("/bookings/all");
       return response.data || [];
     } catch (error: any) {
       return handleThunkError(error, rejectWithValue);
@@ -143,7 +143,7 @@ export const fetchGuideBookings = createAsyncThunk<Booking[]>(
   async (_, { rejectWithValue }) => {
     try {
       const response = await apiService.get<Booking[]>(
-        "/api/bookings/guide-bookings"
+        "/bookings/guide-bookings"
       );
       return response.data || [];
     } catch (error: any) {
@@ -157,7 +157,7 @@ export const fetchBookingById = createAsyncThunk<Booking, string>(
   async (bookingId, { rejectWithValue }) => {
     try {
       const response = await apiService.get<Booking>(
-        `/api/bookings/${bookingId}`
+        `/bookings/${bookingId}`
       );
       if (response.success && response.data) {
         return response.data;
@@ -175,7 +175,7 @@ export const cancelAndRefundBooking = createAsyncThunk<Booking, string>(
   async (bookingId, { rejectWithValue }) => {
     try {
       const response = await apiService.post(
-        `/api/bookings/${bookingId}/cancel`
+        `/bookings/${bookingId}/cancel`
       );
       if (response.success && response.data) {
         return response.data;
@@ -195,7 +195,7 @@ export const updateBookingStatus = createAsyncThunk<
   async ({ bookingId, status }, { rejectWithValue }) => {
     try {
       const response = await apiService.patch(
-        `/api/bookings/${bookingId}/status`,
+        `/bookings/${bookingId}/status`,
         { status }
       );
       if (response.success && response.data) {
@@ -216,7 +216,7 @@ export const assignSubstituteGuide = createAsyncThunk<
   async ({ bookingId, substituteGuideId }, { rejectWithValue }) => {
     try {
       const response = await apiService.patch(
-        `/api/bookings/${bookingId}/assign-substitute`,
+        `/bookings/${bookingId}/assign-substitute`,
         { substituteGuideId }
       );
       if (response.success && response.data) {
@@ -233,7 +233,7 @@ export const deleteBooking = createAsyncThunk<string, string>(
   "bookings/delete",
   async (bookingId, { rejectWithValue }) => {
     try {
-      const response = await apiService.delete(`/api/bookings/${bookingId}`);
+      const response = await apiService.delete(`/bookings/${bookingId}`);
       if (response.success) {
         return bookingId;
       }

@@ -31,7 +31,7 @@ export const getOwnProfile = createAsyncThunk<User, void>(
   "user/getOwnProfile",
   async (_, { rejectWithValue }) => {
     try {
-      const result = await apiService.get("/api/users/me");
+      const result = await apiService.get("/users/me");
       if (!result.success) return rejectWithValue(result.message);
       return getApiData<User>(result);
     } catch (err: any) {
@@ -45,7 +45,7 @@ export const updateOwnProfile = createAsyncThunk<User, UpdateUserRequest>(
   "user/updateOwnProfile",
   async (data, { rejectWithValue }) => {
     try {
-      const result = await apiService.put("/api/users/me", data);
+      const result = await apiService.put("/users/me", data);
       if (!result.success) return rejectWithValue(result.message);
       return getApiData<User>(result);
     } catch (err: any) {
@@ -59,7 +59,7 @@ export const getAllUsers = createAsyncThunk<ApiResponse<User[]>, GetUsersParams 
   "user/getAllUsers",
   async (params = {}, { rejectWithValue }) => {
     try {
-      const result = await apiService.get("/api/users", { params });
+      const result = await apiService.get("/users", { params });
       if (!result.success) return rejectWithValue(result.message);
       return result;
     } catch (err: any) {
@@ -73,7 +73,7 @@ export const getUserById = createAsyncThunk<User, string>(
   "user/getUserById",
   async (userId, { rejectWithValue }) => {
     try {
-      const result = await apiService.get(`/api/users/${userId}`);
+      const result = await apiService.get(`/users/${userId}`);
       if (!result.success) return rejectWithValue(result.message);
       return getApiData<User>(result);
     } catch (err: any) {
@@ -87,7 +87,7 @@ export const getUsersByRole = createAsyncThunk<User[], string>(
   "user/getUsersByRole",
   async (role, { rejectWithValue }) => {
     try {
-      const result = await apiService.get(`/api/users/role/${role}`);
+      const result = await apiService.get(`/users/role/${role}`);
       if (!result.success) return rejectWithValue(result.message);
       return getApiData<User[]>(result);
     } catch (err: any) {
@@ -101,7 +101,7 @@ export const createUser = createAsyncThunk<User, CreateUserRequest>(
   "user/createUser",
   async (userData, { rejectWithValue }) => {
     try {
-      const result = await apiService.post("/api/users", userData);
+      const result = await apiService.post("/users", userData);
       if (!result.success) return rejectWithValue(result.message);
       return getApiData<User>(result);
     } catch (err: any) {
@@ -115,7 +115,7 @@ export const updateUserById = createAsyncThunk<User, { userId: string; data: Upd
   "user/updateUserById",
   async ({ userId, data }, { rejectWithValue }) => {
     try {
-      const result = await apiService.put(`/api/users/${userId}`, data);
+      const result = await apiService.put(`/users/${userId}`, data);
       if (!result.success) return rejectWithValue(result.message);
       return getApiData<User>(result);
     } catch (err: any) {
@@ -129,7 +129,7 @@ export const deleteUser = createAsyncThunk<string, string>(
   "user/deleteUser",
   async (userId, { rejectWithValue }) => {
     try {
-      const result = await apiService.delete(`/api/users/${userId}`);
+      const result = await apiService.delete(`/users/${userId}`);
       if (!result.success) return rejectWithValue(result.message);
       return userId;
     } catch (err: any) {
@@ -143,7 +143,7 @@ export const searchResources = createAsyncThunk<SearchResults, string>(
   "user/searchResources",
   async (query, { rejectWithValue }) => {
     try {
-      const result = await apiService.get(`/api/users/search?query=${encodeURIComponent(query)}`);
+      const result = await apiService.get(`/users/search?query=${encodeURIComponent(query)}`);
       if (!result.success) return rejectWithValue(result.message);
       return result.data;
     } catch (err: any) {

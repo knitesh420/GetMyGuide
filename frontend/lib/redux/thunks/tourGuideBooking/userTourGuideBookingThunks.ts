@@ -36,7 +36,7 @@ export const fetchUserBookings = createAsyncThunk<
 >("userBookings/fetch", async ({ page, limit }, { rejectWithValue }) => {
   try {
     const response = await apiService.get<FetchResponse>(
-      `/api/tourguide/user-bookings?page=${page}&limit=${limit}`
+      `/tourguide/user-bookings?page=${page}&limit=${limit}`
     );
     // ✅ CORRECTION: Return the entire response object, not just the .data property.
     // The slice needs the whole object to get both .data and .pagination.
@@ -55,7 +55,7 @@ export const cancelBooking = createAsyncThunk<
   try {
     // Assuming the cancel endpoint returns the updated booking object directly in its `data` field
     const response = await apiService.post<{ data: Booking }>(
-      `/api/tourguide/${bookingId}/cancel`,
+      `/tourguide/${bookingId}/cancel`,
       { reason }
     );
     return response.data!;
@@ -71,7 +71,7 @@ export const fetchAllBookingsAdmin = createAsyncThunk<
 >("userBookings/fetchAllAdmin", async ({ page, limit }, { rejectWithValue }) => { // Note the unique name: "userBookings/fetchAllAdmin"
   try {
     const response = await apiService.get<FetchResponse>(
-      `/api/tourguide/all?page=${page}&limit=${limit}`
+      `/tourguide/all?page=${page}&limit=${limit}`
     );
     return response;
   } catch (error: any) {
@@ -87,7 +87,7 @@ export const cancelBookingByAdmin = createAsyncThunk<
 >("userBookings/cancelByAdmin", async ({ bookingId, reason }, { rejectWithValue }) => { // Note the unique name: "userBookings/cancelByAdmin"
   try {
     const response = await apiService.post<{ data: Booking }>(
-      `/api/tourguide/${bookingId}/cancel`,
+      `/tourguide/${bookingId}/cancel`,
       { reason }
     );
     return response.data!;
@@ -103,7 +103,7 @@ export const reassignGuideThunk = createAsyncThunk<
 >("userBookings/reassignGuide", async ({ bookingId, newGuideId }, { rejectWithValue }) => {
   try {
     const response = await apiService.patch<{ data: Booking }>(
-      `/api/tourguide/${bookingId}/reassign-guide`,
+      `/tourguide/${bookingId}/reassign-guide`,
       { newGuideId }
     );
     return response.data!;
@@ -124,7 +124,7 @@ export const updateBookingStatusThunk = createAsyncThunk<
 >("userBookings/updateStatus", async ({ bookingId, status }, { rejectWithValue }) => {
   try {
     const response = await apiService.patch<{ data: Booking }>(
-      `/api/tourguide/${bookingId}/status`,
+      `/tourguide/${bookingId}/status`,
       { status } // The body just needs the new status
     );
     return response.data!;
@@ -135,7 +135,7 @@ export const updateBookingStatusThunk = createAsyncThunk<
 
 /**
  * @desc    Fetches all bookings assigned to the currently logged-in guide.
- * @route   GET /api/guides/my-bookings
+ * @route   GET /guides/my-bookings
  */
 export const fetchMyGuideBookingsThunk = createAsyncThunk<
   Booking[], // Returns an array of bookings
@@ -145,7 +145,7 @@ export const fetchMyGuideBookingsThunk = createAsyncThunk<
   try {
     // Note: The backend for this returns the array directly, not nested in a `data` property.
     const response = await apiService.get<Booking[]>(
-      '/api/guides/my-bookings'
+      '/guides/my-bookings'
     );
     return response;
   } catch (error: any) {
@@ -160,7 +160,7 @@ export const fetchMyGuideBookingByIdThunk = createAsyncThunk<
 >("userBookings/fetchMyGuideBookingById", async (bookingId, { rejectWithValue }) => {
   try {
     const response = await apiService.get<Booking>(
-      `/api/guides/my-bookings/${bookingId}`
+      `/guides/my-bookings/${bookingId}`
     );
     return response;
   } catch (error: any) {
@@ -175,7 +175,7 @@ export const createFinalPaymentOrder = createAsyncThunk<any, string, { rejectVal
   "userBookings/createFinalOrder",
   async (bookingId, { rejectWithValue }) => {
     try {
-      const response = await apiService.post<{ data: any }>(`/api/tourguide/${bookingId}/create-final-order`);
+      const response = await apiService.post<{ data: any }>(`/tourguide/${bookingId}/create-final-order`);
       return response.data; // Returns the full Razorpay order object
     } catch (error: any) {
       return handleThunkError(error, rejectWithValue);
@@ -193,7 +193,7 @@ export const verifyFinalPayment = createAsyncThunk<
   async (paymentData, { rejectWithValue }) => {
     try {
       const { bookingId, ...verificationDetails } = paymentData;
-      const response = await apiService.post<{ data: Booking }>(`/api/tourguide/${bookingId}/verify-final-payment`, verificationDetails);
+      const response = await apiService.post<{ data: Booking }>(`/tourguide/${bookingId}/verify-final-payment`, verificationDetails);
       return response.data; // Returns the updated booking object on success
     } catch (error: any) {
       return handleThunkError(error, rejectWithValue);
@@ -206,7 +206,7 @@ export const fetchTourGuideBookingById = createAsyncThunk<Booking, string, { rej
   "userBookings/fetchById",
   async (bookingId, { rejectWithValue }) => {
     try {
-      const response = await apiService.get<{ data: Booking }>(`/api/tourguide/${bookingId}`);
+      const response = await apiService.get<{ data: Booking }>(`/tourguide/${bookingId}`);
       return response.data;
     } catch (error: any) {
       return handleThunkError(error, rejectWithValue);

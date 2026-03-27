@@ -62,7 +62,7 @@ export default function ServicesPage() {
         }
       });
 
-      const res = await fetch(`${API_BASE_URL}/api/package`, {
+      const res = await fetch(`${API_BASE_URL}/package`, {
         method: "POST",
         body: formData,
         headers: {
@@ -113,7 +113,7 @@ export default function ServicesPage() {
     if (!confirmed) return;
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/package/${packageId}`, {
+      const res = await fetch(`${API_BASE_URL}/package/${packageId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,

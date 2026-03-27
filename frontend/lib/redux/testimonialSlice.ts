@@ -83,7 +83,7 @@ export const fetchTestimonials = createAsyncThunk<
         queryParams.append("visible", String(params.visible));
 
       const response = await fetch(
-        `${API_BASE_URL}/api/testimonials?${queryParams.toString()}`,
+        `${API_BASE_URL}/testimonials?${queryParams.toString()}`,
         {
           credentials: 'include',
           headers: {
@@ -122,7 +122,7 @@ export const createTestimonial = createAsyncThunk(
         }
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/testimonials`, {
+      const response = await fetch(`${API_BASE_URL}/testimonials`, {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -166,7 +166,7 @@ export const updateTestimonial = createAsyncThunk(
         }
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/testimonials/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/testimonials/${id}`, {
         method: 'PUT',
         credentials: 'include',
         headers: {
@@ -196,7 +196,7 @@ export const deleteTestimonial = createAsyncThunk(
   "testimonials/deleteTestimonial",
   async (id: string, { rejectWithValue }) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/testimonials/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/testimonials/${id}`, {
         method: 'DELETE',
         credentials: 'include',
         headers: {
@@ -225,7 +225,7 @@ export const toggleTestimonialVisibility = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/testimonials/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/testimonials/${id}`, {
         method: 'PUT',
         credentials: 'include',
         headers: {

@@ -45,7 +45,7 @@ export const loginUser = createAsyncThunk<AuthResponse, LoginRequest>(
   "auth/loginUser",
   async (credentials, { rejectWithValue }) => {
     try {
-      const result = await apiService.post("/api/session/login", credentials);
+      const result = await apiService.post("/session/login", credentials);
       if (!result.success) return rejectWithValue(result.message);
       return result;
     } catch (err: any) {
@@ -67,7 +67,7 @@ export const registerUser = createAsyncThunk<AuthResponse, any>(
         password: data.password,
         role: data.role || data.userType || "tourist",
       };
-      const result = await apiService.post("/api/session/signup", payload);
+      const result = await apiService.post("/session/signup", payload);
       if (!result.success) return rejectWithValue(result.message);
       return result;
     } catch (err: any) {
@@ -81,7 +81,7 @@ export const sendOTP = createAsyncThunk<AuthResponse, OTPRequest>(
   "auth/sendOTP",
   async (data, { rejectWithValue }) => {
     try {
-      const result = await apiService.post("/api/auth/send-otp", data);
+      const result = await apiService.post("/auth/send-otp", data);
       if (!result.success) return rejectWithValue(result.message);
       return result;
     } catch (err: any) {
@@ -103,7 +103,7 @@ export const verifyOtpAndRegister = createAsyncThunk<AuthResponse, FormData>(
         password: formData.get("password") as string,
         role: (formData.get("role") as string) || "tourist",
       };
-      const result = await apiService.post("/api/session/signup", payload);
+      const result = await apiService.post("/session/signup", payload);
       if (!result.success) return rejectWithValue(result.message);
       return result;
     } catch (err: any) {
@@ -117,7 +117,7 @@ export const getCurrentUser = createAsyncThunk<AuthResponse>(
   "auth/getCurrentUser",
   async (_, { rejectWithValue }) => {
     try {
-      const result = await apiService.get("/api/session/validate-auth");
+      const result = await apiService.get("/session/validate-auth");
       if (!result.success) return rejectWithValue(result.message);
       return result;
     } catch (err: any) {
@@ -131,7 +131,7 @@ export const refreshToken = createAsyncThunk<AuthResponse>(
   "auth/refreshToken",
   async (_, { rejectWithValue }) => {
     try {
-      const result = await apiService.post("/api/session/refresh");
+      const result = await apiService.post("/session/refresh");
       if (!result.success) return rejectWithValue(result.message);
       return result;
     } catch (err: any) {
@@ -145,7 +145,7 @@ export const logoutUser = createAsyncThunk<void, void>(
   "auth/logoutUser",
   async (_, { rejectWithValue }) => {
     try {
-      await apiService.post("/api/session/logout");
+      await apiService.post("/session/logout");
     } catch (err: any) {
       return rejectWithValue(handleError(err));
     }

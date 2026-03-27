@@ -29,7 +29,7 @@ const ReassignGuideModal = ({ booking, onClose, onReassign }) => {
       try {
         setLoading(true);
         setError('');
-        const response = await apiService.get(`/api/guides/all?location=${booking.location}&language=${booking.language}`);
+        const response = await apiService.get(`/guides/all?location=${booking.location}&language=${booking.language}`);
         if (response && response.data) {
           const filteredGuides = response.data.filter(guide => guide._id !== booking.guide._id);
           setAvailableGuides(filteredGuides);

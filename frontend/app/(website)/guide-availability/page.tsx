@@ -52,7 +52,7 @@ export default function GuideAvailabilityPage() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`${API_BASE_URL}/api/guide/list-all`);
+      const response = await fetch(`${API_BASE_URL}/guide/list-all`);
 
       if (!response.ok) {
         throw new Error(

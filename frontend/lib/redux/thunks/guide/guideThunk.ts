@@ -18,7 +18,7 @@ export const fetchGuidesForTour = createAsyncThunk<
       total: number;
       page: number;
       totalPages: number;
-    }>("/api/guides/for-tour", { params });
+    }>("/guides/for-tour", { params });
     return response;
   } catch (err: any) {
     return rejectWithValue(handleError(err));
@@ -32,7 +32,7 @@ export const getMyGuideProfile = createAsyncThunk<GuideProfile, void>(
   "guide/getMyProfile",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiService.get<GuideProfile>("/api/guides/profile");
+      const response = await apiService.get<GuideProfile>("/guides/profile");
       return response.data!;
     } catch (err: any) {
       return rejectWithValue(handleError(err));
@@ -46,7 +46,7 @@ export const updateMyGuideProfile = createAsyncThunk<GuideProfile, FormData>(
   async (formData, { rejectWithValue }) => {
     try {
       const response = await apiService.put<GuideProfile>(
-        "/api/guides/profile/update",
+        "/guides/profile/update",
         formData,
         {
           headers: {
@@ -72,7 +72,7 @@ export const adminGetAllGuides = createAsyncThunk<
       total: number;
       page: number;
       totalPages: number;
-    }>("/api/guides/all-guides", { params });
+    }>("/guides/all-guides", { params });
 
     return response;
   } catch (err: any) {
@@ -90,7 +90,7 @@ export const getAllGuides = createAsyncThunk<
       total: number;
       page: number;
       totalPages: number;
-    }>("/api/guides/all", { params });
+    }>("/guides/all", { params });
 
     return response;
   } catch (err: any) {
@@ -103,7 +103,7 @@ export const getGuideById = createAsyncThunk<GuideProfile, string>(
   "guide/getGuideById",
   async (id, { rejectWithValue }) => {
     try {
-      const response = await apiService.get<GuideProfile>(`/api/guides/${id}`);
+      const response = await apiService.get<GuideProfile>(`/guides/${id}`);
       return response.data!;
     } catch (err: any) {
       return rejectWithValue(handleError(err));
@@ -118,7 +118,7 @@ export const toggleGuideApproval = createAsyncThunk<
 >("guide/toggleApproval", async ({ id, isApproved }, { rejectWithValue }) => {
   try {
     const response = await apiService.patch<GuideProfile>(
-      `/api/guides/${id}/approve`,
+      `/guides/${id}/approve`,
       { isApproved }
     );
     return response.data!;
@@ -132,7 +132,7 @@ export const deleteGuide = createAsyncThunk<string, string>(
   "guide/deleteGuide",
   async (id, { rejectWithValue }) => {
     try {
-      await apiService.delete(`/api/guides/${id}`);
+      await apiService.delete(`/guides/${id}`);
       return id;
     } catch (err: any) {
       return rejectWithValue(handleError(err));
@@ -147,7 +147,7 @@ export const updateMyAvailability = createAsyncThunk<
 >("guide/updateMyAvailability", async ({ unavailableDates }, { rejectWithValue }) => {
   try {
     const response = await apiService.put<GuideProfile>(
-      "/api/guides/availability",
+      "/guides/availability",
       { unavailableDates }
     );
     return response.data!;
@@ -168,7 +168,7 @@ export const fetchGuidePricingDetails = createAsyncThunk<
     // which gives us: { success: true, data: { locations: [...], languages: [...] } }
     const response = await apiService.get<{
       data: { locations: AdminLocation[]; languages: LanguageOption[] } 
-    }>(`/api/guides/${guideId}/pricing-details`);
+    }>(`/guides/${guideId}/pricing-details`);
     
     console.log("📦 Full response from API:", response);
     console.log("📊 response.data (the nested data):", response.data);
@@ -195,7 +195,7 @@ export const fetchMyBookingsThunk = createAsyncThunk<tourGuideBooking[]>(
   'guideBookings/fetchMyBookings',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiService.get('/api/guides/my-bookings');
+      const response = await apiService.get('/guides/my-bookings');
       return response.data;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch bookings');

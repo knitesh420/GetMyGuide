@@ -3,7 +3,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import { apiService } from '@/lib/service/api';
 import { LanguageOption, CreateLanguageOption } from '@/types/admin';
 
-const API_BASE_URL = '/api/languages';
+const API_BASE_URL = '/languages';
 
 /**
  * Fetches all language options from the server.

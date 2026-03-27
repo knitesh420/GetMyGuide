@@ -6,7 +6,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 // Helper to fetch current user's guide application
 async function fetchMyGuideApplication() {
-  const res = await fetch(`${API_BASE_URL}/api/guides/me`, {
+  const res = await fetch(`${API_BASE_URL}/guides/me`, {
     credentials: "include",
   });
   if (!res.ok) return null;

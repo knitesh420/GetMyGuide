@@ -45,7 +45,7 @@ function mapPackageToTourData(pkg: PackageResponse): TourData {
 // Fetch packages from backend
 export async function getServices(): Promise<TourData[]> {
   try {
-    const response: any = await apiService.get("/api/package");
+    const response: any = await apiService.get("/package");
     const packages = response?.packages || [];
     return packages.map(mapPackageToTourData);
   } catch (err: any) {
@@ -57,7 +57,7 @@ export async function getServices(): Promise<TourData[]> {
 // Create a new package (admin only)
 export async function createService(formData: FormData): Promise<TourData> {
   try {
-    const response = await apiService.post<any>("/api/package", formData);
+    const response = await apiService.post<any>("/package", formData);
 
     if (!response?.success || !response?.data) {
       throw new Error(response?.message || "Failed to create package");

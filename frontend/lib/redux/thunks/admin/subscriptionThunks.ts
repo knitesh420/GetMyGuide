@@ -4,7 +4,7 @@ import { apiService } from '@/lib/service/api';
 import { SubscriptionPlan, CreateSubscriptionPlan } from '@/types/admin';
 import { GuideProfile } from '@/lib/data'; // Assuming you have a guide type definition
 
-const API_BASE_URL = '/api/subscriptions';
+const API_BASE_URL = '/subscriptions';
 
 // --- Interfaces for Admin Operations ---
 
@@ -131,7 +131,7 @@ export const createPaymentOrder = createAsyncThunk<CreateOrderResponse, string>(
   'subscriptions/createOrder', // Thunk name
   async (planId, { rejectWithValue }) => {
     try {
-      // The API endpoint is now under /api/subscriptions/
+      // The API endpoint is now under /subscriptions/
       const response = await apiService.post<CreateOrderResponse>(`${API_BASE_URL}/create-order`, { planId });
       return response.data!;
     } catch (err: any) {
@@ -147,7 +147,7 @@ export const verifyPayment = createAsyncThunk<GuideProfile, VerifyPaymentPayload
   'subscriptions/verifyPayment', // Thunk name
   async (payload, { rejectWithValue }) => {
     try {
-      // The API endpoint is now under /api/subscriptions/
+      // The API endpoint is now under /subscriptions/
       const response = await apiService.post<{ guide: GuideProfile }>(`${API_BASE_URL}/verify-payment`, payload);
       return response.data!.guide;
     } catch (err: any) {

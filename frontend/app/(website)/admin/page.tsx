@@ -189,7 +189,7 @@ function AdminDashboard() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/guide/enrollment/${guideId}`, {
+      const res = await fetch(`${API_BASE}/guide/enrollment/${guideId}`, {
         method: "DELETE",
         credentials: "include",
         headers: {
@@ -269,7 +269,7 @@ function AdminDashboard() {
   const fetchGuideById = async (id: string) => {
     setLoadingGuideDetails(true);
     try {
-      const response = await fetch(`${API_BASE}/api/guide/enroll-status/${id}`, {
+      const response = await fetch(`${API_BASE}/guide/enroll-status/${id}`, {
         credentials: "include",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -297,7 +297,7 @@ function AdminDashboard() {
     try {
       switch (tab) {
         case "guides":
-          const guidesRes = await fetch(`${API_BASE}/api/guide/list-all`, {
+          const guidesRes = await fetch(`${API_BASE}/guide/list-all`, {
             credentials: "include",
             headers: {
               Authorization: `Bearer ${token}`,
@@ -329,7 +329,7 @@ function AdminDashboard() {
           break;
 
         case "tourists":
-          const touristBookingsRes = await fetch(`${API_BASE}/api/booking`, {
+          const touristBookingsRes = await fetch(`${API_BASE}/booking`, {
             credentials: "include",
             headers: {
               Authorization: `Bearer ${token}`,
@@ -437,7 +437,7 @@ function AdminDashboard() {
 
         case "bookings":
           try {
-            const leadsRes = await fetch(`${API_BASE}/api/lead/contact`, {
+            const leadsRes = await fetch(`${API_BASE}/lead/contact`, {
               credentials: "include",
               headers: {
                 Authorization: `Bearer ${token}`,
@@ -477,7 +477,7 @@ function AdminDashboard() {
 
         case "advertisements":
           try {
-            const adsRes = await fetch(`${API_BASE}/api/advertisement/admin/all`, {
+            const adsRes = await fetch(`${API_BASE}/advertisement/admin/all`, {
               credentials: "include",
               headers: {
                 Authorization: `Bearer ${token}`,
