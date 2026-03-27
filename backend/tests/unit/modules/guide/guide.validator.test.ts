@@ -2,7 +2,6 @@ import { BadRequestError } from 'node-be-utilities';
 import {
 	ConfirmPaymentValidator,
 	EnrollValidator,
-	UpdateStatusValidator,
 } from '../../../../src/modules/guide/guide.validator';
 import {
 	createMockNext,
@@ -162,70 +161,6 @@ describe('Guide Validators', () => {
 
 			expect(mockNext).toHaveBeenCalledWith();
 			expect(mockRequest.locals.data.type).toBe('escort');
-		});
-	});
-
-	describe('UpdateStatusValidator', () => {
-		it('should pass validation with valid status', async () => {
-			const mockRequest = createMockRequest({
-				body: {
-					status: 'payment-pending',
-				},
-			}) as any;
-
-			const mockResponse = createMockResponse();
-			const mockNext = createMockNext();
-
-			await UpdateStatusValidator(mockRequest, mockResponse as any, mockNext);
-
-			expect(mockNext).toHaveBeenCalledWith();
-			expect(mockRequest.locals.data.status).toBe('payment-pending');
-		});
-
-		it('should accept all valid status values', async () => {
-			const validStatuses = ['unverified', 'payment-pending', 'verified'];
-
-			for (const status of validStatuses) {
-				const mockRequest = createMockRequest({
-					body: { status },
-				}) as any;
-
-				const mockResponse = createMockResponse();
-				const mockNext = createMockNext();
-
-				await UpdateStatusValidator(mockRequest, mockResponse as any, mockNext);
-
-				expect(mockNext).toHaveBeenCalledWith();
-				expect(mockRequest.locals.data.status).toBe(status);
-			}
-		});
-
-		it('should fail validation with invalid status', async () => {
-			const mockRequest = createMockRequest({
-				body: {
-					status: 'invalid-status',
-				},
-			}) as any;
-
-			const mockResponse = createMockResponse();
-			const mockNext = createMockNext();
-
-			await UpdateStatusValidator(mockRequest, mockResponse as any, mockNext);
-
-			expect(mockNext).toHaveBeenCalledWith(expect.any(BadRequestError));
-		});
-
-		it('should fail validation if status is missing', async () => {
-			const mockRequest = createMockRequest({
-				body: {},
-			}) as any;
-
-			const mockResponse = createMockResponse();
-			const mockNext = createMockNext();
-
-			await UpdateStatusValidator(mockRequest, mockResponse as any, mockNext);
-
-			expect(mockNext).toHaveBeenCalledWith(expect.any(BadRequestError));
 		});
 	});
 

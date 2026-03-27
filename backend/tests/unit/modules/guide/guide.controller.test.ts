@@ -17,8 +17,6 @@ jest.mock('@services/guide', () => ({
 		enroll: jest.fn(),
 		getAllEnrollments: jest.fn(),
 		getEnrollmentById: jest.fn(),
-		updateEnrollmentStatus: jest.fn(),
-		requestPaymentLink: jest.fn(),
 		confirmPayment: jest.fn(),
 	},
 }));
@@ -331,73 +329,6 @@ describe('Guide Controller', () => {
 			expect(mockNext).not.toHaveBeenCalled();
 			expect(mockResponse.status).toHaveBeenCalledWith(200);
 			expect(GuideService.getEnrollmentById).toHaveBeenCalledWith(enrollmentId);
-		});
-	});
-
-	describe('updateEnrollStatus', () => {
-		it('should update enrollment status', async () => {
-			const mockUser = createMockUser({ role: 'admin' });
-			const enrollmentId = new Types.ObjectId();
-			const mockRequest = createMockRequest({
-				locals: {
-					user: mockUser,
-					id: enrollmentId,
-					data: {
-						status: 'payment-pending',
-					},
-				},
-			}) as any;
-
-			const mockResponse = createMockResponse();
-			const mockNext = createMockNext();
-
-			const mockEnrollment = {
-				id: enrollmentId.toString(),
-				status: 'payment-pending',
-			};
-
-			(GuideService.updateEnrollmentStatus as jest.Mock).mockResolvedValue(mockEnrollment);
-
-			await Controller.updateEnrollStatus(mockRequest, mockResponse as any, mockNext);
-
-			expect(mockNext).not.toHaveBeenCalled();
-			expect(mockResponse.status).toHaveBeenCalledWith(200);
-			expect(GuideService.updateEnrollmentStatus).toHaveBeenCalledWith(
-				enrollmentId,
-				'payment-pending'
-			);
-		});
-	});
-
-	describe('requestPaymentLink', () => {
-		it('should return payment link data', async () => {
-			const enrollmentId = new Types.ObjectId();
-			const mockRequest = createMockRequest({
-				locals: {
-					id: enrollmentId,
-				},
-			}) as any;
-
-			const mockResponse = createMockResponse();
-			const mockNext = createMockNext();
-
-			const mockPaymentData = {
-				data: {
-					transaction_id: 'trans123',
-					razorpay_options: {
-						order_id: 'order123',
-						amount: 50000,
-					},
-				},
-			};
-
-			(GuideService.requestPaymentLink as jest.Mock).mockResolvedValue(mockPaymentData);
-
-			await Controller.requestPaymentLink(mockRequest, mockResponse as any, mockNext);
-
-			expect(mockNext).not.toHaveBeenCalled();
-			expect(mockResponse.status).toHaveBeenCalledWith(200);
-			expect(GuideService.requestPaymentLink).toHaveBeenCalledWith(enrollmentId);
 		});
 	});
 

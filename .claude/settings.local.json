@@ -5,7 +5,9 @@
       "Bash(grep -r \"RAZORPAY\\\\|API_KEY\\\\|SECRET\\\\|TOKEN\" /c/Users/nites/OneDrive/Desktop/Tour/frontend --include=*.ts --include=*.tsx --include=*.js --include=*.jsx --include=.env* -n)",
       "Bash(xargs grep:*)",
       "Bash(grep -r \"unavailableDates\\\\|availability\" /c/Users/nites/OneDrive/Desktop/Tour/backend/src --include=*.ts)",
-      "Bash(grep -r /api/guides /c/Users/nites/OneDrive/Desktop/Tour/backend/src --include=*.ts)"
+      "Bash(grep -r /api/guides /c/Users/nites/OneDrive/Desktop/Tour/backend/src --include=*.ts)",
+      "Bash(npx tsc:*)",
+      "Bash(npx pnpm:*)"
     ]
   }
 }

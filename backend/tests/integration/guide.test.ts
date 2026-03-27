@@ -26,19 +26,18 @@ jest.mock('@provider/razorpay/api/orders', () => ({
 
 // Mock email provider
 jest.mock('@provider/email', () => ({
-	sendGuideCredentialsEmail: jest.fn().mockResolvedValue(true),
-	sendPaymentLinkEmail: jest.fn().mockResolvedValue(true),
+	sendGuidePaymentConfirmationEmail: jest.fn().mockResolvedValue(true),
 	sendPasswordResetEmail: jest.fn().mockResolvedValue(true),
 	sendWelcomeEmail: jest.fn().mockResolvedValue(true),
 }));
 
-import { sendGuideCredentialsEmail, sendPaymentLinkEmail } from '@provider/email';
+import { sendGuidePaymentConfirmationEmail } from '@provider/email';
 import RazorpayCustomers from '@provider/razorpay/api/customers';
 import RazorpayOrders from '@provider/razorpay/api/orders';
 
 describe('Guide API Integration Tests', () => {
 	let app: express.Application;
-	let adminToken: string;
+	let userToken: string;
 	const testUploadDir = path.join(__dirname, '../../static/misc');
 
 	// Create test PDF buffer
@@ -65,10 +64,9 @@ describe('Guide API Integration Tests', () => {
 			fs.mkdirSync(testUploadDir, { recursive: true });
 		}
 
-		// Create admin user
-		const adminData = { ...testSignupData, email: 'admin@example.com', role: 'admin' as const };
-		const adminResult = await AuthService.signup(adminData);
-		adminToken = adminResult.token;
+		// Create user
+		const userResult = await AuthService.signup(testSignupData);
+		userToken = userResult.token;
 	});
 
 	afterAll(async () => {
@@ -89,21 +87,35 @@ describe('Guide API Integration Tests', () => {
 	beforeEach(async () => {
 		await clearDatabase();
 
-		// Recreate admin after clearing database
-		const adminData = { ...testSignupData, email: 'admin@example.com', role: 'admin' as const };
-		const adminResult = await AuthService.signup(adminData);
-		adminToken = adminResult.token;
+		// Recreate user after clearing database
+		const userResult = await AuthService.signup(testSignupData);
+		userToken = userResult.token;
 
 		jest.clearAllMocks();
-		// Reset email mocks to return true
-		(sendGuideCredentialsEmail as jest.Mock).mockResolvedValue(true);
-		(sendPaymentLinkEmail as jest.Mock).mockResolvedValue(true);
+		(sendGuidePaymentConfirmationEmail as jest.Mock).mockResolvedValue(true);
 	});
 
 	describe('POST /guide/enroll', () => {
 		it('should successfully enroll a guide', async () => {
 			const pdfBuffer = createPDFBuffer();
 			const imageBuffer = createImageBuffer();
+
+			const mockCustomer = {
+				id: 'cust_test123',
+				name: 'John Doe',
+				contact: '+1234567890',
+				email: 'john@example.com',
+			};
+
+			const mockOrder = {
+				id: 'order_test123',
+				amount: 50000,
+				currency: 'INR',
+				status: 'created',
+			};
+
+			(RazorpayCustomers.createCustomer as jest.Mock).mockResolvedValue(mockCustomer);
+			(RazorpayOrders.createOrder as jest.Mock).mockResolvedValue(mockOrder);
 
 			const response = await request(app)
 				.post('/guide/enroll')
@@ -120,12 +132,10 @@ describe('Guide API Integration Tests', () => {
 
 			expect(response.status).toBe(201);
 			expect(response.body.success).toBe(true);
-			expect(response.body.message).toContain('Enrollment submitted successfully');
 
 			// Verify enrollment was created
 			const enrollment = await GuideEnrollmentDB.findOne({ email: 'john@example.com' });
 			expect(enrollment).toBeTruthy();
-			expect(enrollment?.status).toBe('unverified');
 		});
 
 		it('should reject enrollment with missing required fields', async () => {
@@ -185,7 +195,7 @@ describe('Guide API Integration Tests', () => {
 	});
 
 	describe('GET /guide/list-all', () => {
-		it('should return all enrollments for admin', async () => {
+		it('should return all enrollments', async () => {
 			// Create test enrollments
 			await GuideEnrollmentDB.create({
 				name: 'Guide 1',
@@ -198,7 +208,6 @@ describe('Guide API Integration Tests', () => {
 				aadhar: 'aad1.pdf',
 				languages: ['English'],
 				photo: 'photo1.jpg',
-				status: 'unverified',
 			});
 
 			await GuideEnrollmentDB.create({
@@ -212,39 +221,18 @@ describe('Guide API Integration Tests', () => {
 				aadhar: 'aad2.pdf',
 				languages: ['English', 'Kannada'],
 				photo: 'photo2.jpg',
-				status: 'payment-pending',
 			});
 
-			const response = await request(app)
-				.get('/guide/list-all')
-				.set('Authorization', `Bearer ${adminToken}`);
+			const response = await request(app).get('/guide/list-all');
 
 			expect(response.status).toBe(200);
 			expect(response.body.success).toBe(true);
 			expect(response.body.enrollments).toHaveLength(2);
 		});
-
-		it('should reject request without authentication', async () => {
-			const response = await request(app).get('/guide/list-all');
-
-			expect(response.status).toBe(401);
-		});
-
-		it('should reject request from non-admin user', async () => {
-			// Create regular user
-			const userResult = await AuthService.signup(testSignupData);
-			const userToken = userResult.token;
-
-			const response = await request(app)
-				.get('/guide/list-all')
-				.set('Authorization', `Bearer ${userToken}`);
-
-			expect(response.status).toBe(401);
-		});
 	});
 
 	describe('GET /guide/enroll-status/:id', () => {
-		it('should return enrollment status (public)', async () => {
+		it('should return enrollment details (public)', async () => {
 			const enrollment = await GuideEnrollmentDB.create({
 				name: 'Test Guide',
 				email: 'test@example.com',
@@ -256,14 +244,12 @@ describe('Guide API Integration Tests', () => {
 				aadhar: 'aad.pdf',
 				languages: ['English'],
 				photo: 'photo.jpg',
-				status: 'payment-pending',
 			});
 
 			const response = await request(app).get(`/guide/enroll-status/${enrollment._id}`);
 
 			expect(response.status).toBe(200);
 			expect(response.body.success).toBe(true);
-			expect(response.body.status).toBe('payment-pending');
 			expect(response.body.id).toBe(enrollment._id.toString());
 		});
 
@@ -271,143 +257,6 @@ describe('Guide API Integration Tests', () => {
 			const fakeId = '507f1f77bcf86cd799439011';
 
 			const response = await request(app).get(`/guide/enroll-status/${fakeId}`);
-
-			expect(response.status).toBe(404);
-		});
-	});
-
-	describe('POST /guide/enroll-status/:id', () => {
-		it('should update enrollment status and send payment email (admin only)', async () => {
-			const enrollment = await GuideEnrollmentDB.create({
-				name: 'Test Guide',
-				email: 'test@example.com',
-				phone: '+1234567890',
-				city: 'Mumbai',
-				type: 'normal',
-				pan: 'PAN123',
-				licence: 'lic.pdf',
-				aadhar: 'aad.pdf',
-				languages: ['English'],
-				photo: 'photo.jpg',
-				status: 'unverified',
-			});
-
-			const response = await request(app)
-				.post(`/guide/enroll-status/${enrollment._id}`)
-				.set('Authorization', `Bearer ${adminToken}`)
-				.send({ status: 'payment-pending' });
-
-			expect(response.status).toBe(200);
-			expect(response.body.success).toBe(true);
-			expect(response.body.status).toBe('payment-pending');
-
-			// Verify email was sent
-			const { sendPaymentLinkEmail } = require('@provider/email');
-			expect(sendPaymentLinkEmail).toHaveBeenCalled();
-
-			// Verify status was updated
-			const updated = await GuideEnrollmentDB.findById(enrollment._id);
-			expect(updated?.status).toBe('payment-pending');
-		});
-
-		it('should reject request from non-admin user', async () => {
-			const enrollment = await GuideEnrollmentDB.create({
-				name: 'Test Guide',
-				email: 'test@example.com',
-				phone: '+1234567890',
-				city: 'Mumbai',
-				type: 'normal',
-				pan: 'PAN123',
-				licence: 'lic.pdf',
-				aadhar: 'aad.pdf',
-				languages: ['English'],
-				photo: 'photo.jpg',
-				status: 'unverified',
-			});
-
-			// Create regular user
-			const userResult = await AuthService.signup({
-				...testSignupData,
-				email: 'user@example.com',
-			});
-			const userToken = userResult.token;
-
-			const response = await request(app)
-				.post(`/guide/enroll-status/${enrollment._id}`)
-				.set('Authorization', `Bearer ${userToken}`)
-				.send({ status: 'payment-pending' });
-
-			expect(response.status).toBe(401);
-		});
-	});
-
-	describe('GET /guide/request-payment-link/:id', () => {
-		it('should return payment link data when status is payment-pending', async () => {
-			const enrollment = await GuideEnrollmentDB.create({
-				name: 'Test Guide',
-				email: 'test@example.com',
-				phone: '+1234567890',
-				city: 'Mumbai',
-				type: 'normal',
-				pan: 'PAN123',
-				licence: 'lic.pdf',
-				aadhar: 'aad.pdf',
-				languages: ['English'],
-				photo: 'photo.jpg',
-				status: 'payment-pending',
-			});
-
-			const mockCustomer = {
-				id: 'cust_test123',
-				name: 'Test Guide',
-				contact: '+1234567890',
-				email: 'test@example.com',
-			};
-
-			const mockOrder = {
-				id: 'order_test123',
-				amount: 500,
-				currency: 'INR',
-				reference_id: enrollment._id.toString(),
-				status: 'created',
-			};
-
-			(RazorpayCustomers.createCustomer as jest.Mock).mockResolvedValue(mockCustomer);
-			(RazorpayOrders.createOrder as jest.Mock).mockResolvedValue(mockOrder);
-
-			const response = await request(app).get(`/guide/request-payment-link/${enrollment._id}`);
-
-			expect(response.status).toBe(200);
-			expect(response.body.success).toBe(true);
-			expect(response.body).toHaveProperty('transaction_id');
-			expect(response.body).toHaveProperty('razorpay_options');
-			expect(response.body.razorpay_options.order_id).toBe('order_test123');
-			expect(response.body.razorpay_options.amount).toBe(50000);
-
-			// Verify transaction was created
-			const transaction = await TransactionDB.findOne({
-				reference_id: enrollment._id.toString(),
-				reference_type: 'enrollment',
-			});
-			expect(transaction).toBeTruthy();
-		});
-
-		it('should return 404 if enrollment status is not payment-pending', async () => {
-			const enrollment = await GuideEnrollmentDB.create({
-				name: 'Test Guide',
-				email: 'test@example.com',
-				phone: '+1234567890',
-				city: 'Mumbai',
-				type: 'normal',
-				pan: 'PAN123',
-				licence: 'lic.pdf',
-				aadhar: 'aad.pdf',
-				languages: ['English'],
-				photo: 'photo.jpg',
-				status: 'unverified',
-			});
-
-			const response = await request(app).get(`/guide/request-payment-link/${enrollment._id}`);
 
 			expect(response.status).toBe(404);
 		});
@@ -426,7 +275,6 @@ describe('Guide API Integration Tests', () => {
 				aadhar: 'aad.pdf',
 				languages: ['English'],
 				photo: 'photo.jpg',
-				status: 'payment-pending',
 			});
 
 			await TransactionDB.create({
@@ -444,15 +292,12 @@ describe('Guide API Integration Tests', () => {
 
 			const response = await request(app)
 				.post(`/guide/confirm-payment/${enrollment._id}`)
+				.set('Authorization', `Bearer ${userToken}`)
 				.send({ transaction_id: 'trans_test123' });
 
 			expect(response.status).toBe(200);
 			expect(response.body.success).toBe(true);
 			expect(response.body.message).toContain('Payment confirmed successfully');
-
-			// Verify enrollment status updated
-			const updatedEnrollment = await GuideEnrollmentDB.findById(enrollment._id);
-			expect(updatedEnrollment?.status).toBe('verified');
 
 			// Verify guide account was created
 			const account = await AccountDB.findOne({ email: 'test@example.com' });
@@ -460,9 +305,8 @@ describe('Guide API Integration Tests', () => {
 			expect(account?.role).toBe('guide');
 			expect(account?.status).toBe('verified');
 
-			// Verify credentials email was sent
-			const { sendGuideCredentialsEmail } = require('@provider/email');
-			expect(sendGuideCredentialsEmail).toHaveBeenCalled();
+			// Verify confirmation email was sent
+			expect(sendGuidePaymentConfirmationEmail).toHaveBeenCalled();
 		});
 
 		it('should return 404 if transaction not found', async () => {
@@ -477,11 +321,11 @@ describe('Guide API Integration Tests', () => {
 				aadhar: 'aad.pdf',
 				languages: ['English'],
 				photo: 'photo.jpg',
-				status: 'payment-pending',
 			});
 
 			const response = await request(app)
 				.post(`/guide/confirm-payment/${enrollment._id}`)
+				.set('Authorization', `Bearer ${userToken}`)
 				.send({ transaction_id: 'invalid_transaction' });
 
 			expect(response.status).toBe(404);
@@ -499,7 +343,6 @@ describe('Guide API Integration Tests', () => {
 				aadhar: 'aad.pdf',
 				languages: ['English'],
 				photo: 'photo.jpg',
-				status: 'payment-pending',
 			});
 
 			await TransactionDB.create({
@@ -517,6 +360,7 @@ describe('Guide API Integration Tests', () => {
 
 			const response = await request(app)
 				.post(`/guide/confirm-payment/${enrollment._id}`)
+				.set('Authorization', `Bearer ${userToken}`)
 				.send({ transaction_id: 'trans_test123' });
 
 			expect(response.status).toBe(500);
