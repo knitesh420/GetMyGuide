@@ -21,12 +21,13 @@ export const fetchBlogs = createAsyncThunk<
       { params: params || undefined }
     );
 
-    // Backend returns { success, data: { blogs: [...] } }
-    // apiService unwraps axios response, so response = { success, data: { blogs } }
+    // Respond() spreads data at root: { blogs: [...], success: true }
+    // So blogs is at response.blogs (via the spread), not response.data.blogs
+    const blogs = (response as any).blogs || response.data?.blogs || [];
     return {
       success: response.success,
       message: "Blogs fetched successfully",
-      data: response.data?.blogs || [],
+      data: blogs,
     };
   } catch (error: any) {
     return rejectWithValue(error.message || "Failed to fetch blogs");
@@ -42,7 +43,9 @@ export const fetchBlogById = createAsyncThunk<Blog, string>(
   async (id, { rejectWithValue }) => {
     try {
       const response = await apiService.get<Blog>(`${RESOURCE_PATH}/${id}`);
-      return response.data!;
+      // Respond() spreads data at root: { id, videoFilename, ..., success: true }
+      const blog = response.data || (response as unknown as Blog);
+      return blog;
     } catch (error: any) {
       return rejectWithValue(error.message || "Failed to fetch blog");
     }
@@ -74,7 +77,8 @@ export const createBlog = createAsyncThunk<Blog, FormData>(
           headers: { "Content-Type": "multipart/form-data" },
         }
       );
-      return response.data!;
+      // Respond() spreads data at root: { id, videoFilename, ..., success: true }
+      return response.data || (response as unknown as Blog);
     } catch (error: any) {
       return rejectWithValue(error.message || "Failed to create blog post");
     }
@@ -93,7 +97,7 @@ export const updateBlog = createAsyncThunk<
         headers: { "Content-Type": "multipart/form-data" },
       }
     );
-    return response.data!;
+    return response.data || (response as unknown as Blog);
   } catch (error: any) {
     return rejectWithValue(error.message || "Failed to update blog post");
   }

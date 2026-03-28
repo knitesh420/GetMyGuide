@@ -1,14 +1,15 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { AppDispatch, RootState } from "@/lib/store";
 import { fetchBlogs } from "@/lib/redux/thunks/blog/blogThunks";
 import { Blog } from "@/lib/data";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, Play, Pause } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -23,6 +24,115 @@ const CardSkeleton = () => (
     </div>
   </div>
 );
+
+// --- Video Card Component with Play/Pause ---
+function BlogVideoCard({ blog }: { blog: Blog }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [videoError, setVideoError] = useState(false);
+  const router = useRouter();
+
+  const videoSrc = blog.videoFilename
+    ? `${API_URL}/media/blogs/${blog.videoFilename}`
+    : "";
+
+  const togglePlay = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const video = videoRef.current;
+      if (!video || videoError) return;
+
+      if (isPlaying) {
+        video.pause();
+        setIsPlaying(false);
+      } else {
+        video
+          .play()
+          .then(() => setIsPlaying(true))
+          .catch((err) => {
+            console.error("Video play failed:", err);
+            setIsPlaying(false);
+          });
+      }
+    },
+    [isPlaying, videoError],
+  );
+
+  const handleCardClick = useCallback(() => {
+    router.push(`/blogs/${blog.id}`);
+  }, [router, blog.id]);
+
+  const handleVideoEnd = useCallback(() => {
+    setIsPlaying(false);
+    const video = videoRef.current;
+    if (video) video.currentTime = 0;
+  }, []);
+
+  return (
+    <div
+      onClick={handleCardClick}
+      className="group bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 ease-in-out h-full flex flex-col cursor-pointer"
+    >
+      {/* Video with Play/Pause */}
+      <div className="relative w-full h-48 bg-gray-900 overflow-hidden">
+        {blog.videoFilename && !videoError ? (
+          <video
+            ref={videoRef}
+            className="w-full h-full object-cover"
+            preload="auto"
+            muted
+            playsInline
+            onEnded={handleVideoEnd}
+            onError={() => setVideoError(true)}
+            src={`${videoSrc}#t=0.1`}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
+            <Play className="w-16 h-16 text-white opacity-50" />
+          </div>
+        )}
+        {/* Play/Pause Button Overlay */}
+        {blog.videoFilename && !videoError && (
+          <button
+            onClick={togglePlay}
+            className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/20 transition-all duration-300"
+          >
+            <div
+              className={`bg-white/90 rounded-full p-3 shadow-lg transition-opacity duration-300 ${
+                isPlaying
+                  ? "opacity-0 group-hover:opacity-100"
+                  : "opacity-100"
+              }`}
+            >
+              {isPlaying ? (
+                <Pause className="w-8 h-8 text-gray-900" />
+              ) : (
+                <Play className="w-8 h-8 text-gray-900" />
+              )}
+            </div>
+          </button>
+        )}
+      </div>
+
+      <div className="p-6 flex flex-row gap-4 items-start flex-grow">
+        <p className="text-gray-700 line-clamp-3 leading-relaxed flex-1">
+          {blog.description}
+        </p>
+        {blog.imageFilename && (
+          <div className="relative w-15 h-8 flex-shrink-0 rounded-lg overflow-hidden">
+            <Image
+              src={`${API_URL}/media/blogs/${blog.imageFilename}`}
+              alt={blog.description.slice(0, 50)}
+              fill
+              className="object-cover"
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // --- Main Page Component ---
 export default function BlogListPage() {
@@ -96,65 +206,7 @@ export default function BlogListPage() {
               {blogs
                 .filter((blog) => blog && blog.id)
                 .map((blog: Blog) => (
-                  <Link href={`/blogs/${blog.id}`} key={blog.id}>
-                    <div className="group bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 ease-in-out h-full flex flex-col cursor-pointer">
-                      {/* Video Thumbnail - will show video's own poster/thumbnail */}
-                      <div className="relative w-full h-48 bg-gray-900 overflow-hidden">
-                        {blog.videoFilename ? (
-                          <video
-                            className="w-full h-full object-cover"
-                            preload="metadata"
-                            muted
-                          >
-                            <source
-                              src={`${API_URL}/media/blogs/${blog.videoFilename}#t=0.1`}
-                              type="video/mp4"
-                            />
-                          </video>
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
-                            <svg
-                              className="w-16 h-16 text-white opacity-50"
-                              fill="currentColor"
-                              viewBox="0 0 20 20"
-                            >
-                              <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
-                            </svg>
-                          </div>
-                        )}
-                        {/* Play icon overlay */}
-                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black bg-opacity-20">
-                          <div className="bg-white bg-opacity-90 rounded-full p-3">
-                            <svg
-                              className="w-8 h-8 text-gray-900"
-                              fill="currentColor"
-                              viewBox="0 0 20 20"
-                            >
-                              <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
-                            </svg>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="p-6 flex flex-row gap-4 items-start flex-grow">
-                        {/* Description */}
-                        <p className="text-gray-700 line-clamp-3 leading-relaxed flex-1">
-                          {blog.description}
-                        </p>
-                        {/* Image Section */}
-                        {blog.imageFilename && (
-                          <div className="relative w-15 h-8 flex-shrink-0 rounded-lg overflow-hidden">
-                            <Image
-                              src={`${API_URL}/media/blogs/${blog.imageFilename}`}
-                              alt={blog.description.slice(0, 50)}
-                              fill
-                              className="object-cover"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </Link>
+                  <BlogVideoCard key={blog.id} blog={blog} />
                 ))}
             </div>
           ) : (

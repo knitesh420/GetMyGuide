@@ -7,7 +7,8 @@
       "Bash(grep -r \"unavailableDates\\\\|availability\" /c/Users/nites/OneDrive/Desktop/Tour/backend/src --include=*.ts)",
       "Bash(grep -r /api/guides /c/Users/nites/OneDrive/Desktop/Tour/backend/src --include=*.ts)",
       "Bash(npx tsc:*)",
-      "Bash(npx pnpm:*)"
+      "Bash(npx pnpm:*)",
+      "Bash(git status:*)"
     ]
   }
 }
