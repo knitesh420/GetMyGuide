@@ -4,7 +4,7 @@ import express, { Express, NextFunction, Request, Response } from 'express';
 import fs from 'fs';
 import routes from './modules';
 
-import { createLoggerContext, errorHandler, NotFoundError, RespondFile } from 'node-be-utilities';
+import { createLoggerContext, errorHandler, NotFoundError } from 'node-be-utilities';
 import { IS_PRODUCTION, IS_WINDOWS, Path } from './config/const';
 
 const allowlist = [
@@ -77,11 +77,11 @@ export default function (app: Express) {
 
 	app.route('/media/:path/:filename').get((req, res, next) => {
 		try {
-			const path = __basedir + '/static/' + req.params.path + '/' + req.params.filename;
-			return RespondFile({
-				res,
-				filename: req.params.filename,
-				filepath: path,
+			const filePath = __basedir + '/static/' + req.params.path + '/' + req.params.filename;
+			res.sendFile(filePath, (err) => {
+				if (err) {
+					return next(new NotFoundError('File not found'));
+				}
 			});
 		} catch {
 			return next(new NotFoundError('File not found'));

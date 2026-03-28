@@ -8,7 +8,7 @@ import SessionRoute from './session/session.route';
 import LeadRoute from './lead/lead.route';
 import UserRoute from './user/user.route';
 
-import { NotFoundError, Respond, RespondFile, ServerError } from 'node-be-utilities';
+import { NotFoundError, Respond, ServerError } from 'node-be-utilities';
 import { FileUpload, ONLY_MEDIA_ALLOWED, SingleFileUploadOptions } from '../utils/files';
 
 const router = express.Router();
@@ -49,11 +49,11 @@ router.post('/upload-media', async function (req, res, next) {
 
 router.get('/media/:path/:filename', async function (req, res, next) {
 	try {
-		const path = __basedir + '/static/' + req.params.path + '/' + req.params.filename;
-		return RespondFile({
-			res,
-			filename: req.params.filename,
-			filepath: path,
+		const filePath = __basedir + '/static/' + req.params.path + '/' + req.params.filename;
+		res.sendFile(filePath, (err) => {
+			if (err) {
+				return next(new NotFoundError('File not found'));
+			}
 		});
 	} catch {
 		return next(new NotFoundError('File not found'));
