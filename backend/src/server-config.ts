@@ -78,11 +78,56 @@ export default function (app: Express) {
 	app.route('/media/:path/:filename').get((req, res, next) => {
 		try {
 			const filePath = __basedir + '/static/' + req.params.path + '/' + req.params.filename;
-			res.sendFile(filePath, (err) => {
-				if (err) {
-					return next(new NotFoundError('File not found'));
-				}
-			});
+
+			if (!fs.existsSync(filePath)) {
+				return next(new NotFoundError('File not found'));
+			}
+
+			const stat = fs.statSync(filePath);
+			const fileSize = stat.size;
+			const range = req.headers.range;
+
+			// Determine content type
+			const ext = req.params.filename.split('.').pop()?.toLowerCase();
+			const mimeTypes: Record<string, string> = {
+				mp4: 'video/mp4',
+				webm: 'video/webm',
+				ogg: 'video/ogg',
+				mov: 'video/quicktime',
+				jpg: 'image/jpeg',
+				jpeg: 'image/jpeg',
+				png: 'image/png',
+				gif: 'image/gif',
+				webp: 'image/webp',
+				svg: 'image/svg+xml',
+			};
+			const contentType = mimeTypes[ext || ''] || 'application/octet-stream';
+
+			if (range) {
+				// Handle range request for video streaming
+				const parts = range.replace(/bytes=/, '').split('-');
+				const start = parseInt(parts[0], 10);
+				const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+				const chunkSize = end - start + 1;
+
+				const stream = fs.createReadStream(filePath, { start, end });
+				res.writeHead(206, {
+					'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+					'Accept-Ranges': 'bytes',
+					'Content-Length': chunkSize,
+					'Content-Type': contentType,
+					'Content-Disposition': 'inline',
+				});
+				stream.pipe(res);
+			} else {
+				res.writeHead(200, {
+					'Content-Length': fileSize,
+					'Content-Type': contentType,
+					'Accept-Ranges': 'bytes',
+					'Content-Disposition': 'inline',
+				});
+				fs.createReadStream(filePath).pipe(res);
+			}
 		} catch {
 			return next(new NotFoundError('File not found'));
 		}
