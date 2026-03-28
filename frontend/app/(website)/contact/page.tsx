@@ -89,19 +89,19 @@ export default function ContactPage() {
     {
       icon: <Phone className="w-6 h-6 text-primary" />,
       titleKey: "contact_info_phone_title",
-      details: ["+91 9876543210", "+91 9876543211"],
+      details: ["9891888444", "7470222666"],
       descriptionKey: "contact_info_phone_desc",
     },
     {
       icon: <Mail className="w-6 h-6 text-secondary" />,
       titleKey: "contact_info_email_title",
-      details: ["support@getmyguide.in", "guides@getmyguide.in"],
+      details: ["Contact@getmyguide.in"],
       descriptionKey: "contact_info_email_desc",
     },
     {
       icon: <MapPin className="w-6 h-6 text-accent" />,
       titleKey: "contact_info_office_title",
-      details: ["123 Tourism Hub", "Connaught Place, New Delhi - 110001"],
+      details: ["A-1/100 Chattarpur Extension birla Farm", "New Delhi - 110074"],
       descriptionKey: "contact_info_office_desc",
     },
     {
@@ -432,9 +432,9 @@ export default function ContactPage() {
                     {t("contact_map_office_name")}
                   </h3>
                   <p className="text-muted-foreground">
-                    123 Tourism Hub, Connaught Place
+                    A-1/100 Chattarpur Extension birla Farm
                     <br />
-                    New Delhi - 110001, India
+                    New Delhi - 110074, India
                   </p>
                   <Button className="mt-4 bg-primary hover:bg-primary/90">
                     {t("contact_map_get_directions")}
