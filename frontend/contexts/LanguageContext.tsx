@@ -76,32 +76,32 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
 
           // Hero Carousel
           hero_title_taj:
-            "We are Committed to Boosting Tourism in India Through www.getmyguide.com",
+            "We are Committed to Boosting Tourism in India Through www.getmyguide.in",
           hero_subtitle_taj:
             "Experience the epitome of Mughal architecture with expert guides",
           hero_category_taj: "Heritage Tours",
           hero_title_rajasthan:
-            "We are Committed to Boosting Tourism in India Through www.getmyguide.com",
+            "We are Committed to Boosting Tourism in India Through www.getmyguide.in",
           hero_subtitle_rajasthan:
             "Wander through the majestic forts and palaces of Jaisalmer",
           hero_category_rajasthan: "Desert Adventures",
           hero_title_kerala:
-            "We are Committed to Boosting Tourism in India Through www.getmyguide.com",
+            "We are Committed to Boosting Tourism in India Through www.getmyguide.in",
           hero_subtitle_kerala:
             "Cruise through serene waters and lush green landscapes",
           hero_category_kerala: "Nature & Wildlife",
           hero_title_varanasi:
-            "We are Committed to Boosting Tourism in India Through www.getmyguide.com",
+            "We are Committed to Boosting Tourism in India Through www.getmyguide.in",
           hero_subtitle_varanasi:
             "Witness ancient rituals along the sacred Ganges River",
           hero_category_varanasi: "Spiritual Tours",
           hero_title_himalayas:
-            "We are Committed to Boosting Tourism in India Through www.getmyguide.com",
+            "We are Committed to Boosting Tourism in India Through www.getmyguide.in",
           hero_subtitle_himalayas:
             "Adventure through breathtaking mountain landscapes",
           hero_category_himalayas: "Adventure Tours",
           hero_title_goa:
-            "We are Committed to Boosting Tourism in India Through www.getmyguide.com",
+            "We are Committed to Boosting Tourism in India Through www.getmyguide.in",
           hero_subtitle_goa:
             "Discover pristine beaches and vibrant Portuguese heritage",
           hero_category_goa: "Beach & Culture",
