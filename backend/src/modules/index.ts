@@ -8,8 +8,9 @@ import SessionRoute from './session/session.route';
 import LeadRoute from './lead/lead.route';
 import UserRoute from './user/user.route';
 
-import { NotFoundError, Respond, RespondFile, ServerError } from 'node-be-utilities';
+import { NotFoundError, Respond, ServerError } from 'node-be-utilities';
 import { FileUpload, ONLY_MEDIA_ALLOWED, SingleFileUploadOptions } from '../utils/files';
+import fs from 'fs';
 
 const router = express.Router();
 
@@ -47,17 +48,55 @@ router.post('/upload-media', async function (req, res, next) {
 	}
 });
 
-router.get('/media/:path/:filename', async function (req, res, next) {
-	try {
-		const filePath = __basedir + '/static/' + req.params.path + '/' + req.params.filename;
+router.get('/media/:path/:filename', function (req, res, next) {
+	const filePath = __basedir + '/static/' + req.params.path + '/' + req.params.filename;
 
-		return RespondFile({
-			res,
-			filename: req.params.filename,
-			filepath:filePath
-		})
-	} catch {
+	if (!fs.existsSync(filePath)) {
 		return next(new NotFoundError('File not found'));
+	}
+
+	const stat = fs.statSync(filePath);
+	const fileSize = stat.size;
+	const range = req.headers.range;
+
+	const ext = req.params.filename.split('.').pop()?.toLowerCase();
+	const mimeTypes: Record<string, string> = {
+		mp4: 'video/mp4',
+		webm: 'video/webm',
+		ogg: 'video/ogg',
+		mov: 'video/quicktime',
+		jpg: 'image/jpeg',
+		jpeg: 'image/jpeg',
+		png: 'image/png',
+		gif: 'image/gif',
+		webp: 'image/webp',
+		svg: 'image/svg+xml',
+	};
+	const contentType = mimeTypes[ext || ''] || 'application/octet-stream';
+
+	if (range) {
+		const parts = range.replace(/bytes=/, '').split('-');
+		const start = parseInt(parts[0], 10);
+		const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+		const chunkSize = end - start + 1;
+
+		const stream = fs.createReadStream(filePath, { start, end });
+		res.writeHead(206, {
+			'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+			'Accept-Ranges': 'bytes',
+			'Content-Length': chunkSize,
+			'Content-Type': contentType,
+			'Content-Disposition': 'inline',
+		});
+		stream.pipe(res);
+	} else {
+		res.writeHead(200, {
+			'Content-Length': fileSize,
+			'Content-Type': contentType,
+			'Accept-Ranges': 'bytes',
+			'Content-Disposition': 'inline',
+		});
+		fs.createReadStream(filePath).pipe(res);
 	}
 });
 

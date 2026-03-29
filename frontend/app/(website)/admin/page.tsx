@@ -19,6 +19,10 @@ import {
   Download,
   LogOut,
   Film,
+  Upload,
+  Plus,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react";
 import { useAuth } from "@/lib/hooks/useAuth";
 import dynamic from "next/dynamic";
@@ -488,16 +492,25 @@ function AdminDashboard() {
             if (adsRes.ok) {
               const adsData = await adsRes.json();
 
-              // Handle response structure: {data: [...]} or [...]
-              const adsArray = Array.isArray(adsData.data)
-                ? adsData.data
-                : adsData;
-
-              if (Array.isArray(adsArray)) {
-                setAdvertisements(adsArray);
+              // Handle all response structures:
+              // New format: { data: [...], success: true }
+              // Old format: { "0": {...}, "1": {...}, success: true } (spread array)
+              let adsArray: Advertisement[] = [];
+              if (Array.isArray(adsData.data)) {
+                adsArray = adsData.data;
+              } else if (Array.isArray(adsData)) {
+                adsArray = adsData;
               } else {
-                setAdvertisements([]);
+                // Old spread format: extract numeric keys
+                const items = Object.keys(adsData)
+                  .filter((key) => !isNaN(Number(key)))
+                  .sort((a, b) => Number(a) - Number(b))
+                  .map((key) => adsData[key]);
+                if (items.length > 0) {
+                  adsArray = items;
+                }
               }
+              setAdvertisements(adsArray);
             } else {
               const errorText = await adsRes.text();
               console.error(
@@ -724,38 +737,14 @@ function AdminDashboard() {
               </>
             )}
             {activeTab === "advertisements" && (
-              <>
-                {advertisements.length === 0 && !loading && (
-                  <div className="text-center py-8">
-                    <Film className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500 mb-4">
-                      No advertisements found.
-                    </p>
-                    <button
-                      onClick={() => {
-                        // You can add a modal for creating new advertisement here
-                        alert(
-                          "Click the upload button in the header to create a new advertisement",
-                        );
-                      }}
-                      className="text-blue-500 hover:text-blue-600 underline"
-                    >
-                      Create your first advertisement
-                    </button>
-                  </div>
-                )}
-                {advertisements.length > 0 && (
-                  <AdvertisementsTable
-                    advertisements={advertisements}
-                    onDelete={(id) => {
-                      setAdvertisements((prev) =>
-                        prev.filter((ad) => ad.id !== id),
-                      );
-                    }}
-                    onUpdate={() => fetchData("advertisements")}
-                  />
-                )}
-              </>
+              <AdvertisementsSection
+                advertisements={advertisements}
+                setAdvertisements={setAdvertisements}
+                loading={loading}
+                token={token}
+                apiBase={API_BASE}
+                onRefresh={() => fetchData("advertisements")}
+              />
             )}
           </div>
         )}
@@ -2595,6 +2584,311 @@ function LeadsTable({ leads }: { leads: Lead[] }) {
             )}
           </div>
         ))
+      )}
+    </div>
+  );
+}
+
+// Advertisements Section with upload, list, toggle, delete
+function AdvertisementsSection({
+  advertisements,
+  setAdvertisements,
+  loading,
+  token,
+  apiBase,
+  onRefresh,
+}: {
+  advertisements: Advertisement[];
+  setAdvertisements: React.Dispatch<React.SetStateAction<Advertisement[]>>;
+  loading: boolean;
+  token: string | null;
+  apiBase: string;
+  onRefresh: () => void;
+}) {
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [failedVideoIds, setFailedVideoIds] = useState<Set<string>>(new Set());
+
+  const PRODUCTION_API = "https://api.getmyguide.in";
+
+  // Get the video URL — fallback to production if local file doesn't exist
+  const getVideoUrl = (ad: Advertisement) => {
+    const base = failedVideoIds.has(ad.id) ? PRODUCTION_API : apiBase;
+    return `${base}/media/advertisements/${ad.videoFilename}`;
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) return;
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("video", selectedFile);
+      if (uploadTitle.trim()) formData.append("title", uploadTitle.trim());
+
+      const res = await fetch(`${apiBase}/advertisement`, {
+        method: "POST",
+        credentials: "include",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      if (res.ok) {
+        setSelectedFile(null);
+        setUploadTitle("");
+        setShowUploadForm(false);
+        setSuccessMsg("Advertisement uploaded successfully!");
+        setTimeout(() => setSuccessMsg(null), 4000);
+        onRefresh();
+      } else {
+        const errData = await res.json().catch(() => null);
+        alert(errData?.message || "Failed to upload advertisement");
+      }
+    } catch (err) {
+      console.error("Upload error:", err);
+      alert("Failed to upload advertisement");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleToggle = async (id: string) => {
+    setActionLoading(id);
+    try {
+      const res = await fetch(`${apiBase}/advertisement/${id}/toggle`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      if (res.ok) {
+        onRefresh();
+      } else {
+        alert("Failed to toggle advertisement status");
+      }
+    } catch {
+      alert("Failed to toggle advertisement status");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this advertisement?")) return;
+
+    setActionLoading(id);
+    try {
+      const res = await fetch(`${apiBase}/advertisement/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      if (res.ok) {
+        setAdvertisements((prev) => prev.filter((ad) => ad.id !== id));
+      } else {
+        alert("Failed to delete advertisement");
+      }
+    } catch {
+      alert("Failed to delete advertisement");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Upload Button / Form */}
+      <div className="flex justify-between items-center">
+        <p className="text-sm text-gray-500">
+          Total advertisements: <strong>{advertisements.length}</strong>
+        </p>
+        {!showUploadForm && (
+          <button
+            onClick={() => setShowUploadForm(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Upload New Ad
+          </button>
+        )}
+      </div>
+
+      {/* Success Message */}
+      {successMsg && (
+        <div className="p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm font-medium">
+          {successMsg}
+        </div>
+      )}
+
+      {/* Upload Form */}
+      {showUploadForm && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-5 space-y-4">
+          <h3 className="text-lg font-semibold text-gray-800">
+            Upload New Advertisement
+          </h3>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Ad Title
+            </label>
+            <input
+              type="text"
+              value={uploadTitle}
+              onChange={(e) => setUploadTitle(e.target.value)}
+              placeholder="Enter advertisement title"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Video File
+            </label>
+            <input
+              type="file"
+              accept="video/*"
+              onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:bg-blue-100 file:text-blue-700 file:font-medium file:cursor-pointer"
+            />
+            {selectedFile && (
+              <p className="text-sm text-green-600 mt-1">
+                Selected: {selectedFile.name} (
+                {(selectedFile.size / (1024 * 1024)).toFixed(1)} MB)
+              </p>
+            )}
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={handleUpload}
+              disabled={!selectedFile || uploading}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            >
+              <Upload className="w-4 h-4" />
+              {uploading ? "Uploading..." : "Upload"}
+            </button>
+            <button
+              onClick={() => {
+                setShowUploadForm(false);
+                setSelectedFile(null);
+                setUploadTitle("");
+              }}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {advertisements.length === 0 && !loading && !showUploadForm && (
+        <div className="text-center py-12">
+          <Film className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-500 mb-4">No advertisements found.</p>
+          <button
+            onClick={() => setShowUploadForm(true)}
+            className="text-blue-500 hover:text-blue-600 underline font-medium"
+          >
+            Create your first advertisement
+          </button>
+        </div>
+      )}
+
+      {/* Advertisements List */}
+      {advertisements.length > 0 && (
+        <div className="grid gap-4">
+          {advertisements.map((ad) => (
+            <div
+              key={ad.id}
+              className={`flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 rounded-lg border transition-colors ${
+                ad.isActive
+                  ? "bg-white border-gray-200"
+                  : "bg-gray-50 border-gray-200 opacity-70"
+              }`}
+            >
+              {/* Video Player - fully playable */}
+              <div className="w-full lg:w-80 flex-shrink-0">
+                <video
+                  key={ad.id + ad.videoFilename}
+                  src={`${getVideoUrl(ad)}#t=0.1`}
+                  className="w-full aspect-video rounded-md bg-black"
+                  controls
+                  muted
+                  preload="auto"
+                  playsInline
+                  onError={() => {
+                    if (!failedVideoIds.has(ad.id) && apiBase !== PRODUCTION_API) {
+                      setFailedVideoIds((prev) => new Set(prev).add(ad.id));
+                    }
+                  }}
+                />
+              </div>
+
+              {/* Ad Info */}
+              <div className="flex-1 min-w-0">
+                <h4 className="text-lg font-semibold text-gray-800 truncate">
+                  {ad.title || "Untitled Ad"}
+                </h4>
+                <p className="text-xs text-gray-400 mt-0.5 font-mono truncate">
+                  {ad.videoFilename}
+                </p>
+                <div className="flex flex-wrap items-center gap-3 mt-3 text-sm text-gray-500">
+                  <span className="flex items-center gap-1">
+                    <Eye className="w-3.5 h-3.5" />
+                    {ad.views} views
+                  </span>
+                  <span>
+                    {new Date(ad.createdAt).toLocaleDateString()}
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                      ad.isActive
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {ad.isActive ? "Active" : "Inactive"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={() => handleToggle(ad.id)}
+                  disabled={actionLoading === ad.id}
+                  className={`p-2 rounded-lg transition-colors ${
+                    ad.isActive
+                      ? "text-green-600 hover:bg-green-50"
+                      : "text-gray-400 hover:bg-gray-100"
+                  } disabled:opacity-50`}
+                  title={ad.isActive ? "Deactivate" : "Activate"}
+                >
+                  {ad.isActive ? (
+                    <ToggleRight className="w-6 h-6" />
+                  ) : (
+                    <ToggleLeft className="w-6 h-6" />
+                  )}
+                </button>
+                <button
+                  onClick={() => handleDelete(ad.id)}
+                  disabled={actionLoading === ad.id}
+                  className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                  title="Delete"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

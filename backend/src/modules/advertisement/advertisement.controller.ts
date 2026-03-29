@@ -40,11 +40,12 @@ async function createAdvertisement(req: Request, res: Response, next: NextFuncti
 		console.log('✅ Video file moved to advertisements directory');
 
 		const advertisement = await AdvertisementService.createAdvertisement({
+			title: req.body.title || 'Advertisement',
 			videoFilename: videoFile.filename,
 		});
 
 		console.log('✅ Advertisement created in DB:', advertisement);
-		return Respond({ res, status: 201, data: advertisement });
+		return Respond({ res, status: 201, data: { data: advertisement } });
 	} catch (error) {
 		console.error('❌ Error in createAdvertisement:', error);
 		return next(error);
@@ -54,7 +55,7 @@ async function createAdvertisement(req: Request, res: Response, next: NextFuncti
 async function getAdvertisements(req: Request, res: Response, next: NextFunction) {
 	try {
 		const advertisements = await AdvertisementService.getAdvertisements();
-		return Respond({ res, status: 200, data: advertisements });
+		return Respond({ res, status: 200, data: { data: advertisements } });
 	} catch (error) {
 		return next(error);
 	}
@@ -63,7 +64,7 @@ async function getAdvertisements(req: Request, res: Response, next: NextFunction
 async function getAllAdvertisements(req: Request, res: Response, next: NextFunction) {
 	try {
 		const advertisements = await AdvertisementService.getAllAdvertisements();
-		return Respond({ res, status: 200, data: advertisements });
+		return Respond({ res, status: 200, data: { data: advertisements } });
 	} catch (error) {
 		return next(error);
 	}
@@ -74,7 +75,7 @@ async function getAdvertisementById(req: Request, res: Response, next: NextFunct
 		const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
 		const advertisement = await AdvertisementService.getAdvertisementById(id);
 		await AdvertisementService.incrementViews(id);
-		return Respond({ res, status: 200, data: advertisement });
+		return Respond({ res, status: 200, data: { data: advertisement } });
 	} catch (error) {
 		return next(error);
 	}
@@ -111,11 +112,15 @@ async function updateAdvertisement(req: Request, res: Response, next: NextFuncti
 			path.join(advertisementsDir, videoFile.filename)
 		);
 
-		const updated = await AdvertisementService.updateAdvertisement(id, {
+		const updateData: { videoFilename: string; title?: string } = {
 			videoFilename: videoFile.filename,
-		});
+		};
+		if (req.body.title) {
+			updateData.title = req.body.title;
+		}
+		const updated = await AdvertisementService.updateAdvertisement(id, updateData);
 
-		return Respond({ res, status: 200, data: updated });
+		return Respond({ res, status: 200, data: { data: updated } });
 	} catch (error) {
 		return next(error);
 	}
@@ -125,7 +130,7 @@ async function toggleActive(req: Request, res: Response, next: NextFunction) {
 	try {
 		const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
 		const updated = await AdvertisementService.toggleActive(id);
-		return Respond({ res, status: 200, data: updated });
+		return Respond({ res, status: 200, data: { data: updated } });
 	} catch (error) {
 		return next(error);
 	}

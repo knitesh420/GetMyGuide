@@ -3,6 +3,12 @@ import IAdvertisement from '../types/advertisement';
 
 const AdvertisementSchema = new mongoose.Schema<IAdvertisement>(
   {
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+      default: 'Advertisement',
+    },
     videoFilename: {
       type: String,
       required: true,

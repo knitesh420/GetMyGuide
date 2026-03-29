@@ -7,6 +7,9 @@ import {
 } from "@/lib/redux/advertisementSlice";
 import { Advertisement } from "@/lib/service/advertisementService";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const PRODUCTION_API_URL = "https://api.getmyguide.in";
+
 interface AdvertisementDisplayProps {
   className?: string;
   autoplay?: boolean;
@@ -27,6 +30,7 @@ const AdvertisementDisplay: React.FC<AdvertisementDisplayProps> = ({
     (state: RootState) => state.advertisement,
   );
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
+  const [useProductionUrl, setUseProductionUrl] = useState(false);
 
   useEffect(() => {
     dispatch(fetchAdvertisements());
@@ -78,19 +82,23 @@ const AdvertisementDisplay: React.FC<AdvertisementDisplayProps> = ({
   }
 
   const currentAd = advertisements[currentAdIndex];
+  const baseUrl = useProductionUrl ? PRODUCTION_API_URL : API_URL;
+  const videoUrl = `${baseUrl}/media/advertisements/${currentAd.videoFilename}`;
 
   return (
     <div className={`relative overflow-hidden bg-black ${className}`}>
       <video
-        key={currentAd.id}
-        src={`${process.env.NEXT_PUBLIC_API_URL}/media/advertisements/${currentAd.videoFilename}`}
+        key={currentAd.id + (useProductionUrl ? "-prod" : "")}
+        src={videoUrl}
         autoPlay={autoplay}
         muted={muted}
         loop={loop}
         controls={controls}
         className="w-full h-full object-cover"
-        onError={(e) => {
-          console.error("Video failed to load:", e);
+        onError={() => {
+          if (!useProductionUrl && API_URL !== PRODUCTION_API_URL) {
+            setUseProductionUrl(true);
+          }
         }}
       />
 

@@ -8,6 +8,7 @@ import { Header } from "@/components/layout/website/header";
 import { Footer } from "@/components/layout/website/footer";
 import Script from "next/script";
 import { WhatsAppFloatingButton } from "@/components/WhatsAppFloatingButton";
+import FloatingVideoAd from "@/components/FloatingVideoAd";
 // import { CartProvider } from "@/contexts/CardContext";
 
 export const metadata: Metadata = {
@@ -27,6 +28,7 @@ export default function RootLayout({
       <Header />
       <Suspense fallback={null}>{children}</Suspense>
       <Footer />
+      <FloatingVideoAd />
       <WhatsAppFloatingButton
         phoneNumber="917470222666"
         message="Hi, I want to know more about GetMyGuide."

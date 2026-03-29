@@ -4,11 +4,13 @@ import { Types } from 'mongoose';
 import { NotFoundError } from 'node-be-utilities';
 
 interface AdvertisementData {
+  title?: string;
   videoFilename: string;
 }
 
 interface TransformedAdvertisement {
   id: string;
+  title: string;
   videoFilename: string;
   isActive: boolean;
   views: number;
@@ -19,6 +21,7 @@ interface TransformedAdvertisement {
 function transformAdvertisement(ad: IAdvertisement): TransformedAdvertisement {
   return {
     id: ad._id.toString(),
+    title: ad.title,
     videoFilename: ad.videoFilename,
     isActive: ad.isActive,
     views: ad.views,

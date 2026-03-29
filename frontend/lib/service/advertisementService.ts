@@ -2,6 +2,7 @@ import { apiService } from "@/lib/service/api";
 
 export interface Advertisement {
   id: string;
+  title: string;
   videoFilename: string;
   views: number;
   isActive: boolean;
@@ -13,7 +14,31 @@ export interface AdvertisementResponse {
   success: boolean;
   message: string;
   data?: Advertisement[] | Advertisement;
-  advertisements?: Advertisement[];
+  [key: string]: any;
+}
+
+// Helper to extract array from both response formats:
+// New: { data: [...], success: true }
+// Old (spread array): { "0": {...}, "1": {...}, success: true }
+function extractAdArray(response: any): Advertisement[] {
+  if (Array.isArray(response?.data)) return response.data;
+  if (Array.isArray(response)) return response;
+  // Old spread format: numeric keys
+  const items = Object.keys(response || {})
+    .filter((key) => !isNaN(Number(key)))
+    .sort((a, b) => Number(a) - Number(b))
+    .map((key) => response[key]);
+  return items.length > 0 ? items : [];
+}
+
+// Helper to extract single ad from response
+function extractSingleAd(response: any): Advertisement | null {
+  if (response?.data && typeof response.data === "object" && !Array.isArray(response.data)) {
+    return response.data as Advertisement;
+  }
+  // Old spread format: check for 'id' directly on response
+  if (response?.id) return response as Advertisement;
+  return null;
 }
 
 // Fetch active advertisements
@@ -21,8 +46,8 @@ export async function getAdvertisements(): Promise<Advertisement[]> {
   try {
     const response =
       await apiService.get<AdvertisementResponse>("/advertisement");
-    if (response?.success && Array.isArray(response.data)) {
-      return response.data;
+    if (response?.success) {
+      return extractAdArray(response);
     }
     return [];
   } catch (error) {
@@ -37,8 +62,8 @@ export async function getAllAdvertisements(): Promise<Advertisement[]> {
     const response = await apiService.get<AdvertisementResponse>(
       "/advertisement/admin/all",
     );
-    if (response?.success && Array.isArray(response.data)) {
-      return response.data;
+    if (response?.success) {
+      return extractAdArray(response);
     }
     return [];
   } catch (error) {
@@ -55,8 +80,8 @@ export async function getAdvertisementById(
     const response = await apiService.get<AdvertisementResponse>(
       `/advertisement/${id}`,
     );
-    if (response?.success && response.data && !Array.isArray(response.data)) {
-      return response.data as Advertisement;
+    if (response?.success) {
+      return extractSingleAd(response);
     }
     return null;
   } catch (error) {
@@ -74,8 +99,8 @@ export async function createAdvertisement(
       "/advertisement",
       formData,
     );
-    if (response?.success && response.data && !Array.isArray(response.data)) {
-      return response.data as Advertisement;
+    if (response?.success) {
+      return extractSingleAd(response);
     }
     return null;
   } catch (error) {
@@ -94,8 +119,8 @@ export async function updateAdvertisement(
       `/advertisement/${id}`,
       formData,
     );
-    if (response?.success && response.data && !Array.isArray(response.data)) {
-      return response.data as Advertisement;
+    if (response?.success) {
+      return extractSingleAd(response);
     }
     return null;
   } catch (error) {
@@ -113,8 +138,8 @@ export async function toggleAdvertisementActive(
       `/advertisement/${id}/toggle`,
       {},
     );
-    if (response?.success && response.data && !Array.isArray(response.data)) {
-      return response.data as Advertisement;
+    if (response?.success) {
+      return extractSingleAd(response);
     }
     return null;
   } catch (error) {

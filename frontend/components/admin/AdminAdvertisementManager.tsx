@@ -20,6 +20,7 @@ const AdminAdvertisementManager: React.FC = () => {
   } = useSelector((state: RootState) => state.advertisement);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [title, setTitle] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -42,10 +43,12 @@ const AdminAdvertisementManager: React.FC = () => {
 
     const formData = new FormData();
     formData.append("video", selectedFile);
+    if (title.trim()) formData.append("title", title.trim());
 
     try {
       await dispatch(createNewAdvertisement(formData)).unwrap();
       setSelectedFile(null);
+      setTitle("");
       setIsCreating(false);
       alert("Advertisement created successfully");
     } catch {
@@ -61,10 +64,12 @@ const AdminAdvertisementManager: React.FC = () => {
 
     const formData = new FormData();
     formData.append("video", selectedFile);
+    if (title.trim()) formData.append("title", title.trim());
 
     try {
       await dispatch(updateAdvertisementData({ id, formData })).unwrap();
       setSelectedFile(null);
+      setTitle("");
       setEditingId(null);
       alert("Advertisement updated successfully");
     } catch {
@@ -115,6 +120,16 @@ const AdminAdvertisementManager: React.FC = () => {
 
         {isCreating ? (
           <div className="space-y-4">
+            <div className="flex flex-col gap-2">
+              <label className="font-semibold">Ad Title</label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Enter advertisement title"
+                className="p-2 border border-gray-300 rounded"
+              />
+            </div>
             <div className="flex flex-col gap-2">
               <label className="font-semibold">Select Video File</label>
               <input
@@ -181,6 +196,9 @@ const AdminAdvertisementManager: React.FC = () => {
                     ID
                   </th>
                   <th className="border border-gray-300 px-4 py-2 text-left">
+                    Title
+                  </th>
+                  <th className="border border-gray-300 px-4 py-2 text-left">
                     Video
                   </th>
                   <th className="border border-gray-300 px-4 py-2 text-left">
@@ -204,6 +222,9 @@ const AdminAdvertisementManager: React.FC = () => {
                       {ad.id.slice(0, 8)}...
                     </td>
                     <td className="border border-gray-300 px-4 py-2 text-sm">
+                      {ad.title || "—"}
+                    </td>
+                    <td className="border border-gray-300 px-4 py-2 text-sm">
                       {ad.videoFilename}
                     </td>
                     <td className="border border-gray-300 px-4 py-2 text-center">
@@ -224,6 +245,13 @@ const AdminAdvertisementManager: React.FC = () => {
                     <td className="border border-gray-300 px-4 py-2 text-sm space-y-2">
                       {editingId === ad.id ? (
                         <div className="space-y-2">
+                          <input
+                            type="text"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            placeholder="Update title"
+                            className="w-full p-1 border border-gray-300 rounded text-xs"
+                          />
                           <div className="flex flex-col gap-2">
                             <input
                               type="file"
@@ -254,7 +282,10 @@ const AdminAdvertisementManager: React.FC = () => {
                       ) : (
                         <div className="flex gap-1 flex-wrap">
                           <button
-                            onClick={() => setEditingId(ad.id)}
+                            onClick={() => {
+                              setEditingId(ad.id);
+                              setTitle(ad.title || "");
+                            }}
                             className="px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
                           >
                             Edit
