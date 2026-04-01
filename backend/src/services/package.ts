@@ -11,6 +11,8 @@ interface PackageData {
 	shortDescription?: string;
 	description?: string;
 	price?: number;
+	numberOfPeople?: number;
+	numberOfDays?: number;
 	inclusions?: string[];
 	exclusions?: string[];
 	featured?: boolean;
@@ -25,6 +27,8 @@ interface UpdatePackageData {
 	shortDescription?: string;
 	description?: string;
 	price?: number;
+	numberOfPeople?: number;
+	numberOfDays?: number;
 	inclusions?: string[];
 	exclusions?: string[];
 	featured?: boolean;
@@ -39,6 +43,8 @@ interface TransformedPackage {
 	shortDescription?: string;
 	description?: string;
 	price?: number;
+	numberOfPeople?: number;
+	numberOfDays?: number;
 	inclusions?: string[];
 	exclusions?: string[];
 	featured?: boolean;
@@ -61,6 +67,8 @@ function transformPackage(pkg: IPackage): TransformedPackage {
 		shortDescription: pkg.shortDescription,
 		description: pkg.description,
 		price: pkg.price,
+		numberOfPeople: pkg.numberOfPeople,
+		numberOfDays: pkg.numberOfDays,
 		inclusions: pkg.inclusions,
 		exclusions: pkg.exclusions,
 		featured: pkg.featured,
@@ -71,6 +79,8 @@ function transformPackage(pkg: IPackage): TransformedPackage {
 
 	// Remove undefined optional fields
 	if (transformed.price === undefined) delete (transformed as any).price;
+	if (transformed.numberOfPeople === undefined) delete (transformed as any).numberOfPeople;
+	if (transformed.numberOfDays === undefined) delete (transformed as any).numberOfDays;
 	if (transformed.shortDescription === undefined) delete (transformed as any).shortDescription;
 	if (transformed.description === undefined) delete (transformed as any).description;
 	if (transformed.inclusions === undefined) delete (transformed as any).inclusions;

@@ -6,7 +6,8 @@ export default interface IContactInquiry extends Document {
 	phoneNumber: string;
 	email: string;
 	nationality: string;
-	category: 'tour booking' | 'become a guide' | 'other';
+	category: 'tour booking' | 'become a guide' | 'service' | 'other';
+	serviceName?: string;
 	subject: string;
 	message: string;
 	status: 'pending' | 'reviewed' | 'resolved';

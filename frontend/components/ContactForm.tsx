@@ -36,7 +36,7 @@ interface ContactFormData {
   phoneNumber: string;
   email: string;
   nationality: string;
-  category: "tour booking" | "become a guide" | "other" | "";
+  category: "tour booking" | "become a guide" | "service" | "other" | "";
   subject: string;
   message: string;
 }
@@ -67,7 +67,7 @@ export function ContactForm() {
   const handleCategoryChange = (value: string) => {
     setFormData((prev) => ({
       ...prev,
-      category: value as "tour booking" | "become a guide" | "other",
+      category: value as "tour booking" | "become a guide" | "service" | "other",
     }));
   };
 
@@ -237,6 +237,7 @@ export function ContactForm() {
               <SelectContent>
                 <SelectItem value="tour booking">Tour Booking</SelectItem>
                 <SelectItem value="become a guide">Become a Guide</SelectItem>
+                <SelectItem value="service">Service Inquiry</SelectItem>
                 <SelectItem value="other">Other</SelectItem>
               </SelectContent>
             </Select>

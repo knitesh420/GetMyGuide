@@ -5,6 +5,10 @@ export interface TourData {
   city: string; // Changed from "location" to match backend
   places: string[]; // Added - required by Package API
   images: (File | string)[]; // Files for uploads, URLs from backend
+  price?: number; // Package price
+  shortDescription?: string; // Short description
+  numberOfPeople?: number; // Number of people
+  numberOfDays?: number; // Number of days
   inclusions?: string[]; // Added - Package API field
   exclusions?: string[]; // Added - Package API field
   featured?: boolean; // Added - Package API field

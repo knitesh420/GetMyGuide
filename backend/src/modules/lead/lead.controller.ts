@@ -15,6 +15,7 @@ async function createContactInquiry(req: Request, res: Response, next: NextFunct
 			category: data.category,
 			subject: data.subject,
 			message: data.message,
+			...(data.serviceName && { serviceName: data.serviceName }),
 			status: 'pending',
 		});
 

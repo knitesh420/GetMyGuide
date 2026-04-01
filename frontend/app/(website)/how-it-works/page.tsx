@@ -323,7 +323,7 @@ export default function HowItWorksPage() {
                   </div>
                 ))}
               </div>
-              <div className="text-center">
+              {/* <div className="text-center">
                 <Link href="/guides/register" passHref>
                   <Button
                     size="lg"
@@ -332,7 +332,7 @@ export default function HowItWorksPage() {
                     {t("how_for_guides_button")}
                   </Button>
                 </Link>
-              </div>
+              </div> */}
             </div>
           </div>
         </section>

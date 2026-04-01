@@ -21,7 +21,7 @@ interface LanguageContextType {
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(
-  undefined
+  undefined,
 );
 
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
@@ -49,7 +49,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   const t = useCallback(
     (
       key: string,
-      replacements?: { [key: string]: string | number }
+      replacements?: { [key: string]: string | number },
     ): string => {
       const translations: Record<LanguageCode, Record<string, string>> = {
         // ================================= ENGLISH =================================
@@ -198,7 +198,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           // About Page Sections
           about_platform_title: "About",
           about_platform_p1:
-            "IndiaTourManager.com is a unified digital platform that connects certified linguistic tour guides from across India with international travellers and inbound tour groups.",
+            "GetMyGuide.in is a unified digital platform that connects certified linguistic tour guides from across India with international travellers and inbound tour groups.",
           about_platform_p2:
             "Our mission is to empower India's tour guides, enhance the visitor experience, and promote authentic, responsible, and transparent tourism.",
           about_platform_p3:
@@ -227,7 +227,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           gt_p1:
             "The Golden Triangle — Delhi, Agra, and Jaipur — represents the heart of India's tourism experience, covering some of the nation's most iconic World Heritage Sites such as the Taj Mahal, Qutub Minar, Amber Fort, and Red Fort in Agra.",
           gt_p2:
-            "At IndiaTourManager.com, we specialize in offering the best professional guides for this region. Whether you're exploring Delhi's Mughal architecture, Agra's timeless love story, or Jaipur's royal heritage — our guides ensure you experience these wonders with comfort, clarity, and cultural depth.",
+            "At GetMyGuide.in, we specialize in offering the best professional guides for this region. Whether you're exploring Delhi's Mughal architecture, Agra's timeless love story, or Jaipur's royal heritage — our guides ensure you experience these wonders with comfort, clarity, and cultural depth.",
           gt_stat_cities: "Iconic Cities",
           gt_stat_exp: "Experiences",
           gt_overlay_title: "The Golden Triangle",
@@ -242,7 +242,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           vision_p:
             "To become India's most trusted online platform for professional tour guide bookings, uplifting the status of licensed guides while redefining the global travel experience through authenticity and transparency.",
           why_choose_header: "Why Choose Us",
-          why_choose_title: "Why Choose or Sign Up on IndiaTourManager.com",
+          why_choose_title: "Why Choose or Sign Up on GetMyGuide.in",
           reason_1_title: "Direct Access",
           reason_1_desc:
             "Connect directly with licensed guides — no agencies or brokers involved.",
@@ -400,7 +400,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           how_badge: "How It Works",
           how_title: "Simple Steps to Plan Your Perfect Trip",
           how_desc:
-            "From choosing a guide to booking your next adventure — discover how easy it is to travel with BookMyTourGuide.",
+            "From choosing a guide to booking your next adventure — discover how easy it is to travel with GetMyGuide.",
           how_section_1_title: "Book Your Perfect Tour in 4 Easy Steps",
           how_step_1_title: "Search & Browse",
           how_step_1_desc:
@@ -461,7 +461,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
             "Real-time location sharing for added security",
           how_safety_feat_4_title: "Quality Assurance",
           how_safety_feat_4_desc: "Regular monitoring and feedback system",
-          how_for_guides_title: "Want to Become a Guide?",
+          how_for_guides_title: "Certified Guide Curated Journey",
           how_guide_step_1_title: "Application",
           how_guide_step_1_desc:
             "Submit your profile and documents for verification",
@@ -2376,13 +2376,13 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
         Object.keys(replacements).forEach((placeholder) => {
           translation = translation.replace(
             `{${placeholder}}`,
-            String(replacements[placeholder])
+            String(replacements[placeholder]),
           );
         });
       }
       return translation;
     },
-    [language]
+    [language],
   );
 
   const value: LanguageContextType = useMemo(
@@ -2391,7 +2391,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
       setLanguage,
       t,
     }),
-    [language, setLanguage, t]
+    [language, setLanguage, t],
   );
 
   return (

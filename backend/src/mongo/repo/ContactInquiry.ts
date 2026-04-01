@@ -27,7 +27,11 @@ const contactInquirySchema = new Schema<IContactInquiry>(
 		category: {
 			type: String,
 			required: true,
-			enum: ['tour booking', 'become a guide', 'other'],
+			enum: ['tour booking', 'become a guide', 'service', 'other'],
+		},
+		serviceName: {
+			type: String,
+			trim: true,
 		},
 		subject: {
 			type: String,

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { TourData } from "../types/tour";
-import { X, Upload, MapPin } from "lucide-react";
+import { X, Upload, MapPin, IndianRupee, Users, Calendar } from "lucide-react";
 
 interface Props {
   onSubmit: (data: TourData) => Promise<boolean>;
@@ -15,6 +15,10 @@ export default function TourForm({ onSubmit }: Props) {
     title: "",
     city: "",
     places: "",
+    price: "",
+    shortDescription: "",
+    numberOfPeople: "",
+    numberOfDays: "",
   });
   const [images, setImages] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -94,6 +98,14 @@ export default function TourForm({ onSubmit }: Props) {
       city: form.city,
       places: placesArray,
       images,
+      ...(form.price && { price: Number(form.price) }),
+      ...(form.shortDescription.trim() && {
+        shortDescription: form.shortDescription.trim(),
+      }),
+      ...(form.numberOfPeople && {
+        numberOfPeople: Number(form.numberOfPeople),
+      }),
+      ...(form.numberOfDays && { numberOfDays: Number(form.numberOfDays) }),
     };
 
     const ok = await onSubmit(tourData);
@@ -106,6 +118,10 @@ export default function TourForm({ onSubmit }: Props) {
       title: "",
       city: "",
       places: "",
+      price: "",
+      shortDescription: "",
+      numberOfPeople: "",
+      numberOfDays: "",
     });
     setImages([]);
     setPreviews([]);
@@ -193,6 +209,113 @@ export default function TourForm({ onSubmit }: Props) {
             {errors.places && (
               <p className="text-red-500 text-xs mt-1">{errors.places}</p>
             )}
+          </div>
+
+          {/* Price */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              <IndianRupee className="inline w-4 h-4 mr-1" /> Package Price
+            </label>
+            <input
+              type="number"
+              value={form.price}
+              placeholder="4999"
+              min="0"
+              className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
+                errors.price
+                  ? "border-red-300 bg-red-50"
+                  : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
+              }`}
+              onChange={(e) => {
+                setForm({ ...form, price: e.target.value });
+                setErrors({ ...errors, price: "" });
+              }}
+            />
+            {errors.price && (
+              <p className="text-red-500 text-xs mt-1">{errors.price}</p>
+            )}
+          </div>
+
+          {/* Short Description */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Short Description
+            </label>
+            <textarea
+              value={form.shortDescription}
+              placeholder="A brief overview of the tour package..."
+              rows={3}
+              className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none resize-none ${
+                errors.shortDescription
+                  ? "border-red-300 bg-red-50"
+                  : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
+              }`}
+              onChange={(e) => {
+                setForm({ ...form, shortDescription: e.target.value });
+                setErrors({ ...errors, shortDescription: "" });
+              }}
+            />
+            {errors.shortDescription && (
+              <p className="text-red-500 text-xs mt-1">
+                {errors.shortDescription}
+              </p>
+            )}
+          </div>
+
+          {/* No. of People and No. of Days - side by side */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <Users className="inline w-4 h-4 mr-1" />
+                No. of People
+              </label>
+              <input
+                type="number"
+                value={form.numberOfPeople}
+                placeholder="10"
+                min="1"
+                className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
+                  errors.numberOfPeople
+                    ? "border-red-300 bg-red-50"
+                    : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
+                }`}
+                onChange={(e) => {
+                  setForm({ ...form, numberOfPeople: e.target.value });
+                  setErrors({ ...errors, numberOfPeople: "" });
+                }}
+              />
+              {errors.numberOfPeople && (
+                <p className="text-red-500 text-xs mt-1">
+                  {errors.numberOfPeople}
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <Calendar className="inline w-4 h-4 mr-1" />
+                No. of Days
+              </label>
+              <input
+                type="number"
+                value={form.numberOfDays}
+                placeholder="5"
+                min="1"
+                className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
+                  errors.numberOfDays
+                    ? "border-red-300 bg-red-50"
+                    : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
+                }`}
+                onChange={(e) => {
+                  setForm({ ...form, numberOfDays: e.target.value });
+                  setErrors({ ...errors, numberOfDays: "" });
+                }}
+              />
+              {errors.numberOfDays && (
+                <p className="text-red-500 text-xs mt-1">
+                  {errors.numberOfDays}
+                </p>
+              )}
+            </div>
           </div>
         </div>
 

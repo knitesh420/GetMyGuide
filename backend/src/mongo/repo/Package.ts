@@ -41,6 +41,14 @@ const PackageSchema = new mongoose.Schema<IPackage>(
 			type: Number,
 			min: 0,
 		},
+		numberOfPeople: {
+			type: Number,
+			min: 1,
+		},
+		numberOfDays: {
+			type: Number,
+			min: 1,
+		},
 		inclusions: {
 			type: [String],
 		},

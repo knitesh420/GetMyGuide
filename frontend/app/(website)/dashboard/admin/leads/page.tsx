@@ -103,7 +103,7 @@ export default function LeadsPage() {
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <User className="w-4 h-4 text-muted-foreground" />
-                          {lead.name}
+                          {lead.fullName}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -114,7 +114,7 @@ export default function LeadsPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <Phone className="w-3 h-3 text-muted-foreground" />
-                            {lead.phone}
+                            {lead.phoneNumber}
                           </div>
                         </div>
                       </TableCell>
@@ -129,7 +129,19 @@ export default function LeadsPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{lead.category}</Badge>
+                        <div className="flex flex-col gap-1">
+                          <Badge
+                            variant={lead.category === "service" ? "default" : "outline"}
+                            className={lead.category === "service" ? "bg-purple-600 hover:bg-purple-700" : ""}
+                          >
+                            {lead.category}
+                          </Badge>
+                          {lead.category === "service" && lead.serviceName && (
+                            <span className="text-xs text-purple-600 font-medium truncate max-w-[150px]" title={lead.serviceName}>
+                              {lead.serviceName}
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate" title={lead.subject}>
                         {lead.subject}

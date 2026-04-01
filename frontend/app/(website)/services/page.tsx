@@ -54,6 +54,10 @@ export default function ServicesPage() {
       formData.append("title", packageData.title);
       formData.append("city", packageData.city);
       formData.append("places", JSON.stringify(packageData.places));
+      if (packageData.price !== undefined) formData.append("price", String(packageData.price));
+      if (packageData.shortDescription) formData.append("shortDescription", packageData.shortDescription);
+      if (packageData.numberOfPeople !== undefined) formData.append("numberOfPeople", String(packageData.numberOfPeople));
+      if (packageData.numberOfDays !== undefined) formData.append("numberOfDays", String(packageData.numberOfDays));
 
       // Append image files
       packageData.images.forEach((img) => {
@@ -78,21 +82,24 @@ export default function ServicesPage() {
         return false;
       }
 
-      const created = data.data;
-
+      // Respond utility spreads data at the top level: { ...pkg, success: true }
       setPackages((prev) => [
         {
-          id: created.id, // Backend already provides id field
-          title: created.title,
-          city: created.city,
-          places: created.places,
-          images: created.images.map(
+          id: data.id,
+          title: data.title,
+          city: data.city,
+          places: data.places,
+          images: data.images.map(
             (img: string) => `${API_BASE_URL}/media/packages/${img}`,
           ),
-          featured: created.featured,
-          status: created.status,
-          createdAt: created.createdAt,
-          updatedAt: created.updatedAt,
+          price: data.price,
+          shortDescription: data.shortDescription,
+          numberOfPeople: data.numberOfPeople,
+          numberOfDays: data.numberOfDays,
+          featured: data.featured,
+          status: data.status,
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
         },
         ...prev,
       ]);
@@ -209,6 +216,10 @@ export default function ServicesPage() {
                       city={pkg.city}
                       images={pkg.images}
                       places={pkg.places}
+                      price={pkg.price}
+                      shortDescription={pkg.shortDescription}
+                      numberOfPeople={pkg.numberOfPeople}
+                      numberOfDays={pkg.numberOfDays}
                     />
 
                     {admin && (

@@ -56,9 +56,9 @@ export function GuideRegistration() {
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           {/* Left Content */}
           <div className="animate-slide-in-left">
-            <Badge className="mb-4 bg-secondary/10 text-secondary border-secondary/20">
+            {/* <Badge className="mb-4 bg-secondary/10 text-secondary border-secondary/20">
               {t("join_our_network")}
-            </Badge>
+            </Badge> */}
             <h2 className="text-4xl md:text-5xl font-bold text-primary mb-6">
               {t("become_certified_guide")}
             </h2>
@@ -90,7 +90,7 @@ export function GuideRegistration() {
                 );
               })}
             </div>
-            <Link href="/register">
+            <Link href="/register-guide">
               <Button
                 size="lg"
                 className="bg-secondary hover:bg-secondary/90 text-secondary-foreground"

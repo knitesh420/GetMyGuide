@@ -9,6 +9,8 @@ export default interface IPackage extends Document {
 	shortDescription?: string;
 	description?: string;
 	price?: number;
+	numberOfPeople?: number;
+	numberOfDays?: number;
 	inclusions?: string[];
 	exclusions?: string[];
 	featured?: boolean;

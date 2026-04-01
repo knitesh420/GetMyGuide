@@ -41,7 +41,7 @@ export default function AboutPlatformSection() {
             >
               {t("about_platform_title")}{" "}
               <span className="bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
-                IndiaTourManager.com
+                  GetMyGuide.in
               </span>
             </motion.h2>
             <div className="space-y-6 flex-grow">

@@ -7,9 +7,10 @@ export type CreateContactInquiryValidationResult = {
 	email: string;
 	phoneNumber: string;
 	nationality: string;
-	category: 'tour booking' | 'become a guide' | 'other';
+	category: 'tour booking' | 'become a guide' | 'service' | 'other';
 	subject: string;
 	message: string;
+	serviceName?: string;
 };
 
 export async function CreateContactInquiryValidator(
@@ -40,7 +41,9 @@ export async function CreateContactInquiryValidator(
 				.min(2, 'Nationality must be at least 2 characters')
 				.max(50, 'Nationality must not exceed 50 characters'),
 
-			category: z.enum(['tour booking', 'become a guide', 'other']),
+			category: z.enum(['tour booking', 'become a guide', 'service', 'other']),
+
+			serviceName: z.string().trim().max(200, 'Service name must not exceed 200 characters').optional(),
 
 			subject: z
 				.string()

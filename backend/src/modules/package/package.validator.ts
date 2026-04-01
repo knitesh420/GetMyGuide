@@ -6,6 +6,10 @@ export type CreatePackageValidationResult = {
 	title: string;
 	city: string;
 	places: string[];
+	price?: number;
+	shortDescription?: string;
+	numberOfPeople?: number;
+	numberOfDays?: number;
 };
 
 export async function CreatePackageValidator(req: Request, res: Response, next: NextFunction) {
@@ -27,6 +31,19 @@ export async function CreatePackageValidator(req: Request, res: Response, next: 
 				z.array(z.string().trim().min(1)).min(1, 'At least one place is required')
 			)
 			.transform((val) => (Array.isArray(val) ? val : [val])),
+		price: z.preprocess(
+			(val) => (val !== undefined && val !== '' ? Number(val) : undefined),
+			z.number().min(0, 'Price must be a positive number').optional()
+		),
+		shortDescription: z.string().trim().optional(),
+		numberOfPeople: z.preprocess(
+			(val) => (val !== undefined && val !== '' ? Number(val) : undefined),
+			z.number().int().min(1, 'Number of people must be at least 1').optional()
+		),
+		numberOfDays: z.preprocess(
+			(val) => (val !== undefined && val !== '' ? Number(val) : undefined),
+			z.number().int().min(1, 'Number of days must be at least 1').optional()
+		),
 	});
 
 	const reqValidatorResult = reqValidator.safeParse(req.body);
@@ -47,6 +64,10 @@ export type UpdatePackageValidationResult = {
 	title?: string;
 	city?: string;
 	places?: string[];
+	price?: number;
+	shortDescription?: string;
+	numberOfPeople?: number;
+	numberOfDays?: number;
 };
 
 export async function UpdatePackageValidator(req: Request, res: Response, next: NextFunction) {
@@ -68,6 +89,19 @@ export async function UpdatePackageValidator(req: Request, res: Response, next: 
 				z.array(z.string().trim().min(1)).min(1, 'At least one place is required').optional()
 			)
 			.optional(),
+		price: z.preprocess(
+			(val) => (val !== undefined && val !== '' ? Number(val) : undefined),
+			z.number().min(0, 'Price must be a positive number').optional()
+		),
+		shortDescription: z.string().trim().optional(),
+		numberOfPeople: z.preprocess(
+			(val) => (val !== undefined && val !== '' ? Number(val) : undefined),
+			z.number().int().min(1, 'Number of people must be at least 1').optional()
+		),
+		numberOfDays: z.preprocess(
+			(val) => (val !== undefined && val !== '' ? Number(val) : undefined),
+			z.number().int().min(1, 'Number of days must be at least 1').optional()
+		),
 	});
 
 	const reqValidatorResult = reqValidator.safeParse(req.body);

@@ -8,9 +8,10 @@ export interface Lead {
   email: string;
   phoneNumber: string;
   nationality: string;
-  category: "tour booking" | "become a guide" | "other";
+  category: "tour booking" | "become a guide" | "service" | "other";
   subject: string;
   message: string;
+  serviceName?: string;
   status: string;
   createdAt: string;
 }
@@ -21,9 +22,10 @@ interface LeadData {
   email: string;
   phoneNumber: string;
   nationality: string;
-  category: "tour booking" | "become a guide" | "other";
+  category: "tour booking" | "become a guide" | "service" | "other";
   subject: string;
   message: string;
+  serviceName?: string;
 }
 
 // Define the shape of this slice's state

@@ -191,7 +191,7 @@ export function TourCategories() {
               <p className="text-muted-foreground mb-6">
                 {t("custom_tour_prompt")}
               </p>
-              <Link href="/dashboard/user/custom-tour">
+              <Link href="/contact">
                 <Button
                   size="lg"
                   variant="outline"

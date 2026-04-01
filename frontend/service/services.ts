@@ -12,7 +12,9 @@ interface PackageResponse {
   images: string[];
   shortDescription?: string;
   description?: string;
-  price: number;
+  price?: number;
+  numberOfPeople?: number;
+  numberOfDays?: number;
   inclusions?: string[];
   exclusions?: string[];
   featured: boolean;
@@ -33,6 +35,10 @@ function mapPackageToTourData(pkg: PackageResponse): TourData {
     city: pkg.city,
     places: pkg.places,
     images: pkg.images.map(buildMediaUrl),
+    price: pkg.price,
+    shortDescription: pkg.shortDescription,
+    numberOfPeople: pkg.numberOfPeople,
+    numberOfDays: pkg.numberOfDays,
     inclusions: pkg.inclusions,
     exclusions: pkg.exclusions,
     featured: pkg.featured,
