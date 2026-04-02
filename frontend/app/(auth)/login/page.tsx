@@ -1,45 +1,39 @@
 // app/(auth)/login/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
-import Link from "next/link";
+import { useState, useEffect, useCallback } from "react";
 import { toast } from "react-toastify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+  InputOTPSeparator,
+} from "@/components/ui/input-otp";
 import { useAuth } from "@/lib/hooks/useAuth";
-import { LoginRequest } from "@/types/auth";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/store";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const [formData, setFormData] = useState<LoginRequest>({
-    email: "",
-    password: "",
-  });
+  const [step, setStep] = useState<"email" | "otp">("email");
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
 
-  const { login, loading, error, clearAuthError } = useAuth();
+  const { sendOtp, verifyOtpLogin, loading, error, clearAuthError } =
+    useAuth();
   const { isAuthenticated, user } = useSelector(
     (state: RootState) => state.auth,
   );
 
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const message = searchParams.get("message");
 
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated && user) {
-      const ROLE_ROUTES: Record<string, string> = {
-        guide: "/dashboard/guide",
-        admin: "/admin",
-        manager: "/admin",
-        user: "/dashboard/user",
-        tourist: "/dashboard/user", // Backend uses 'tourist' role
-      };
-      const redirectPath = ROLE_ROUTES[user.role] ?? "/dashboard";
-      router.push(redirectPath);
+      router.push("/admin");
     }
   }, [isAuthenticated, user, router]);
 
@@ -50,46 +44,72 @@ export default function LoginPage() {
     };
   }, [clearAuthError]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  // Resend cooldown timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
 
-    // Clear errors when user starts typing
-    if (error) {
+  const handleSendOtp = useCallback(
+    async (e?: React.FormEvent) => {
+      e?.preventDefault();
+
+      if (!email.trim()) {
+        toast.error("Email is required");
+        return;
+      }
+
+      if (!/\S+@\S+\.\S+/.test(email)) {
+        toast.error("Please enter a valid email address");
+        return;
+      }
+
       clearAuthError();
+      const success = await sendOtp(email);
+      if (success) {
+        setStep("otp");
+        setOtp("");
+        setResendCooldown(60);
+      }
+    },
+    [email, sendOtp, clearAuthError],
+  );
+
+  const handleVerifyOtp = useCallback(
+    async (otpValue: string) => {
+      if (otpValue.length !== 6) {
+        toast.error("Please enter the complete 6-digit OTP");
+        return;
+      }
+
+      clearAuthError();
+      await verifyOtpLogin(email, otpValue);
+    },
+    [email, verifyOtpLogin, clearAuthError],
+  );
+
+  const handleOtpChange = (value: string) => {
+    setOtp(value);
+    if (value.length === 6) {
+      handleVerifyOtp(value);
     }
   };
 
-  const validateForm = (): boolean => {
-    if (!formData.email.trim()) {
-      toast.error("Email is required", { ariaLabel: "Email validation error" });
-      return false;
-    }
-
-    if (!formData.password.trim()) {
-      toast.error("Password is required", {
-        ariaLabel: "Password validation error",
-      });
-      return false;
-    }
-
-    if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      toast.error("Please enter a valid email address", {
-        ariaLabel: "Email format error",
-      });
-      return false;
-    }
-
-    return true;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) return;
+  const handleResend = async () => {
+    if (resendCooldown > 0) return;
     clearAuthError();
+    const success = await sendOtp(email);
+    if (success) {
+      setOtp("");
+      setResendCooldown(60);
+    }
+  };
 
-    await login(formData);
+  const handleBack = () => {
+    setStep("email");
+    setOtp("");
+    clearAuthError();
   };
 
   // Don't render the form if already authenticated (prevent flash)
@@ -101,65 +121,98 @@ export default function LoginPage() {
     <div className="bg-card rounded-xl shadow-lg p-8 border border-border animate-scale-in">
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold text-foreground mb-2">
-          Welcome Back
+          Admin Login
         </h1>
-        <p className="text-muted-foreground">Sign in to your account</p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">
-            Email address
-          </label>
-          <Input
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleInputChange}
-            placeholder="Enter your email"
-            required
-            className="animate-slide-in-left animate-delay-200"
-            disabled={loading}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">
-            Password
-          </label>
-          <Input
-            type="password"
-            name="password"
-            value={formData.password}
-            onChange={handleInputChange}
-            placeholder="Enter your password"
-            required
-            className="animate-slide-in-right animate-delay-400"
-            disabled={loading}
-          />
-        </div>
-
-        <Button
-          type="submit"
-          disabled={loading}
-          className="w-full red-gradient animate-fade-in-up animate-delay-600"
-          size="lg"
-        >
-          {loading ? "Signing in..." : "Sign in"}
-        </Button>
-      </form>
-
-      <div className="mt-8 text-center animate-fade-in-up animate-delay-800">
-        <p className="text-muted-foreground text-sm">
-          Want to become a guide?{" "}
-          <Link
-            href="/register-guide"
-            className="text-primary hover:text-primary/80 font-medium"
-          >
-            Register here
-          </Link>
+        <p className="text-muted-foreground">
+          {step === "email"
+            ? "Enter your admin email to receive a login code"
+            : `Enter the 6-digit code sent to ${email}`}
         </p>
       </div>
+
+      {step === "email" ? (
+        <form onSubmit={handleSendOtp} className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">
+              Email address
+            </label>
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (error) clearAuthError();
+              }}
+              placeholder="Enter your admin email"
+              required
+              className="animate-slide-in-left animate-delay-200"
+              disabled={loading}
+            />
+          </div>
+
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full red-gradient animate-fade-in-up animate-delay-600"
+            size="lg"
+          >
+            {loading ? "Sending OTP..." : "Send OTP"}
+          </Button>
+        </form>
+      ) : (
+        <div className="space-y-6">
+          <div className="flex justify-center animate-fade-in-up">
+            <InputOTP
+              maxLength={6}
+              value={otp}
+              onChange={handleOtpChange}
+              disabled={loading}
+            >
+              <InputOTPGroup>
+                <InputOTPSlot index={0} />
+                <InputOTPSlot index={1} />
+                <InputOTPSlot index={2} />
+              </InputOTPGroup>
+              <InputOTPSeparator />
+              <InputOTPGroup>
+                <InputOTPSlot index={3} />
+                <InputOTPSlot index={4} />
+                <InputOTPSlot index={5} />
+              </InputOTPGroup>
+            </InputOTP>
+          </div>
+
+          <Button
+            onClick={() => handleVerifyOtp(otp)}
+            disabled={loading || otp.length !== 6}
+            className="w-full red-gradient"
+            size="lg"
+          >
+            {loading ? "Verifying..." : "Verify & Login"}
+          </Button>
+
+          <div className="flex items-center justify-between text-sm">
+            <button
+              type="button"
+              onClick={handleBack}
+              disabled={loading}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              &larr; Change email
+            </button>
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={loading || resendCooldown > 0}
+              className="text-primary hover:text-primary/80 transition-colors disabled:text-muted-foreground"
+            >
+              {resendCooldown > 0
+                ? `Resend in ${resendCooldown}s`
+                : "Resend OTP"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

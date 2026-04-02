@@ -4,7 +4,9 @@ import Controller from './session.controller';
 import {
 	ForgotPasswordValidator,
 	LoginValidator,
+	OtpLoginValidator,
 	ResetPasswordValidator,
+	SendOtpValidator,
 	SignupValidator,
 } from './session.validator';
 
@@ -13,6 +15,8 @@ const router = express.Router();
 // Public routes
 router.route('/signup').post(SignupValidator, Controller.signup);
 router.route('/login').post(LoginValidator, Controller.login);
+router.route('/login/send-otp').post(SendOtpValidator, Controller.sendLoginOtp);
+router.route('/login/verify-otp').post(OtpLoginValidator, Controller.loginWithOtp);
 router.route('/forgot-password').post(ForgotPasswordValidator, Controller.forgotPassword);
 router.route('/reset-password').post(ResetPasswordValidator, Controller.resetPassword);
 

@@ -4,7 +4,9 @@ import { Respond } from 'node-be-utilities';
 import {
 	ForgotPasswordValidationResult,
 	LoginValidationResult,
+	OtpLoginValidationResult,
 	ResetPasswordValidationResult,
+	SendOtpValidationResult,
 	SignupValidationResult,
 } from './session.validator';
 
@@ -93,6 +95,36 @@ async function logout(req: Request, res: Response, _next: NextFunction) {
 	});
 }
 
+async function sendLoginOtp(req: Request, res: Response, next: NextFunction) {
+	try {
+		const data = req.locals.data as SendOtpValidationResult;
+		await AuthService.sendLoginOtp(data.email);
+		return Respond({
+			res,
+			status: 200,
+			data: {
+				message: 'OTP sent successfully',
+			},
+		});
+	} catch (error) {
+		return next(error);
+	}
+}
+
+async function loginWithOtp(req: Request, res: Response, next: NextFunction) {
+	try {
+		const data = req.locals.data as OtpLoginValidationResult;
+		const result = await AuthService.loginWithOtp(data.email, data.otp);
+		return Respond({
+			res,
+			status: 200,
+			data: result,
+		});
+	} catch (error) {
+		return next(error);
+	}
+}
+
 const Controller = {
 	signup,
 	login,
@@ -100,6 +132,8 @@ const Controller = {
 	resetPassword,
 	validateAuth,
 	logout,
+	sendLoginOtp,
+	loginWithOtp,
 };
 
 export default Controller;

@@ -86,6 +86,54 @@ export async function ForgotPasswordValidator(req: Request, res: Response, next:
 	return next(new BadRequestError(message));
 }
 
+export type SendOtpValidationResult = {
+	email: string;
+};
+
+export type OtpLoginValidationResult = {
+	email: string;
+	otp: string;
+};
+
+export async function SendOtpValidator(req: Request, res: Response, next: NextFunction) {
+	const reqValidator = z.object({
+		email: z.string().email('Invalid email address').toLowerCase(),
+	});
+
+	const reqValidatorResult = reqValidator.safeParse(req.body);
+
+	if (reqValidatorResult.success) {
+		req.locals.data = reqValidatorResult.data;
+		return next();
+	}
+
+	const message = reqValidatorResult.error.issues
+		.map((err) => `${err.path.join('.')}: ${err.message}`)
+		.join(', ');
+
+	return next(new BadRequestError(message));
+}
+
+export async function OtpLoginValidator(req: Request, res: Response, next: NextFunction) {
+	const reqValidator = z.object({
+		email: z.string().email('Invalid email address').toLowerCase(),
+		otp: z.string().length(6, 'OTP must be 6 digits').regex(/^\d{6}$/, 'OTP must be numeric'),
+	});
+
+	const reqValidatorResult = reqValidator.safeParse(req.body);
+
+	if (reqValidatorResult.success) {
+		req.locals.data = reqValidatorResult.data;
+		return next();
+	}
+
+	const message = reqValidatorResult.error.issues
+		.map((err) => `${err.path.join('.')}: ${err.message}`)
+		.join(', ');
+
+	return next(new BadRequestError(message));
+}
+
 export async function ResetPasswordValidator(req: Request, res: Response, next: NextFunction) {
 	const reqValidator = z.object({
 		token: z.string().min(1, 'Reset token is required'),

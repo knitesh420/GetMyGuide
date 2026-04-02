@@ -121,6 +121,11 @@ export interface OTPRequest {
   email: string;
 }
 
+export interface OtpLoginRequest {
+  email: string;
+  otp: string;
+}
+
 export interface VerifyOTPRequest extends RegisterRequest {
   otp: string;
 }

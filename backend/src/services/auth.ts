@@ -1,7 +1,7 @@
 import { randomBytes } from 'crypto';
 import { ConflictError, NotFoundError, ServerError, UnauthorizedError } from 'node-be-utilities';
 import { AccountDB, StorageDB } from '@mongo';
-import { sendPasswordResetEmail } from '@provider/email';
+import { sendAdminOtpEmail, sendPasswordResetEmail } from '@provider/email';
 import JWTService, { JWTPayload } from '@services/jwt';
 
 interface SignupData {
@@ -139,6 +139,84 @@ class AuthService {
 		if (!emailSent) {
 			throw new ServerError('Failed to send password reset email');
 		}
+	}
+
+	/**
+	 * Send OTP to admin email for login
+	 */
+	async sendLoginOtp(email: string): Promise<void> {
+		const user = await AccountDB.findOne({ email: email.toLowerCase() });
+		if (!user) {
+			throw new UnauthorizedError('Invalid email or not an admin account');
+		}
+
+		if (user.role !== 'admin') {
+			throw new UnauthorizedError('Invalid email or not an admin account');
+		}
+
+		if (!user.isActive) {
+			throw new UnauthorizedError('Account is deactivated');
+		}
+
+		// Generate 6-digit OTP
+		const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+		// Store OTP in StorageDB (20 min TTL by default)
+		await StorageDB.setString('admin-otp:' + email.toLowerCase(), otp);
+
+		// Send OTP email
+		const emailSent = await sendAdminOtpEmail(user.email, otp);
+		if (!emailSent) {
+			throw new ServerError('Failed to send OTP email');
+		}
+	}
+
+	/**
+	 * Login admin with OTP
+	 */
+	async loginWithOtp(email: string, otp: string): Promise<AuthResponse> {
+		const user = await AccountDB.findOne({ email: email.toLowerCase() });
+		if (!user) {
+			throw new UnauthorizedError('Invalid email or OTP');
+		}
+
+		if (user.role !== 'admin') {
+			throw new UnauthorizedError('Invalid email or OTP');
+		}
+
+		if (!user.isActive) {
+			throw new UnauthorizedError('Account is deactivated');
+		}
+
+		// Verify OTP
+		const storedOtp = await StorageDB.getString('admin-otp:' + email.toLowerCase());
+		if (!storedOtp || storedOtp !== otp) {
+			throw new UnauthorizedError('Invalid or expired OTP');
+		}
+
+		// Delete used OTP
+		await StorageDB.deleteOne({ key: 'admin-otp:' + email.toLowerCase() });
+
+		// Generate JWT token
+		const payload: JWTPayload = {
+			userId: user._id.toString(),
+			role: user.role,
+			email: user.email,
+			name: user.name,
+		};
+		const token = JWTService.generateToken(payload);
+
+		return {
+			token,
+			user: {
+				id: user._id.toString(),
+				name: user.name,
+				email: user.email,
+				phone: user.phone,
+				role: user.role,
+				status: user.status,
+			},
+		};
 	}
 
 	/**

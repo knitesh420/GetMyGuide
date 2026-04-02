@@ -6,3 +6,4 @@ export { default as PaymentLinkTemplate } from './paymentLink';
 export { default as WelcomeEmailTemplate } from './welcome';
 export { default as TouristPaymentConfirmationTemplate } from './touristPaymentConfirmation';
 export { default as GuidePaymentConfirmationTemplate } from './guidePaymentConfirmation';
+export { default as AdminOtpTemplate } from './adminOtp';

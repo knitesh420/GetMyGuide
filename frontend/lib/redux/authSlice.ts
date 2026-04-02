@@ -5,6 +5,7 @@ import {
   AuthState,
   LoginRequest,
   OTPRequest,
+  OtpLoginRequest,
   User,
   AuthResponse,
 } from "@/types/auth";
@@ -68,6 +69,34 @@ export const registerUser = createAsyncThunk<AuthResponse, any>(
         role: data.role || data.userType || "tourist",
       };
       const result = await apiService.post("/session/signup", payload);
+      if (!result.success) return rejectWithValue(result.message);
+      return result;
+    } catch (err: any) {
+      return rejectWithValue(handleError(err));
+    }
+  },
+);
+
+// Send OTP for admin login
+export const sendLoginOtp = createAsyncThunk<any, { email: string }>(
+  "auth/sendLoginOtp",
+  async (data, { rejectWithValue }) => {
+    try {
+      const result = await apiService.post("/session/login/send-otp", data);
+      if (!result.success) return rejectWithValue(result.message);
+      return result;
+    } catch (err: any) {
+      return rejectWithValue(handleError(err));
+    }
+  },
+);
+
+// Verify OTP and login admin
+export const loginWithOtp = createAsyncThunk<AuthResponse, OtpLoginRequest>(
+  "auth/loginWithOtp",
+  async (data, { rejectWithValue }) => {
+    try {
+      const result = await apiService.post("/session/login/verify-otp", data);
       if (!result.success) return rejectWithValue(result.message);
       return result;
     } catch (err: any) {
@@ -251,6 +280,40 @@ const authSlice = createSlice({
         }
       })
       .addCase(registerUser.rejected, setRejected);
+
+    // Send Login OTP
+    builder
+      .addCase(sendLoginOtp.pending, setPending)
+      .addCase(sendLoginOtp.fulfilled, (state) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(sendLoginOtp.rejected, setRejected);
+
+    // Login with OTP
+    builder
+      .addCase(loginWithOtp.pending, setPending)
+      .addCase(loginWithOtp.fulfilled, (state, action) => {
+        state.loading = false;
+        const responseData = action.payload.user;
+        const userData = responseData;
+        if (userData && userData.phone) {
+          userData.mobile = userData.phone;
+        }
+        const token = action.payload.token;
+        localStorage.setItem("authToken", token);
+
+        state.user = userData;
+        state.token = token;
+        state.isAuthenticated = true;
+        state.error = null;
+
+        if (token && typeof window !== "undefined") {
+          localStorage.setItem("authToken", token);
+          localStorage.setItem("authUser", JSON.stringify(userData));
+        }
+      })
+      .addCase(loginWithOtp.rejected, setRejected);
 
     // Send OTP (not used by backend, kept for compatibility)
     builder

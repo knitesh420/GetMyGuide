@@ -44,7 +44,11 @@ import { useLanguage } from "@/contexts/LanguageContext";
 export default function ContactPage() {
   const { t } = useLanguage();
 
-  type ContactCategory = "tour booking" | "become a guide" | "service" | "other";
+  type ContactCategory =
+    | "tour booking"
+    | "become a guide"
+    | "service"
+    | "other";
   interface ContactFormData {
     fullName: string;
     email: string;
@@ -113,7 +117,10 @@ export default function ContactPage() {
     {
       icon: <MapPin className="w-6 h-6 text-accent" />,
       titleKey: "contact_info_office_title",
-      details: ["A-1/100 Chattarpur Extension birla Farm", "New Delhi - 110074"],
+      details: [
+        "A-1/100 Chattarpur Extension birla Farm",
+        "New Delhi - 110074",
+      ],
       descriptionKey: "contact_info_office_desc",
     },
     {

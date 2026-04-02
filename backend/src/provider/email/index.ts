@@ -2,6 +2,7 @@ import { RESEND_API_KEY } from '@config/const';
 import { error as logError } from 'node-be-utilities';
 import { Resend } from 'resend';
 import {
+	AdminOtpTemplate,
 	BookingAllocatedGuideTemplate,
 	BookingAllocatedTouristTemplate,
 	GuideCredentialsTemplate,
@@ -201,6 +202,21 @@ export async function sendTouristPaymentConfirmationEmail(
 		logError('Exception in sendTouristPaymentConfirmationEmail', error);
 		return false;
 	}
+}
+
+export async function sendAdminOtpEmail(to: string, otp: string) {
+	const { error } = await resend.emails.send({
+		from: 'Get My Guide <support@getmyguide.in>',
+		to: [to],
+		subject: 'Your Admin Login Code - Get My Guide',
+		html: AdminOtpTemplate(otp),
+	});
+
+	if (error) {
+		logError('Resend Error: Error Sending admin OTP email', error);
+		return false;
+	}
+	return true;
 }
 
 export async function sendGuidePaymentConfirmationEmail(

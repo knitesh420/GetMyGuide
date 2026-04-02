@@ -146,6 +146,8 @@ import { AppDispatch, RootState } from "../store";
 import {
   loginUser,
   registerUser,
+  sendLoginOtp,
+  loginWithOtp,
   getCurrentUser,
   logoutUser,
   refreshToken,
@@ -192,6 +194,36 @@ export const useAuth = () => {
     [dispatch, router],
   );
 
+  const sendOtp = useCallback(
+    async (email: string) => {
+      try {
+        await dispatch(sendLoginOtp({ email })).unwrap();
+        showToast.success("OTP sent to your email!");
+        return true;
+      } catch (err: any) {
+        showToast.error(err || "Failed to send OTP");
+        return false;
+      }
+    },
+    [dispatch],
+  );
+
+  const verifyOtpLogin = useCallback(
+    async (email: string, otp: string) => {
+      try {
+        const result = await dispatch(loginWithOtp({ email, otp })).unwrap();
+        const userData = result.user;
+        const userName = userData?.name || "Admin";
+        showToast.success(`Welcome back, ${userName}!`);
+        router.push("/admin");
+        return result;
+      } catch (err: any) {
+        showToast.error(err || "Invalid OTP");
+      }
+    },
+    [dispatch, router],
+  );
+
   const register = useCallback(
     async (data: any) => {
       const result = await dispatch(registerUser(data));
@@ -225,6 +257,8 @@ export const useAuth = () => {
     error,
     isAuthenticated,
     login,
+    sendOtp,
+    verifyOtpLogin,
     register,
     fetchCurrentUser,
     refresh,
