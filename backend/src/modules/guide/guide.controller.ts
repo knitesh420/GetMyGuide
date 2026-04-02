@@ -57,12 +57,6 @@ async function enroll(req: Request, res: Response, next: NextFunction) {
 			data: result,
 		});
 	} catch (error) {
-		console.error('❌ Enrollment error in controller:', error);
-		if (error instanceof Error) {
-			console.error('❌ Error name:', error.name);
-			console.error('❌ Error message:', error.message);
-			console.error('❌ Error stack:', error.stack);
-		}
 		return next(error);
 	}
 }

@@ -235,7 +235,7 @@ export default function HeroCarousel() {
                 {t("book_your_tour_now")}
               </Button>
             </Link>
-            <Link href="/register">
+            <Link href="/register-guide">
               <Button
                 size="lg"
                 variant="outline"

@@ -22,7 +22,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const publicRoutes = [
     "/",
     "/login",
-    "/register",
+    "/register-guide",
     "/about",
     "/contact",
   ];
@@ -36,11 +36,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       !loading &&
       !isAuthenticated &&
       !pathname.includes("/login") &&
-      !pathname.includes("/register")
+      !pathname.includes("/register-guide")
     ) {
       dispatch(getCurrentUser()).finally(() => {
         setInitialized(true);
-      });-
+      });
     } else if (!initialized) {
       setInitialized(true);
     }

@@ -181,17 +181,10 @@ export async function sendTouristPaymentConfirmationEmail(
 		orderId: string;
 	}
 ) {
-	console.log('📧 [EMAIL SERVICE] sendTouristPaymentConfirmationEmail called');
-	console.log('📧 [EMAIL SERVICE] Recipient email:', to);
-	console.log('📧 [EMAIL SERVICE] Booking details received:', bookingDetails);
-
 	try {
-		console.log('📧 [EMAIL SERVICE] Generating email template...');
 		const htmlContent = TouristPaymentConfirmationTemplate(bookingDetails);
-		console.log('📧 [EMAIL SERVICE] Template generated, length:', htmlContent.length);
 
-		console.log('📧 [EMAIL SERVICE] Calling Resend API...');
-		const { error, data } = await resend.emails.send({
+		const { error } = await resend.emails.send({
 			from: 'Get My Guide <support@getmyguide.in>',
 			to: [to],
 			subject: 'Payment Confirmation - Your Tour Guide Booking',
@@ -199,18 +192,12 @@ export async function sendTouristPaymentConfirmationEmail(
 		});
 
 		if (error) {
-			console.error('❌ [EMAIL SERVICE] Resend API returned error:', error);
 			logError('Resend Error: Error Sending tourist payment confirmation email', error);
 			return false;
 		}
 
-		console.log('✅ [EMAIL SERVICE] Resend API success, response data:', data);
 		return true;
 	} catch (error) {
-		console.error(
-			'❌ [EMAIL SERVICE] Exception caught in sendTouristPaymentConfirmationEmail:',
-			error
-		);
 		logError('Exception in sendTouristPaymentConfirmationEmail', error);
 		return false;
 	}
@@ -230,17 +217,10 @@ export async function sendGuidePaymentConfirmationEmail(
 		orderId: string;
 	}
 ) {
-	console.log('📧 [EMAIL SERVICE] sendGuidePaymentConfirmationEmail called');
-	console.log('📧 [EMAIL SERVICE] Recipient email:', to);
-	console.log('📧 [EMAIL SERVICE] Guide details received:', guideDetails);
-
 	try {
-		console.log('📧 [EMAIL SERVICE] Generating guide email template...');
 		const htmlContent = GuidePaymentConfirmationTemplate(guideDetails);
-		console.log('📧 [EMAIL SERVICE] Template generated, length:', htmlContent.length);
 
-		console.log('📧 [EMAIL SERVICE] Calling Resend API for guide...');
-		const { error, data } = await resend.emails.send({
+		const { error } = await resend.emails.send({
 			from: 'Get My Guide <support@getmyguide.in>',
 			to: [to],
 			subject: 'Payment Confirmation - Guide Registration Successful',
@@ -248,18 +228,12 @@ export async function sendGuidePaymentConfirmationEmail(
 		});
 
 		if (error) {
-			console.error('❌ [EMAIL SERVICE] Resend API returned error for guide:', error);
 			logError('Resend Error: Error Sending guide payment confirmation email', error);
 			return false;
 		}
 
-		console.log('✅ [EMAIL SERVICE] Resend API success for guide, response data:', data);
 		return true;
 	} catch (error) {
-		console.error(
-			'❌ [EMAIL SERVICE] Exception caught in sendGuidePaymentConfirmationEmail:',
-			error
-		);
 		logError('Exception in sendGuidePaymentConfirmationEmail', error);
 		return false;
 	}

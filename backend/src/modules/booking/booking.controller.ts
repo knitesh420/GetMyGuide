@@ -168,6 +168,22 @@ async function verifyAndCreateGuestBooking(req: Request, res: Response, next: Ne
 	}
 }
 
+async function deleteBooking(req: Request, res: Response, next: NextFunction) {
+	try {
+		const bookingId = req.locals.id!;
+
+		const result = await BookingService.deleteBooking(bookingId);
+
+		return Respond({
+			res,
+			status: 200,
+			data: result,
+		});
+	} catch (error) {
+		return next(error);
+	}
+}
+
 const Controller = {
 	createCustomisedBooking,
 	createGuestBooking,
@@ -178,6 +194,7 @@ const Controller = {
 	getMyReservations,
 	getTransactionStatus,
 	getRazorpayKey,
+	deleteBooking,
 };
 
 export default Controller;

@@ -161,8 +161,8 @@ class AuthService {
 		user.password = newPassword;
 		await user.save();
 
-		// Delete reset token - use mongoose model directly
-		await (StorageDB as any).findOneAndDelete({ key: token });
+		// Delete reset token
+		await StorageDB.deleteOne({ key: token });
 
 		// Generate new JWT token
 		const payload: JWTPayload = {

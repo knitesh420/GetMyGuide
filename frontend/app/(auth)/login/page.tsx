@@ -151,9 +151,9 @@ export default function LoginPage() {
 
       <div className="mt-8 text-center animate-fade-in-up animate-delay-800">
         <p className="text-muted-foreground text-sm">
-          Don't have an account?{" "}
+          Want to become a guide?{" "}
           <Link
-            href="/register"
+            href="/register-guide"
             className="text-primary hover:text-primary/80 font-medium"
           >
             Register here

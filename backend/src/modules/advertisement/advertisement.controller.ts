@@ -7,19 +7,13 @@ import { BadRequestError, Respond } from 'node-be-utilities';
 
 async function createAdvertisement(req: Request, res: Response, next: NextFunction) {
 	try {
-		console.log('🎬 createAdvertisement called');
-		console.log('📁 req.file:', req.file);
 		const videoFile = req.file;
 
 		if (!videoFile) {
-			console.log('❌ No video file provided');
 			return next(new BadRequestError('Video file is required'));
 		}
 
-		console.log('📹 Video file found:', videoFile.filename, 'Type:', videoFile.mimetype);
-
 		if (!videoFile.mimetype.startsWith('video/')) {
-			console.log('❌ Invalid file type:', videoFile.mimetype);
 			return next(new BadRequestError('Only video files are allowed'));
 		}
 
@@ -27,27 +21,20 @@ async function createAdvertisement(req: Request, res: Response, next: NextFuncti
 		const advertisementsDir = path.join(global.__basedir, 'static', 'advertisements');
 		const miscDir = path.join(global.__basedir, Path.Misc);
 
-		console.log('📂 Advertisements dir:', advertisementsDir);
-		console.log('📂 Misc dir:', miscDir);
-
 		await fs.mkdir(advertisementsDir, { recursive: true });
-		console.log('✅ Created advertisements directory');
 
 		await fs.rename(
 			path.join(miscDir, videoFile.filename),
 			path.join(advertisementsDir, videoFile.filename)
 		);
-		console.log('✅ Video file moved to advertisements directory');
 
 		const advertisement = await AdvertisementService.createAdvertisement({
 			title: req.body.title || 'Advertisement',
 			videoFilename: videoFile.filename,
 		});
 
-		console.log('✅ Advertisement created in DB:', advertisement);
 		return Respond({ res, status: 201, data: { data: advertisement } });
 	} catch (error) {
-		console.error('❌ Error in createAdvertisement:', error);
 		return next(error);
 	}
 }

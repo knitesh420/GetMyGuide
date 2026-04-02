@@ -43,13 +43,25 @@ import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function ContactPage() {
   const { t } = useLanguage();
-  const [formData, setFormData] = useState({
+
+  type ContactCategory = "tour booking" | "become a guide" | "service" | "other";
+  interface ContactFormData {
+    fullName: string;
+    email: string;
+    phoneNumber: string;
+    nationality: string;
+    subject: string;
+    category: ContactCategory;
+    message: string;
+  }
+
+  const [formData, setFormData] = useState<ContactFormData>({
     fullName: "",
     email: "",
     phoneNumber: "",
     nationality: "",
     subject: "",
-    category: "",
+    category: "tour booking",
     message: "",
   });
   const dispatch: AppDispatch = useDispatch();
@@ -66,7 +78,7 @@ export default function ContactPage() {
         phoneNumber: "",
         nationality: "",
         subject: "",
-        category: "",
+        category: "tour booking",
         message: "",
       });
       timer = setTimeout(() => {

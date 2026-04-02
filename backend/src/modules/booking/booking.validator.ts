@@ -219,7 +219,7 @@ export async function CreateBookingValidator(req: Request, res: Response, next: 
 					}
 					return val;
 				},
-				z.number().min(0, 'Price must be a positive number')
+				z.number().min(1, 'Price must be a positive number')
 			),
 		}),
 	});

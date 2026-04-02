@@ -266,9 +266,7 @@ class BookingService {
 
 		// Send payment confirmation email to tourist (non-blocking)
 		try {
-			console.log('📧 [EMAIL] Attempting to send payment confirmation email...');
-			console.log('📧 [EMAIL] Recipient:', data.tourist_info.email);
-			console.log('📧 [EMAIL] Booking details:', {
+			await sendTouristPaymentConfirmationEmail(data.tourist_info.email, {
 				name: data.tourist_info.name,
 				email: data.tourist_info.email,
 				phone: data.tourist_info.phone,
@@ -282,33 +280,8 @@ class BookingService {
 				orderId: razorpay_order_id,
 			});
 
-			const emailResult = await sendTouristPaymentConfirmationEmail(data.tourist_info.email, {
-				name: data.tourist_info.name,
-				email: data.tourist_info.email,
-				phone: data.tourist_info.phone,
-				city: data.travel_details.city,
-				places: data.travel_details.places,
-				date: data.travel_details.date.toString(),
-				persons: data.travel_details.no_of_person,
-				duration: data.booking_configuration.duration,
-				amount: data.booking_configuration.price,
-				transactionId: transaction.transaction_id,
-				orderId: razorpay_order_id,
-			});
-
-			if (emailResult) {
-				console.log('✅ [EMAIL] Payment confirmation email sent successfully!');
-			} else {
-				console.log('⚠️ [EMAIL] Email function returned false - check email provider logs');
-			}
 		} catch (emailError) {
-			// Log error but don't fail the booking
-			console.error('❌ [EMAIL] Failed to send payment confirmation email:');
-			console.error('❌ [EMAIL] Error details:', emailError);
-			if (emailError instanceof Error) {
-				console.error('❌ [EMAIL] Error message:', emailError.message);
-				console.error('❌ [EMAIL] Error stack:', emailError.stack);
-			}
+			// Non-blocking - don't fail the booking if email fails
 		}
 
 		return transformBooking(booking);
@@ -439,7 +412,7 @@ class BookingService {
 			// Send payment confirmation email to tourist (non-blocking)
 			try {
 				const transaction = await TransactionService.getTransaction(booking.transaction_id);
-				const emailSent = await sendTouristPaymentConfirmationEmail(booking.tourist_info.email, {
+				await sendTouristPaymentConfirmationEmail(booking.tourist_info.email, {
 					name: booking.tourist_info.name,
 					email: booking.tourist_info.email,
 					phone: booking.tourist_info.phone,
@@ -452,16 +425,25 @@ class BookingService {
 					transactionId: booking.transaction_id,
 					orderId: transaction.razorpay_order_id || 'N/A',
 				});
-				if (!emailSent) {
-					console.warn('Failed to send payment confirmation email to:', booking.tourist_info.email);
-				}
 			} catch (emailError) {
-				console.error('Error sending payment confirmation email:', emailError);
-				// Continue anyway - booking was confirmed successfully
+				// Non-blocking - booking was confirmed successfully
 			}
 		}
 
 		return transactionStatus;
+	}
+
+	/**
+	 * Delete a booking (admin only)
+	 */
+	async deleteBooking(bookingId: Types.ObjectId): Promise<{ message: string }> {
+		const booking = await BookingDB.findByIdAndDelete(bookingId);
+
+		if (!booking) {
+			throw new NotFoundError('Booking not found');
+		}
+
+		return { message: 'Booking deleted successfully' };
 	}
 }
 

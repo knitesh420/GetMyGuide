@@ -8,64 +8,20 @@ import {
   LogOut,
   UserCircle,
   BookOpen,
-  Map,
   X,
-  Globe2,
-  MessageSquare,
-  Binoculars,
-  PlaneLanding,
   Banknote,
-  UserRoundPlus,
   Calendar,
-  BusFront,
   Bus,
   TramFront,
-  User,
-  Users,
   PersonStanding,
-  Languages,
-  Podcast,
-  Book,
-  FileText,
+  PlaneLanding,
+  Binoculars,
 } from "lucide-react";
 import { useAuth } from "@/lib/hooks/useAuth";
 
 // --- Navigation Links for Each Role ---
 const adminNavigation = [
-  { name: "Dashboard", href: "/dashboard/admin", icon: LayoutGrid },
-  { name: "Leads", href: "/dashboard/admin/leads", icon: FileText },
-  { name: "Package", href: "/dashboard/admin/package", icon: Globe2 },
-  { name: "Locations", href: "/dashboard/admin/locations", icon: Map },
-  { name: "Languages", href: "/dashboard/admin/languages", icon: Languages },
-  { name: "User", href: "/dashboard/admin/users", icon: User },
-  { name: "Guide", href: "/dashboard/admin/guides", icon: Users },
-  { name: "Blogs", href: "/dashboard/admin/blog", icon: Book },
-  {
-    name: "Subscription",
-    href: "/dashboard/admin/subscriptions",
-    icon: Podcast,
-  },
-  {
-    name: "Service Booking",
-    href: "/dashboard/admin/service-bookings",
-    icon: BookOpen,
-  },
-  {
-    name: "Tour Guide Booking",
-    href: "/dashboard/admin/tourguide-bookings",
-    icon: BookOpen,
-  },
-  {
-    name: "User's requests",
-    href: "/dashboard/admin/custom-booking",
-    icon: UserRoundPlus,
-  },
-  { name: "Leads", href: "/dashboard/admin/leads", icon: FileText },
-  {
-    name: "Testimonials",
-    href: "/dashboard/admin/testimonial",
-    icon: MessageSquare,
-  },
+  { name: "Dashboard", href: "/admin", icon: LayoutGrid },
 ];
 
 const guideNavigation = [

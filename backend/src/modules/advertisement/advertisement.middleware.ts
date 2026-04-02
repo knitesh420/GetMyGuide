@@ -30,11 +30,8 @@ const uploadVideo = multer({
 }).single('video');
 
 export const parseAdvertisementFormData = (req: Request, res: Response, next: NextFunction) => {
-	console.log('🚀 parseAdvertisementFormData middleware called');
 	uploadVideo(req, res, (err: any) => {
 		if (err) {
-			console.error('❌ File upload error:', err);
-
 			if (err instanceof multer.MulterError) {
 				if (err.code === 'LIMIT_FILE_SIZE') {
 					return next(new BadRequestError('File size exceeds 500MB limit'));
@@ -50,7 +47,6 @@ export const parseAdvertisementFormData = (req: Request, res: Response, next: Ne
 
 			return next(new BadRequestError('File upload failed'));
 		}
-		console.log('✅ File uploaded successfully');
 		next();
 	});
 };

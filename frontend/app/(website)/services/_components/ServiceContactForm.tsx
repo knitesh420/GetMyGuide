@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { User, Phone, Mail, Globe, MessageSquare, Send, CheckCircle } from "lucide-react";
+import { User, Phone, Mail, Globe, MessageSquare, Send, CheckCircle, Hotel, Car } from "lucide-react";
 import { apiService } from "@/lib/service/api";
 
 interface Props {
@@ -17,6 +17,8 @@ export default function ServiceContactForm({ serviceName }: Props) {
     phoneNumber: "",
     email: "",
     nationality: "",
+    wantHotel: false,
+    wantCab: false,
     message: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -54,6 +56,8 @@ export default function ServiceContactForm({ serviceName }: Props) {
         serviceName: serviceName,
         subject: `Service Inquiry: ${serviceName}`,
         message: form.message.trim(),
+        wantHotel: form.wantHotel,
+        wantCab: form.wantCab,
       });
       setSubmitted(true);
     } catch (err: any) {
@@ -174,6 +178,37 @@ export default function ServiceContactForm({ serviceName }: Props) {
           {errors.nationality && (
             <p className="text-red-500 text-xs mt-0.5">{errors.nationality}</p>
           )}
+        </div>
+      </div>
+
+      {/* Additional Services */}
+      <div>
+        <label className="text-xs font-semibold text-slate-600 mb-2 block">
+          Additional Services
+        </label>
+        <div className="flex flex-wrap gap-4">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={form.wantHotel}
+              disabled={isSubmitting}
+              onChange={(e) => setForm({ ...form, wantHotel: e.target.checked })}
+              className="w-4 h-4 rounded border-slate-300 text-orange-500 focus:ring-orange-400 accent-orange-500"
+            />
+            <Hotel className="w-4 h-4 text-slate-500" />
+            <span className="text-sm text-slate-700">Hotel</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={form.wantCab}
+              disabled={isSubmitting}
+              onChange={(e) => setForm({ ...form, wantCab: e.target.checked })}
+              className="w-4 h-4 rounded border-slate-300 text-orange-500 focus:ring-orange-400 accent-orange-500"
+            />
+            <Car className="w-4 h-4 text-slate-500" />
+            <span className="text-sm text-slate-700">Cab Service</span>
+          </label>
         </div>
       </div>
 

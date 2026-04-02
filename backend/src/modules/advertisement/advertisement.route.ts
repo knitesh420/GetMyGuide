@@ -10,8 +10,6 @@ import {
 
 const router = express.Router();
 
-console.log('📡 Advertisement routes initialized');
-
 // Admin — get all (including inactive) — MUST be before /:id
 router.get('/admin/all', VerifySession, VerifyMinLevel('admin'), Controller.getAllAdvertisements);
 
@@ -27,8 +25,6 @@ router.post(
 	CreateAdvertisementValidator,
 	Controller.createAdvertisement
 );
-
-console.log('✅ Advertisement POST route registered');
 
 // Admin — toggle active — MUST be before /:id
 router.patch(

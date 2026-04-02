@@ -221,6 +221,84 @@ function AdminDashboard() {
     }
   };
 
+  const handleDeleteTouristBooking = async (bookingId: string) => {
+    if (
+      !confirm(
+        "Are you sure you want to delete this tourist's booking? This action cannot be undone.",
+      )
+    )
+      return;
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/booking/${bookingId}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        console.error("Delete failed:", res.status, txt);
+        alert(`Failed to delete booking: ${res.status} ${res.statusText}`);
+        return;
+      }
+
+      const data = await res.json();
+      // Remove tourist from UI list
+      setTourists((prev) => prev.filter((t) => t.id !== bookingId));
+      alert(data?.message || "Booking deleted successfully");
+    } catch (err) {
+      console.error("Error deleting booking:", err);
+      alert("Error deleting booking");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteLead = async (leadId: string) => {
+    if (
+      !confirm(
+        "Are you sure you want to delete this contact inquiry? This action cannot be undone.",
+      )
+    )
+      return;
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/lead/contact/${leadId}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        console.error("Delete failed:", res.status, txt);
+        alert(
+          `Failed to delete contact inquiry: ${res.status} ${res.statusText}`,
+        );
+        return;
+      }
+
+      const data = await res.json();
+      // Remove lead from UI list
+      setLeads((prev) => prev.filter((l) => l._id !== leadId));
+      alert(data?.message || "Contact inquiry deleted successfully");
+    } catch (err) {
+      console.error("Error deleting contact inquiry:", err);
+      alert("Error deleting contact inquiry");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const menuItems = [
     {
       id: "dashboard",
@@ -702,7 +780,12 @@ function AdminDashboard() {
                     <p className="text-gray-500">No tourists found.</p>
                   </div>
                 )}
-                {tourists.length > 0 && <TouristsTable tourists={tourists} />}
+                {tourists.length > 0 && (
+                  <TouristsTable
+                    tourists={tourists}
+                    onDelete={handleDeleteTouristBooking}
+                  />
+                )}
               </>
             )}
             {activeTab === "bookings" && (
@@ -733,7 +816,9 @@ function AdminDashboard() {
                     </p>
                   </div>
                 )}
-                {leads.length > 0 && <LeadsTable leads={leads} />}
+                {leads.length > 0 && (
+                  <LeadsTable leads={leads} onDelete={handleDeleteLead} />
+                )}
               </>
             )}
             {activeTab === "advertisements" && (
@@ -1202,7 +1287,13 @@ function GuidesTable({
 }
 
 // Tourists Table Component
-function TouristsTable({ tourists }: { tourists: Tourist[] }) {
+function TouristsTable({
+  tourists,
+  onDelete,
+}: {
+  tourists: Tourist[];
+  onDelete: (id: string) => void;
+}) {
   const [expandedTourist, setExpandedTourist] = useState<string | null>(null);
 
   const toggleExpand = (touristId: string) => {
@@ -1727,6 +1818,20 @@ function TouristsTable({ tourists }: { tourists: Tourist[] }) {
                     </p>
                   </div>
                 )}
+
+                {/* Delete Button */}
+                <div className="mt-4 flex justify-end">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(tourist.id);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -2471,7 +2576,13 @@ function GuideDetailsModal({
 }
 
 // Leads Table Component
-function LeadsTable({ leads }: { leads: Lead[] }) {
+function LeadsTable({
+  leads,
+  onDelete,
+}: {
+  leads: Lead[];
+  onDelete: (id: string) => void;
+}) {
   const [expandedLead, setExpandedLead] = useState<string | null>(null);
 
   const toggleExpand = (leadId: string) => {
@@ -2578,6 +2689,20 @@ function LeadsTable({ leads }: { leads: Lead[] }) {
                     <p className="text-sm text-gray-700 whitespace-pre-wrap">
                       {lead.message}
                     </p>
+                  </div>
+
+                  {/* Delete Button */}
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(lead._id);
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </button>
                   </div>
                 </div>
               </div>

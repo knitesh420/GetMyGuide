@@ -91,13 +91,10 @@ class GuideService {
 			key: string;
 		};
 	}> {
-		console.log('Creating enrollment for:', data.email);
 		try {
 			// Create enrollment without status field
 			const enrollment = await GuideEnrollmentDB.create(data);
-			console.log('Enrollment created with ID:', enrollment._id.toString());
 
-			console.log('Creating transaction for payment...');
 			// Create transaction using TransactionService for payment
 			const transaction = await TransactionService.createTransaction(
 				{
@@ -115,22 +112,12 @@ class GuideService {
 					description: 'Guide Registration Fee - Rs 500',
 				}
 			);
-			console.log('Transaction created:', transaction.transaction_id);
-
 			return {
 				enrollment_id: enrollment._id.toString(),
 				transaction_id: transaction.transaction_id,
 				razorpay_options: transaction.razorpay_options,
 			};
 		} catch (error) {
-			console.error('❌ Error in guide enroll service:', error);
-			if (error instanceof Error) {
-				console.error('❌ Error details:', {
-					name: error.name,
-					message: error.message,
-					stack: error.stack,
-				});
-			}
 			throw error;
 		}
 	}
@@ -176,7 +163,6 @@ class GuideService {
 					}
 				} catch (error) {
 					// If transaction not found, just return enrollment without transaction details
-					console.log(`No transaction found for enrollment ${enrollment._id.toString()}`);
 				}
 
 				return transformEnrollment(enrollment);
@@ -256,9 +242,7 @@ class GuideService {
 
 		// Send payment confirmation email to guide (non-blocking)
 		try {
-			console.log('📧 [EMAIL] Attempting to send guide payment confirmation email...');
-			console.log('📧 [EMAIL] Recipient:', enrollment.email);
-			console.log('📧 [EMAIL] Guide enrollment details:', {
+			await sendGuidePaymentConfirmationEmail(enrollment.email, {
 				name: enrollment.name,
 				email: enrollment.email,
 				phone: enrollment.phone,
@@ -270,30 +254,8 @@ class GuideService {
 				orderId: transaction.razorpay_order_id,
 			});
 
-			const paymentEmailResult = await sendGuidePaymentConfirmationEmail(enrollment.email, {
-				name: enrollment.name,
-				email: enrollment.email,
-				phone: enrollment.phone,
-				city: enrollment.city,
-				experience: enrollment.type === 'escort' ? 'Licensed Escort Guide' : 'Regular Guide',
-				languages: enrollment.languages,
-				amount: 500,
-				transactionId: transaction.transaction_id,
-				orderId: transaction.razorpay_order_id,
-			});
-
-			if (paymentEmailResult) {
-				console.log('✅ [EMAIL] Guide payment confirmation email sent successfully!');
-			} else {
-				console.log('⚠️ [EMAIL] Payment email function returned false - check email provider logs');
-			}
 		} catch (emailError) {
-			console.error('❌ [EMAIL] Failed to send guide payment confirmation email:');
-			console.error('❌ [EMAIL] Error details:', emailError);
-			if (emailError instanceof Error) {
-				console.error('❌ [EMAIL] Error message:', emailError.message);
-				console.error('❌ [EMAIL] Error stack:', emailError.stack);
-			}
+			// Non-blocking - don't fail if email fails
 		}
 
 		// Try to send credentials email (non-blocking - don't fail if email fails)
@@ -514,7 +476,8 @@ class GuideService {
 		const query: any = { role: 'guide', isActive: true, status: 'verified' };
 
 		if (params?.search) {
-			query.name = { $regex: params.search, $options: 'i' };
+			const escapedSearch = params.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+			query.name = { $regex: escapedSearch, $options: 'i' };
 		}
 
 		const accounts = await AccountDB.find(query).skip(skip).limit(limit).lean();

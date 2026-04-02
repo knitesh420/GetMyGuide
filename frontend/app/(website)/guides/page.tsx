@@ -5,15 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Award,
   Clock,
-  IndianRupee, 
+  IndianRupee,
   CheckCircle,
   ArrowRight,
-  Badge,
 } from "lucide-react";
 import HeroSection from "@/components/all/CommonHeroSection";
 import Link from "next/link";
 import { useLanguage } from "@/contexts/LanguageContext"; // Import karein
-import router from "next/router";
 
 export default function BecomeAGuidePage() {
   const { t } = useLanguage(); // Add karein
@@ -148,10 +146,6 @@ export default function BecomeAGuidePage() {
           </div>
         </section>
 
-        <section>
-          <div className="container mx-auto px-4 py-1 md:py-1 text-center"></div>
-        </section>
-
         <section className="py-20 md:py-28 text-center">
           <div className="container mx-auto px-4 max-w-3xl">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
@@ -160,7 +154,7 @@ export default function BecomeAGuidePage() {
             <p className="text-lg text-muted-foreground mb-8">
               {t("guide_page_cta_desc")}
             </p>
-            <Link href="/register" passHref>
+            <Link href="/register-guide" passHref>
               <Button size="lg" className="text-lg h-14 px-8">
                 {t("guide_page_cta_button")}
                 <ArrowRight className="ml-2 h-5 w-5" />

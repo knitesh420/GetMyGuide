@@ -8,7 +8,9 @@
       "Bash(grep -r /api/guides /c/Users/nites/OneDrive/Desktop/Tour/backend/src --include=*.ts)",
       "Bash(npx tsc:*)",
       "Bash(npx pnpm:*)",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "Bash(curl -s http://localhost:8000/advertisement)",
+      "Bash(curl -s http://localhost:8000/advertisement/admin/all)"
     ]
   }
 }

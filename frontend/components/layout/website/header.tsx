@@ -8,7 +8,6 @@ import {
   X,
   User,
   LogIn,
-  UserPlus,
   LogOut,
   ChevronDown,
   Home,
@@ -86,7 +85,6 @@ export function Header() {
   }, [pathname]);
 
   const handleLogin = () => router.push("/login");
-  const handleRegister = () => router.push("/register");
 
   const handleLogout = async () => {
     await logout();
@@ -99,7 +97,7 @@ export function Header() {
         user.role === "guide"
           ? "/dashboard/guide"
           : user.role === "admin" || user.role === "manager"
-          ? "/dashboard/admin"
+          ? "/admin"
           : "/dashboard/user";
       router.push(dashboardPath);
       setIsProfileOpen(false);
@@ -230,17 +228,6 @@ export function Header() {
                           {t("profile_login")}
                         </span>
                       </button>
-                      <button
-                        onClick={handleRegister}
-                        className="w-full flex items-center space-x-3 px-4 py-3 text-sm text-gray-700 hover:bg-primary/10 hover:text-primary transition-all duration-200"
-                      >
-                        <div className="w-8 h-8 bg-primary/15 rounded-lg flex items-center justify-center">
-                          <UserPlus className="w-4 h-4 text-primary" />
-                        </div>
-                        <span className="font-medium">
-                          {t("profile_register")}
-                        </span>
-                      </button>
                     </>
                   ) : (
                     <>
@@ -355,13 +342,6 @@ export function Header() {
                   >
                     <LogIn className="w-4 h-4 text-primary" />
                     <span>{t("profile_login")}</span>
-                  </button>
-                  <button
-                    onClick={handleRegister}
-                    className="w-full flex items-center space-x-3 px-3 py-3 text-sm font-medium text-gray-700 hover:bg-primary/10 hover:text-primary transition-all duration-200 rounded-lg"
-                  >
-                    <UserPlus className="w-4 h-4 text-primary" />
-                    <span>{t("profile_register")}</span>
                   </button>
                 </div>
               ) : (

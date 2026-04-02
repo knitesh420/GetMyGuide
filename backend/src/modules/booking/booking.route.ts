@@ -38,6 +38,10 @@ router
 		Controller.allocateGuide
 	);
 
+router
+	.route('/:id')
+	.delete(VerifySession, VerifyMinLevel('admin'), IDValidator, Controller.deleteBooking);
+
 // Guide routes
 router
 	.route('/my-reservations')

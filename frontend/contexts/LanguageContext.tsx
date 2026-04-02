@@ -133,7 +133,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
 
           // Guide Registration
           join_our_network: "Join Our Network",
-          become_certified_guide: "Become a Certified Guide",
+          become_certified_guide: "Register as a Certified Guide",
           guide_reg_desc:
             "Join our exclusive network of professional guides and share your passion for your local culture while earning a sustainable income.",
           benefit_title_1: "Earn Premium Income",
