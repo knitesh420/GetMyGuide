@@ -205,7 +205,7 @@ export default function MyBookingsPage() {
           You haven't booked any tours.
         </p>
         <Button size="lg" asChild>
-          <Link href="/tours">Explore Tours</Link>
+          <Link href="/services">Explore Tours</Link>
         </Button>
       </div>
     );

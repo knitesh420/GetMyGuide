@@ -117,7 +117,7 @@ export default function GuideProfilePage({ params }: { params: { guideId: string
               <div className="mt-6 text-center animate-fade-in-up animate-delay-400">
                 <p className="text-muted-foreground mb-4">Ready for an adventure with {guide.name.split(' ')[0]}?</p>
                 <Button size="lg" className="w-full text-lg h-14 red-gradient text-white font-bold" asChild>
-                  <Link href="/tours">
+                  <Link href="/services">
                     Explore Tours to Book this Guide
                   </Link>
                 </Button>

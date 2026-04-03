@@ -177,7 +177,7 @@ function CheckoutContent() {
         <p className="text-muted-foreground">
           Please start your booking again from the tours page.
         </p>
-        <Button onClick={() => router.push("/tours")} className="mt-4">
+        <Button onClick={() => router.push("/services")} className="mt-4">
           Browse Tours
         </Button>
       </div>

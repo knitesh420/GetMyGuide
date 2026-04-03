@@ -128,7 +128,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
                             <div className="grid grid-cols-2 gap-3">
                                 <button
                                     onClick={() => {
-                                        router.push("/tours");
+                                        router.push("/services");
                                         onClose();
                                     }}
                                     className="flex items-center space-x-3 p-4 rounded-xl border border-gray-200 hover:border-primary hover:bg-primary/5 transition-all group"
@@ -137,7 +137,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
                                         <Package className="w-5 h-5 text-primary" />
                                     </div>
                                     <div className="text-left">
-                                        <Link href="/tours">
+                                        <Link href="/services">
                                             <p className="font-semibold text-gray-900">All Tours</p>
                                             <p className="text-xs text-gray-500">Browse packages</p>
                                         </Link>

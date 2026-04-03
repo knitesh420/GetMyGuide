@@ -53,7 +53,7 @@ const guideNavigation = [
 const userNavigation = [
   { name: "Dashboard", href: "/dashboard/user", icon: LayoutGrid },
   { name: "Find a Guide", href: "/find-guides", icon: PersonStanding },
-  { name: "Explore Our packages", href: "/tours", icon: PlaneLanding },
+  { name: "Explore Our packages", href: "/services", icon: PlaneLanding },
   {
     name: "Plan Your Tour",
     href: "/dashboard/user/custom-tour",

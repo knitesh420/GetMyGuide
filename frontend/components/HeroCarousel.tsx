@@ -226,7 +226,7 @@ export default function HeroCarousel() {
             variants={itemVariants}
             className="flex flex-col sm:flex-row gap-4 justify-center mb-6"
           >
-            <Link href="/tours">
+            <Link href="/services">
               <Button
                 size="lg"
                 className="bg-orange-500 hover:bg-orange-600 text-white px-10 py-6 text-lg font-semibold rounded-full shadow-2xl transform hover:scale-105 transition-all"
