@@ -100,6 +100,9 @@ class GuideService {
 		// Create a temporary reference for the order
 		const tempReference = randomBytes(12).toString('base64').slice(0, 16);
 
+		// Fixed registration fee — defined on backend only
+		const GUIDE_REGISTRATION_FEE = 500;
+
 		// Create transaction using TransactionService for payment
 		const transaction = await TransactionService.createTransaction(
 			{
@@ -107,13 +110,10 @@ class GuideService {
 				email: data.email,
 				phone_number: data.phone,
 			},
-			500, // 500 rupees
+			GUIDE_REGISTRATION_FEE,
 			{
 				reference_id: tempReference,
 				reference_type: 'pending_enrollment',
-				data: {
-					enrollment_data,
-				},
 				description: 'Guide Registration Fee - Rs 500',
 			}
 		);

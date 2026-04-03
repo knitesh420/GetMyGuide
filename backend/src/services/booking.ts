@@ -6,6 +6,7 @@ import {
 	sendTouristPaymentConfirmationEmail,
 } from '@provider/email';
 import { verifyRazorpaySignature } from '@utils/paymentVerify';
+import { calculateBookingPrice } from '@utils/priceCalculator';
 import { randomBytes } from 'crypto';
 import { Types } from 'mongoose';
 import { NotFoundError, ServerError } from 'node-be-utilities';
@@ -139,6 +140,14 @@ class BookingService {
 			};
 		};
 	}> {
+		// Recalculate price on backend — never trust frontend price
+		const priceBreakdown = calculateBookingPrice(
+			data.travel_details.no_of_person,
+			data.travel_details.city,
+			data.booking_configuration
+		);
+		data.booking_configuration.price = priceBreakdown.total;
+
 		// Encode booking data — NO DB write here
 		const booking_data = Buffer.from(JSON.stringify(data)).toString('base64');
 		const tempReference = randomBytes(12).toString('base64').slice(0, 16);
@@ -150,7 +159,7 @@ class BookingService {
 				email: data.tourist_info.email,
 				phone_number: data.tourist_info.phone,
 			},
-			data.booking_configuration.price,
+			priceBreakdown.total,
 			{
 				reference_id: tempReference,
 				reference_type: 'pending_booking',
@@ -191,6 +200,14 @@ class BookingService {
 			booking_data: string; // Base64 encoded booking data
 		};
 	}> {
+		// Recalculate price on backend — never trust frontend price
+		const priceBreakdown = calculateBookingPrice(
+			data.travel_details.no_of_person,
+			data.travel_details.city,
+			data.booking_configuration
+		);
+		data.booking_configuration.price = priceBreakdown.total;
+
 		// Generate transaction_id using base64 format
 		const transaction_id = randomBytes(12).toString('base64').slice(0, 16);
 
@@ -204,7 +221,7 @@ class BookingService {
 				email: data.tourist_info.email,
 				phone_number: data.tourist_info.phone,
 			},
-			data.booking_configuration.price,
+			priceBreakdown.total,
 			{
 				reference_id: transaction_id,
 				reference_type: 'pending_booking',

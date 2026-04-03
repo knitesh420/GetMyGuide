@@ -726,9 +726,9 @@ export default function CombinedGuideBookingForm() {
               );
             }
 
-            // Store order and payment IDs
+            // Store order and payment IDs — use backend-calculated amount
             setOrderId(response.razorpay_order_id);
-            setPaymentAmount(totalAmount);
+            setPaymentAmount(data.razorpay_options.amount / 100);
             setTransactionId(data.transaction_id || "");
 
             setShowSuccess(true);
