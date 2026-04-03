@@ -29,7 +29,7 @@ export default function AdminOtpTemplate(otp: string) {
                   <td valign="top" align="center" style="padding:0;margin:0;width:560px">
                    <table cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
                      <tr>
-                      <td align="center" style="padding:0;margin:0;padding-bottom:10px;font-size:0px"><img src="https://ehoqxxg.stripocdn.email/content/guids/CABINET_0cffabf3297c3399cd17664f2aee220b8678981dceeba5f947a748a648c9028f/images/keethjewels.jpg" alt="Logo" style="display:block;font-size:12px;border:0;outline:none;text-decoration:none" width="200"></td>
+                      <td align="center" style="padding:0;margin:0;padding-bottom:10px;font-size:0px"><img src="https://getmyguide.in/images/logo.png" alt="Logo" style="display:block;font-size:12px;border:0;outline:none;text-decoration:none" width="200"></td>
                      </tr>
                    </table></td>
                  </tr>
