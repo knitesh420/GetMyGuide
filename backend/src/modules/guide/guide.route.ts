@@ -17,8 +17,8 @@ router.route('/enroll').post(parseGuideEnrollmentFormData, EnrollValidator, Cont
 router.route('/enroll-status/:id').get(IDValidator, Controller.getEnrollStatus);
 
 router
-	.route('/confirm-payment/:id')
-	.post(VerifySession, IDValidator, ConfirmPaymentValidator, Controller.confirmPayment);
+	.route('/confirm-payment')
+	.post(ConfirmPaymentValidator, Controller.confirmPayment);
 
 // Public route - list all guides (no authentication required)
 router.route('/list-all').get(Controller.listAll);

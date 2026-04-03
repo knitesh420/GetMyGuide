@@ -95,14 +95,19 @@ async function getEnrollStatus(req: Request, res: Response, next: NextFunction) 
 
 async function confirmPayment(req: Request, res: Response, next: NextFunction) {
 	try {
-		const enrollmentId = req.locals.id!;
 		const data = req.locals.data as ConfirmPaymentValidationResult;
 
-		const result = await GuideService.confirmPayment(enrollmentId, data.transaction_id);
+		const result = await GuideService.confirmPayment({
+			transaction_id: data.transaction_id,
+			razorpay_order_id: data.razorpay_order_id,
+			razorpay_payment_id: data.razorpay_payment_id,
+			razorpay_signature: data.razorpay_signature,
+			enrollment_data: data.enrollment_data,
+		});
 
 		return Respond({
 			res,
-			status: 200,
+			status: 201,
 			data: result,
 		});
 	} catch (error) {

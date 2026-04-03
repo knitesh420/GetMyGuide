@@ -296,54 +296,61 @@ export default function BecomeGuidePage() {
           description: enrollmentData.razorpay_options.description,
           order_id: enrollmentData.razorpay_options.order_id,
           handler: async function (response: any) {
-            const verifyRes = await fetch(
-              `${API_BASE_URL}/guide/confirm-payment/${enrollmentData.enrollment_id}`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  transaction_id: enrollmentData.transaction_id,
-                }),
-                credentials: "include",
-              },
-            );
+            try {
+              // Send signature + enrollment_data for server-side verification
+              const verifyRes = await fetch(
+                `${API_BASE_URL}/guide/confirm-payment`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    transaction_id: enrollmentData.transaction_id,
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_signature: response.razorpay_signature,
+                    enrollment_data: enrollmentData.enrollment_data,
+                  }),
+                  credentials: "include",
+                },
+              );
 
-            const verifyData = await verifyRes.json();
-            if (verifyRes.ok && verifyData.success) {
+              const verifyData = await verifyRes.json();
+              if (verifyRes.ok && verifyData.success) {
+                setMessage(
+                  "Payment completed successfully! Your guide account has been created.",
+                );
+
+                // Reset form
+                setName("");
+                setPan("");
+                setEmail("");
+                setAadhaarFile(null);
+                setAadhaarPreview(null);
+                setProfileFile(null);
+                setProfilePreview(null);
+                setLocation("");
+                setLanguages([]);
+                setShowLangError(false);
+                setFile(null);
+                setPreview(null);
+                setGuideType("");
+                setNameError("");
+                setEmailError("");
+                setLocationError("");
+                setPhone("");
+                setPhoneError("");
+                setDisclaimerAccepted(false);
+                setDisclaimerError("");
+
+                // Refetch guide application
+                fetchMyGuideApplication().then((g) => setMyGuide(g));
+              } else {
+                setMessage(verifyData.message || "Payment verification failed.");
+              }
+            } catch (err) {
               setMessage(
-                "Payment completed successfully! Your guide account has been created.",
+                "Payment completed but verification failed. Please contact support.",
               );
-
-              // Reset form
-              setName("");
-              setPan("");
-              setEmail("");
-              setAadhaarFile(null);
-              setAadhaarPreview(null);
-              setProfileFile(null);
-              setProfilePreview(null);
-              setLocation("");
-              setLanguages([]);
-              setShowLangError(false);
-              setFile(null);
-              setPreview(null);
-              setGuideType("");
-              setNameError("");
-              setEmailError("");
-              setLocationError("");
-              setPhone("");
-              setPhoneError("");
-              setDisclaimerAccepted(false);
-              setDisclaimerError("");
-
-              // Refetch guide application
-              fetchMyGuideApplication().then((g) => setMyGuide(g));
-            } else {
-              console.error(
-                "❌ Payment verification failed:",
-                verifyData.message,
-              );
-              setMessage(verifyData.message || "Payment verification failed.");
             }
             setSubmitting(false);
           },
@@ -357,9 +364,8 @@ export default function BecomeGuidePage() {
           },
           modal: {
             ondismiss: () => {
-              console.warn("⚠️ Payment modal dismissed by user");
               setMessage(
-                "Payment was cancelled. Your application was not completed.",
+                "Payment was cancelled. No data has been saved.",
               );
               setSubmitting(false);
             },
@@ -368,6 +374,10 @@ export default function BecomeGuidePage() {
 
         // @ts-ignore
         const rzp = new window.Razorpay(options);
+        rzp.on("payment.failed", function () {
+          setMessage("Payment failed. Please try again.");
+          setSubmitting(false);
+        });
         rzp.open();
       } else {
         console.error("Enrollment failed:", data.message);

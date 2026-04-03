@@ -703,7 +703,7 @@ export default function CombinedGuideBookingForm() {
 
         handler: async (response: any) => {
           try {
-            // Verify payment and create booking in database
+            // Verify payment signature and create booking in database
             const verifyRes = await fetch(
               `${API_BASE_URL}/booking/verify-guest-booking`,
               {
@@ -712,6 +712,7 @@ export default function CombinedGuideBookingForm() {
                 body: JSON.stringify({
                   razorpay_order_id: response.razorpay_order_id,
                   razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
                   booking_data: data.booking_data,
                 }),
               },

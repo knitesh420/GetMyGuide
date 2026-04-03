@@ -55,11 +55,19 @@ export async function EnrollValidator(req: Request, res: Response, next: NextFun
 
 export type ConfirmPaymentValidationResult = {
 	transaction_id: string;
+	razorpay_order_id: string;
+	razorpay_payment_id: string;
+	razorpay_signature: string;
+	enrollment_data: string;
 };
 
 export async function ConfirmPaymentValidator(req: Request, res: Response, next: NextFunction) {
 	const reqValidator = z.object({
 		transaction_id: z.string().trim().min(1, 'Transaction ID is required'),
+		razorpay_order_id: z.string().trim().min(1, 'Razorpay order ID is required'),
+		razorpay_payment_id: z.string().trim().min(1, 'Razorpay payment ID is required'),
+		razorpay_signature: z.string().trim().min(1, 'Razorpay signature is required'),
+		enrollment_data: z.string().trim().min(1, 'Enrollment data is required'),
 	});
 
 	const reqValidatorResult = reqValidator.safeParse(req.body);

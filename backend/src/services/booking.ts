@@ -5,7 +5,7 @@ import {
 	sendBookingAllocatedTouristEmail,
 	sendTouristPaymentConfirmationEmail,
 } from '@provider/email';
-import RazorpayOrders from '@provider/razorpay/api/orders';
+import { verifyRazorpaySignature } from '@utils/paymentVerify';
 import { randomBytes } from 'crypto';
 import { Types } from 'mongoose';
 import { NotFoundError, ServerError } from 'node-be-utilities';
@@ -112,7 +112,9 @@ function transformBooking(booking: IBooking): TransformedBooking {
 
 class BookingService {
 	/**
-	 * Create a new booking and transaction
+	 * Create a Razorpay order for authenticated tourist booking.
+	 * Does NOT save booking to DB — data is encoded and returned to frontend.
+	 * DB write only happens after payment verification.
 	 */
 	async createBooking(
 		data: CreateBookingData,
@@ -120,6 +122,8 @@ class BookingService {
 	): Promise<{
 		data: {
 			transaction_id: string;
+			booking_data: string;
+			user_id: string;
 			razorpay_options: {
 				description: string;
 				currency: string;
@@ -135,16 +139,9 @@ class BookingService {
 			};
 		};
 	}> {
-		// Generate transaction_id using base64 format
-		const transaction_id = randomBytes(12).toString('base64').slice(0, 16);
-
-		// Create booking
-		const booking = await BookingDB.create({
-			...data,
-			linked_to: userId,
-			transaction_id,
-			status: 'payment-pending',
-		});
+		// Encode booking data — NO DB write here
+		const booking_data = Buffer.from(JSON.stringify(data)).toString('base64');
+		const tempReference = randomBytes(12).toString('base64').slice(0, 16);
 
 		// Create transaction using TransactionService
 		const transaction = await TransactionService.createTransaction(
@@ -155,17 +152,18 @@ class BookingService {
 			},
 			data.booking_configuration.price,
 			{
-				reference_id: booking._id.toString(),
-				reference_type: 'booking',
-				data: {
-					booking_id: booking._id.toString(),
-				},
+				reference_id: tempReference,
+				reference_type: 'pending_booking',
 				description: 'Get My Guide Customised Booking Payment',
 			}
 		);
 
 		return {
-			data: transaction,
+			data: {
+				...transaction,
+				booking_data,
+				user_id: userId.toString(),
+			},
 		};
 	}
 
@@ -208,12 +206,8 @@ class BookingService {
 			},
 			data.booking_configuration.price,
 			{
-				reference_id: transaction_id, // Use transaction_id as temporary reference
+				reference_id: transaction_id,
 				reference_type: 'pending_booking',
-				data: {
-					transaction_id: transaction_id,
-					booking_data: booking_data,
-				},
 				description: 'Get My Guide Customised Booking Payment',
 			}
 		);
@@ -227,44 +221,60 @@ class BookingService {
 	}
 
 	/**
-	 * Verify payment and create booking after successful payment
+	 * Verify Razorpay signature and create booking after successful payment.
+	 * Works for both guest and authenticated bookings.
 	 */
-	async verifyAndCreateGuestBooking(
-		razorpay_order_id: string,
-		razorpay_payment_id: string,
-		booking_data: string
-	): Promise<TransformedBooking> {
-		// Get transaction status from Razorpay
+	async verifyAndCreateBooking(params: {
+		razorpay_order_id: string;
+		razorpay_payment_id: string;
+		razorpay_signature: string;
+		booking_data: string;
+		user_id?: string;
+	}): Promise<TransformedBooking> {
+		const {
+			razorpay_order_id,
+			razorpay_payment_id,
+			razorpay_signature,
+			booking_data,
+			user_id,
+		} = params;
+
+		// Step 1: Verify Razorpay signature (HMAC SHA256)
+		const isValid = verifyRazorpaySignature(
+			razorpay_order_id,
+			razorpay_payment_id,
+			razorpay_signature
+		);
+
+		if (!isValid) {
+			throw new ServerError('Payment verification failed: invalid signature');
+		}
+
+		// Step 2: Verify transaction exists
 		const transaction = await TransactionDB.findOne({ razorpay_order_id });
 
 		if (!transaction) {
 			throw new NotFoundError('Transaction not found');
 		}
 
-		// Check payment status
-		const orderStatus = await RazorpayOrders.getOrderStatus(razorpay_order_id);
-
-		if (orderStatus !== 'paid') {
-			throw new ServerError('Payment not completed');
-		}
-
-		// Decode booking data
+		// Step 3: Decode booking data
 		const data: CreateBookingData = JSON.parse(Buffer.from(booking_data, 'base64').toString());
 
-		// Create booking now that payment is confirmed
+		// Step 4: Create booking now that payment is verified
 		const booking = await BookingDB.create({
 			...data,
+			...(user_id ? { linked_to: new Types.ObjectId(user_id) } : {}),
 			transaction_id: transaction.transaction_id,
 			status: 'successful',
 		});
 
-		// Update transaction with booking reference
+		// Step 5: Update transaction with booking reference and mark as paid
 		transaction.reference_id = booking._id.toString();
 		transaction.reference_type = 'booking';
 		transaction.status = 'paid';
 		await transaction.save();
 
-		// Send payment confirmation email to tourist (non-blocking)
+		// Step 6: Send payment confirmation email (non-blocking)
 		try {
 			await sendTouristPaymentConfirmationEmail(data.tourist_info.email, {
 				name: data.tourist_info.name,
@@ -279,7 +289,6 @@ class BookingService {
 				transactionId: transaction.transaction_id,
 				orderId: razorpay_order_id,
 			});
-
 		} catch (emailError) {
 			// Non-blocking - don't fail the booking if email fails
 		}
@@ -320,8 +329,7 @@ class BookingService {
 
 		if (
 			booking.status !== 'successful' &&
-			booking.status !== 'confirmed' &&
-			booking.status !== 'payment-pending'
+			booking.status !== 'confirmed'
 		) {
 			throw new ServerError('Booking is not in a valid state for guide allocation');
 		}

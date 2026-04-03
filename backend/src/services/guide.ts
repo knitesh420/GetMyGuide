@@ -1,6 +1,7 @@
 import { AccountDB, ContactInquiryDB, GuideEnrollmentDB } from '@mongo';
 import IGuideEnrollment from '@mongo/types/guideEnrollment';
 import { sendGuidePaymentConfirmationEmail } from '@provider/email';
+import { verifyRazorpaySignature } from '@utils/paymentVerify';
 import { randomBytes } from 'crypto';
 import { Types } from 'mongoose';
 import { NotFoundError, ServerError } from 'node-be-utilities';
@@ -72,10 +73,12 @@ function transformEnrollment(
 
 class GuideService {
 	/**
-	 * Create a new guide enrollment and return payment options
+	 * Create a Razorpay order for guide enrollment.
+	 * Does NOT save enrollment to DB — data is encoded and returned to frontend.
+	 * DB write only happens after payment verification in confirmPayment().
 	 */
 	async enroll(data: EnrollData): Promise<{
-		enrollment_id: string;
+		enrollment_data: string;
 		transaction_id: string;
 		razorpay_options: {
 			description: string;
@@ -91,35 +94,34 @@ class GuideService {
 			key: string;
 		};
 	}> {
-		try {
-			// Create enrollment without status field
-			const enrollment = await GuideEnrollmentDB.create(data);
+		// Encode form data (including file names) — NO DB write here
+		const enrollment_data = Buffer.from(JSON.stringify(data)).toString('base64');
 
-			// Create transaction using TransactionService for payment
-			const transaction = await TransactionService.createTransaction(
-				{
-					name: data.name,
-					email: data.email,
-					phone_number: data.phone,
+		// Create a temporary reference for the order
+		const tempReference = randomBytes(12).toString('base64').slice(0, 16);
+
+		// Create transaction using TransactionService for payment
+		const transaction = await TransactionService.createTransaction(
+			{
+				name: data.name,
+				email: data.email,
+				phone_number: data.phone,
+			},
+			500, // 500 rupees
+			{
+				reference_id: tempReference,
+				reference_type: 'pending_enrollment',
+				data: {
+					enrollment_data,
 				},
-				500, // 500 rupees
-				{
-					reference_id: enrollment._id.toString(),
-					reference_type: 'enrollment',
-					data: {
-						enrollment_id: enrollment._id.toString(),
-					},
-					description: 'Guide Registration Fee - Rs 500',
-				}
-			);
-			return {
-				enrollment_id: enrollment._id.toString(),
-				transaction_id: transaction.transaction_id,
-				razorpay_options: transaction.razorpay_options,
-			};
-		} catch (error) {
-			throw error;
-		}
+				description: 'Guide Registration Fee - Rs 500',
+			}
+		);
+		return {
+			enrollment_data,
+			transaction_id: transaction.transaction_id,
+			razorpay_options: transaction.razorpay_options,
+		};
 	}
 
 	/**
@@ -186,97 +188,99 @@ class GuideService {
 	}
 
 	/**
-	 * Confirm payment - verify payment status and create guide account
+	 * Confirm payment — verify Razorpay signature, then save enrollment + create account.
+	 * This is the ONLY place where guide data is written to DB.
 	 */
-	async confirmPayment(
-		enrollmentId: Types.ObjectId,
-		transaction_id: string
-	): Promise<{ message: string }> {
-		// Get transaction status (this also fetches and updates the transaction)
-		const transactionStatus = await TransactionService.getTransactionStatus(transaction_id);
+	async confirmPayment(params: {
+		transaction_id: string;
+		razorpay_order_id: string;
+		razorpay_payment_id: string;
+		razorpay_signature: string;
+		enrollment_data: string;
+	}): Promise<{ message: string }> {
+		const {
+			transaction_id,
+			razorpay_order_id,
+			razorpay_payment_id,
+			razorpay_signature,
+			enrollment_data,
+		} = params;
 
-		// Verify transaction exists
+		// Step 1: Verify Razorpay signature (HMAC SHA256)
+		const isValid = verifyRazorpaySignature(
+			razorpay_order_id,
+			razorpay_payment_id,
+			razorpay_signature
+		);
+
+		if (!isValid) {
+			throw new ServerError('Payment verification failed: invalid signature');
+		}
+
+		// Step 2: Verify transaction exists and matches
 		const transaction = await TransactionService.getTransaction(transaction_id);
 
-		// Verify transaction belongs to this enrollment
-		if (
-			transaction.reference_id !== enrollmentId.toString() ||
-			transaction.reference_type !== 'enrollment'
-		) {
-			throw new NotFoundError('Transaction not found for this enrollment');
+		if (transaction.razorpay_order_id !== razorpay_order_id) {
+			throw new ServerError('Order ID mismatch');
 		}
 
-		// Verify payment is completed
-		if (transactionStatus.order_status !== 'paid') {
-			throw new ServerError(
-				'Payment not completed. Order status: ' + transactionStatus.order_status
-			);
+		// Step 3: Decode enrollment data
+		const data: EnrollData = JSON.parse(
+			Buffer.from(enrollment_data, 'base64').toString()
+		);
+
+		// Step 4: Check for duplicate — prevent double save
+		const existingGuideAccount = await AccountDB.findOne({
+			email: data.email.toLowerCase(),
+			role: 'guide',
+		});
+		if (existingGuideAccount) {
+			throw new ServerError('A guide account with this email already exists');
 		}
 
-		// Get enrollment
-		const enrollment = await GuideEnrollmentDB.findById(enrollmentId);
+		// Step 5: NOW save enrollment to DB (only after verification)
+		const enrollment = await GuideEnrollmentDB.create(data);
 
-		if (!enrollment) {
-			throw new NotFoundError('Enrollment not found');
-		}
+		// Step 6: Update transaction with enrollment reference and mark as paid
+		transaction.reference_id = enrollment._id.toString();
+		transaction.reference_type = 'enrollment';
+		transaction.status = 'paid';
+		await transaction.save();
 
-		// Generate random password
+		// Step 7: Generate random password and create guide account
 		const password = randomBytes(12).toString('base64').slice(0, 16);
 
-		// Check if account already exists
-		const existingAccount = await AccountDB.findOne({ email: enrollment.email.toLowerCase() });
-		if (existingAccount) {
-			throw new ServerError('Account with this email already exists');
-		}
-
-		// Create guide account with verified status
 		await AccountDB.create({
-			name: enrollment.name,
-			email: enrollment.email.toLowerCase(),
-			phone: enrollment.phone,
+			name: data.name,
+			email: data.email.toLowerCase(),
+			phone: data.phone,
 			password, // Will be hashed by pre-save hook
 			role: 'guide',
 			status: 'verified',
 			isActive: true,
 		});
 
-		// Send payment confirmation email to guide (non-blocking)
+		// Step 8: Send payment confirmation email (non-blocking)
 		try {
-			await sendGuidePaymentConfirmationEmail(enrollment.email, {
-				name: enrollment.name,
-				email: enrollment.email,
-				phone: enrollment.phone,
-				city: enrollment.city,
-				experience: enrollment.type === 'escort' ? 'Licensed Escort Guide' : 'Regular Guide',
-				languages: enrollment.languages,
+			await sendGuidePaymentConfirmationEmail(data.email, {
+				name: data.name,
+				email: data.email,
+				phone: data.phone,
+				city: data.city,
+				experience: data.type === 'escort' ? 'Licensed Escort Guide' : 'Regular Guide',
+				languages: data.languages,
 				amount: 500,
 				transactionId: transaction.transaction_id,
-				orderId: transaction.razorpay_order_id,
+				orderId: razorpay_order_id,
 			});
-
 		} catch (emailError) {
 			// Non-blocking - don't fail if email fails
 		}
 
-		// Try to send credentials email (non-blocking - don't fail if email fails)
-		// try {
-		// 	const emailSent = await sendGuideCredentialsEmail(
-		// 		enrollment.email,
-		// 		enrollment.email,
-		// 		password
-		// 	);
-		// 	if (!emailSent) {
-		// 		console.warn('Failed to send credentials email to:', enrollment.email);
-		// 	}
-		// } catch (emailError) {
-		// 	console.error('Error sending credentials email:', emailError);
-		// 	// Continue anyway - account was created successfully
-		// }
-
 		return {
 			message:
 				'Payment confirmed successfully. Your guide account has been created. Please check your email (' +
-				enrollment.email +
+				data.email +
 				') for your login credentials.',
 		};
 	}

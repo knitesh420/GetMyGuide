@@ -15,7 +15,7 @@ async function createCustomisedBooking(req: Request, res: Response, next: NextFu
 
 		return Respond({
 			res,
-			status: 201,
+			status: 200,
 			data: result.data,
 		});
 	} catch (error) {
@@ -143,20 +143,23 @@ async function getRazorpayKey(req: Request, res: Response, next: NextFunction) {
 
 async function verifyAndCreateGuestBooking(req: Request, res: Response, next: NextFunction) {
 	try {
-		const { razorpay_order_id, razorpay_payment_id, booking_data } = req.body;
+		const { razorpay_order_id, razorpay_payment_id, razorpay_signature, booking_data, user_id } =
+			req.body;
 
-		if (!razorpay_order_id || !razorpay_payment_id || !booking_data) {
+		if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !booking_data) {
 			return res.status(400).json({
 				success: false,
 				message: 'Missing required payment details',
 			});
 		}
 
-		const booking = await BookingService.verifyAndCreateGuestBooking(
+		const booking = await BookingService.verifyAndCreateBooking({
 			razorpay_order_id,
 			razorpay_payment_id,
-			booking_data
-		);
+			razorpay_signature,
+			booking_data,
+			user_id,
+		});
 
 		return Respond({
 			res,
@@ -184,10 +187,41 @@ async function deleteBooking(req: Request, res: Response, next: NextFunction) {
 	}
 }
 
+async function verifyAndCreateBooking(req: Request, res: Response, next: NextFunction) {
+	try {
+		const user = req.locals.user as JWTPayload;
+		const { razorpay_order_id, razorpay_payment_id, razorpay_signature, booking_data } = req.body;
+
+		if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !booking_data) {
+			return res.status(400).json({
+				success: false,
+				message: 'Missing required payment details',
+			});
+		}
+
+		const booking = await BookingService.verifyAndCreateBooking({
+			razorpay_order_id,
+			razorpay_payment_id,
+			razorpay_signature,
+			booking_data,
+			user_id: user.userId,
+		});
+
+		return Respond({
+			res,
+			status: 201,
+			data: booking,
+		});
+	} catch (error) {
+		return next(error);
+	}
+}
+
 const Controller = {
 	createCustomisedBooking,
 	createGuestBooking,
 	verifyAndCreateGuestBooking,
+	verifyAndCreateBooking,
 	getMyBookings,
 	getAllBookings,
 	allocateGuide,

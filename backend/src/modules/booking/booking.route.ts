@@ -22,6 +22,10 @@ router
 	);
 
 router
+	.route('/verify-booking')
+	.post(VerifySession, VerifyMinLevel('tourist'), Controller.verifyAndCreateBooking);
+
+router
 	.route('/my-bookings')
 	.get(VerifySession, VerifyMinLevel('tourist'), Controller.getMyBookings);
 

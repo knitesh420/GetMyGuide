@@ -1,4 +1,4 @@
-import { GuideEnrollmentDB } from '@mongo';
+import { AccountDB, GuideEnrollmentDB } from '@mongo';
 import GuideService from '@services/guide';
 import { Types } from 'mongoose';
 import { NotFoundError, ServerError } from 'node-be-utilities';
@@ -20,8 +20,14 @@ jest.mock('@provider/email', () => ({
 	sendGuidePaymentConfirmationEmail: jest.fn().mockResolvedValue(true),
 }));
 
+// Mock paymentVerify
+jest.mock('@utils/paymentVerify', () => ({
+	verifyRazorpaySignature: jest.fn(),
+}));
+
 import { sendGuidePaymentConfirmationEmail } from '@provider/email';
 import TransactionService from '@services/transaction';
+import { verifyRazorpaySignature } from '@utils/paymentVerify';
 
 describe('Guide Service', () => {
 	beforeAll(async () => {
@@ -43,7 +49,7 @@ describe('Guide Service', () => {
 	});
 
 	describe('enroll', () => {
-		it('should create a new enrollment and return payment options', async () => {
+		it('should NOT save enrollment to DB and should return encoded enrollment_data', async () => {
 			const enrollData = {
 				name: 'John Doe',
 				email: 'john@example.com',
@@ -78,9 +84,13 @@ describe('Guide Service', () => {
 
 			const result = await GuideService.enroll(enrollData);
 
-			expect(result.enrollment_id).toBeDefined();
+			expect(result.enrollment_data).toBeDefined();
 			expect(result.transaction_id).toBe('trans_test123');
 			expect(result.razorpay_options.order_id).toBe('order_test123');
+
+			// Verify enrollment was NOT saved to DB
+			const enrollment = await GuideEnrollmentDB.findOne({ email: 'john@example.com' });
+			expect(enrollment).toBeNull();
 
 			expect(TransactionService.createTransaction).toHaveBeenCalledWith(
 				{
@@ -90,15 +100,10 @@ describe('Guide Service', () => {
 				},
 				500,
 				expect.objectContaining({
-					reference_type: 'enrollment',
+					reference_type: 'pending_enrollment',
 					description: 'Guide Registration Fee - Rs 500',
 				})
 			);
-
-			const enrollment = await GuideEnrollmentDB.findOne({ email: 'john@example.com' });
-			expect(enrollment).toBeTruthy();
-			expect(enrollment?.name).toBe('John Doe');
-			expect(enrollment?.type).toBe('normal');
 		});
 	});
 
@@ -171,109 +176,100 @@ describe('Guide Service', () => {
 	});
 
 	describe('confirmPayment', () => {
-		it('should verify payment, create guide account, and send confirmation email', async () => {
-			const enrollment = await GuideEnrollmentDB.create({
-				name: 'Test Guide',
-				email: 'test@example.com',
-				phone: '+1234567890',
-				city: 'Mumbai',
-				type: 'normal',
-				pan: 'PAN123',
-				licence: 'lic.pdf',
-				aadhar: 'aad.pdf',
-				languages: ['English'],
-				photo: 'photo.jpg',
-			});
+		const enrollData = {
+			name: 'Test Guide',
+			email: 'test@example.com',
+			phone: '+1234567890',
+			city: 'Mumbai',
+			type: 'normal' as const,
+			licence: 'lic.pdf',
+			aadhar: 'aad.pdf',
+			languages: ['English'],
+			photo: 'photo.jpg',
+		};
 
+		const enrollment_data = Buffer.from(JSON.stringify(enrollData)).toString('base64');
+
+		it('should verify signature, save enrollment, create guide account, and send email', async () => {
 			const mockTransaction = {
 				_id: new Types.ObjectId(),
-				reference_id: enrollment._id.toString(),
-				reference_type: 'enrollment',
+				reference_id: 'temp_ref',
+				reference_type: 'pending_enrollment',
 				razorpay_order_id: 'order_test123',
 				transaction_id: 'trans_test123',
-				status: 'paid',
+				status: 'created',
+				save: jest.fn(),
 			};
 
-			(TransactionService.getTransactionStatus as jest.Mock).mockResolvedValue({
-				transaction_id: 'trans_test123',
-				status: 'paid',
-				order_status: 'paid',
-				amount: 500,
-				currency: 'INR',
-			});
-
+			(verifyRazorpaySignature as jest.Mock).mockReturnValue(true);
 			(TransactionService.getTransaction as jest.Mock).mockResolvedValue(mockTransaction);
 
-			const result = await GuideService.confirmPayment(enrollment._id, 'trans_test123');
-
-			expect(TransactionService.getTransactionStatus).toHaveBeenCalledWith('trans_test123');
-			expect(TransactionService.getTransaction).toHaveBeenCalledWith('trans_test123');
-
-			expect(result.message).toContain('Payment confirmed successfully');
-
-			// Verify confirmation email was sent
-			expect(sendGuidePaymentConfirmationEmail).toHaveBeenCalledTimes(1);
-		});
-
-		it('should throw NotFoundError if transaction not found', async () => {
-			const enrollment = await GuideEnrollmentDB.create({
-				name: 'Test Guide',
-				email: 'test@example.com',
-				phone: '+1234567890',
-				city: 'Mumbai',
-				type: 'normal',
-				pan: 'PAN123',
-				licence: 'lic.pdf',
-				aadhar: 'aad.pdf',
-				languages: ['English'],
-				photo: 'photo.jpg',
+			const result = await GuideService.confirmPayment({
+				transaction_id: 'trans_test123',
+				razorpay_order_id: 'order_test123',
+				razorpay_payment_id: 'pay_test123',
+				razorpay_signature: 'valid_signature',
+				enrollment_data,
 			});
 
-			(TransactionService.getTransactionStatus as jest.Mock).mockRejectedValue(
-				new NotFoundError('Transaction not found')
+			expect(verifyRazorpaySignature).toHaveBeenCalledWith(
+				'order_test123',
+				'pay_test123',
+				'valid_signature'
 			);
+			expect(result.message).toContain('Payment confirmed successfully');
+			expect(sendGuidePaymentConfirmationEmail).toHaveBeenCalledTimes(1);
+
+			// Verify enrollment was saved to DB
+			const enrollment = await GuideEnrollmentDB.findOne({ email: 'test@example.com' });
+			expect(enrollment).toBeTruthy();
+
+			// Verify guide account was created
+			const account = await AccountDB.findOne({ email: 'test@example.com' });
+			expect(account).toBeTruthy();
+			expect(account?.role).toBe('guide');
+
+			// Verify transaction was updated
+			expect(mockTransaction.save).toHaveBeenCalled();
+			expect(mockTransaction.status).toBe('paid');
+		});
+
+		it('should throw ServerError if signature is invalid', async () => {
+			(verifyRazorpaySignature as jest.Mock).mockReturnValue(false);
 
 			await expect(
-				GuideService.confirmPayment(enrollment._id, 'invalid_transaction_id')
-			).rejects.toThrow(NotFoundError);
+				GuideService.confirmPayment({
+					transaction_id: 'trans_test123',
+					razorpay_order_id: 'order_test123',
+					razorpay_payment_id: 'pay_test123',
+					razorpay_signature: 'invalid_signature',
+					enrollment_data,
+				})
+			).rejects.toThrow(ServerError);
+
+			// Verify nothing was saved to DB
+			const enrollment = await GuideEnrollmentDB.findOne({ email: 'test@example.com' });
+			expect(enrollment).toBeNull();
 		});
 
-		it('should throw ServerError if payment not completed', async () => {
-			const enrollment = await GuideEnrollmentDB.create({
-				name: 'Test Guide',
-				email: 'test@example.com',
-				phone: '+1234567890',
-				city: 'Mumbai',
-				type: 'normal',
-				pan: 'PAN123',
-				licence: 'lic.pdf',
-				aadhar: 'aad.pdf',
-				languages: ['English'],
-				photo: 'photo.jpg',
-			});
-
+		it('should throw ServerError if order ID does not match transaction', async () => {
 			const mockTransaction = {
-				_id: new Types.ObjectId(),
-				reference_id: enrollment._id.toString(),
-				reference_type: 'enrollment',
-				razorpay_order_id: 'order_test123',
+				razorpay_order_id: 'order_different',
 				transaction_id: 'trans_test123',
-				status: 'created',
 			};
 
-			(TransactionService.getTransactionStatus as jest.Mock).mockResolvedValue({
-				transaction_id: 'trans_test123',
-				status: 'created',
-				order_status: 'created',
-				amount: 500,
-				currency: 'INR',
-			});
-
+			(verifyRazorpaySignature as jest.Mock).mockReturnValue(true);
 			(TransactionService.getTransaction as jest.Mock).mockResolvedValue(mockTransaction);
 
-			await expect(GuideService.confirmPayment(enrollment._id, 'trans_test123')).rejects.toThrow(
-				ServerError
-			);
+			await expect(
+				GuideService.confirmPayment({
+					transaction_id: 'trans_test123',
+					razorpay_order_id: 'order_test123',
+					razorpay_payment_id: 'pay_test123',
+					razorpay_signature: 'valid_signature',
+					enrollment_data,
+				})
+			).rejects.toThrow(ServerError);
 		});
 	});
 });
