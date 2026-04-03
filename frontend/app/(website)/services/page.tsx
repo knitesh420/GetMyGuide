@@ -1,7 +1,8 @@
 "use client";
 
-import { Compass, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Compass, Trash2, Search, X } from "lucide-react";
+import { Suspense, useEffect, useState, useMemo } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import TourCard from "./_components/TourCard";
 import TourForm from "./_components/TourForm";
 import type { TourData } from "./types/tour";
@@ -11,12 +12,48 @@ import { useSelector } from "react-redux";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function ServicesPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-slate-600">Loading...</p></div>}>
+      <ServicesContent />
+    </Suspense>
+  );
+}
+
+function ServicesContent() {
   const [packages, setPackages] = useState<TourData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const { user, token } = useSelector((state: any) => state.auth);
   const admin = user?.role === "admin";
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // Read search query from URL on mount
+  useEffect(() => {
+    const urlSearch = searchParams.get("search");
+    if (urlSearch) {
+      setSearchQuery(urlSearch);
+    }
+  }, [searchParams]);
+
+  // Filter packages by search query (city or title)
+  const filteredPackages = useMemo(() => {
+    if (!searchQuery.trim()) return packages;
+    const q = searchQuery.toLowerCase().trim();
+    return packages.filter(
+      (pkg) =>
+        pkg.title.toLowerCase().includes(q) ||
+        pkg.city.toLowerCase().includes(q) ||
+        pkg.places?.some((place) => place.toLowerCase().includes(q))
+    );
+  }, [packages, searchQuery]);
+
+  const clearSearch = () => {
+    setSearchQuery("");
+    router.replace("/services", { scroll: false });
+  };
 
   // Ensure component only renders after hydration
   useEffect(() => {
@@ -153,41 +190,49 @@ export default function ServicesPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 mt-20">
-      {/* Header */}
-      <header className="bg-white/80 backdrop-blur-md shadow-sm border-b border-slate-200/50 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-6 py-5">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-600 to-pink-600 flex items-center justify-center">
-              <Compass className="w-7 h-7 text-white" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-pink-600 bg-clip-text text-transparent">
-                Tour Packages
-              </h1>
-              <p className="text-sm text-slate-600">
-                Create and manage tour packages
-              </p>
-            </div>
-          </div>
-        </div>
-      </header>
-
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 py-12">
+      <main className="max-w-7xl mx-auto px-6 py-4">
         {/* Tour Form */}
-        <div className="mb-16">
+        <div className="mb-6">
           {mounted && admin && <TourForm onSubmit={handleSubmit} />}
         </div>
 
         {/* Packages Grid */}
         <section>
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
             <h2 className="text-3xl font-bold text-slate-800">
               Available Packages
             </h2>
             <span className="px-4 py-2 bg-white rounded-full text-slate-600 font-semibold shadow-sm">
-              {packages.length} {packages.length === 1 ? "Package" : "Packages"}
+              {filteredPackages.length} {filteredPackages.length === 1 ? "Package" : "Packages"}
             </span>
+          </div>
+
+          {/* Search Bar */}
+          <div className="mb-8">
+            <div className="relative max-w-md">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by city or package name..."
+                className="w-full pl-12 pr-10 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-sm"
+              />
+              {searchQuery && (
+                <button
+                  onClick={clearSearch}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-slate-100 transition-colors"
+                >
+                  <X className="w-4 h-4 text-slate-400" />
+                </button>
+              )}
+            </div>
+            {searchQuery && (
+              <p className="mt-2 text-sm text-slate-500">
+                Showing results for &quot;{searchQuery}&quot;
+              </p>
+            )}
           </div>
 
           {error && (
@@ -200,17 +245,27 @@ export default function ServicesPage() {
             <div className="text-center py-12">
               <p className="text-slate-600">Loading packages...</p>
             </div>
-          ) : packages.length === 0 ? (
+          ) : filteredPackages.length === 0 ? (
             <div className="text-center py-12 bg-white rounded-2xl shadow-lg">
               <Compass className="w-16 h-16 mx-auto text-slate-300 mb-4" />
               <p className="text-slate-600 text-lg">
-                No packages yet. Create your first package above!
+                {searchQuery
+                  ? `No packages found for "${searchQuery}"`
+                  : "No packages yet. Create your first package above!"}
               </p>
+              {searchQuery && (
+                <button
+                  onClick={clearSearch}
+                  className="mt-4 px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                >
+                  Clear search
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
-              {packages.map((pkg, index) => (
-                  <div key={pkg.id || index} className="relative">
+              {filteredPackages.map((pkg, index) => (
+                  <div key={pkg.id || index} className="relative h-full">
                     <TourCard
                       title={pkg.title}
                       city={pkg.city}

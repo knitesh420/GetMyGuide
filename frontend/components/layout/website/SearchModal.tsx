@@ -64,6 +64,13 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
         onClose();
     };
 
+    const handleSearchServices = () => {
+        if (query.trim()) {
+            router.push(`/services?search=${encodeURIComponent(query.trim())}`);
+            onClose();
+        }
+    };
+
     if (!isOpen) return null;
 
     return (
@@ -87,20 +94,29 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
                 </div>
 
                 <div className="p-6 border-b border-gray-200 flex-shrink-0">
-                    <div className="relative">
+                    <form onSubmit={(e) => { e.preventDefault(); handleSearchServices(); }} className="relative">
                         <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                         <input
                             type="text"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Search for tour packages, destinations..."
+                            placeholder="Search by city name, package name..."
                             className="w-full pl-12 pr-4 py-4 text-lg border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                             autoFocus
                         />
                         {isSearching && (
                             <Loader2 className="absolute right-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-primary animate-spin" />
                         )}
-                    </div>
+                    </form>
+                    {query.trim() && (
+                        <button
+                            onClick={handleSearchServices}
+                            className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary/10 text-primary font-semibold rounded-xl hover:bg-primary/20 transition-colors text-sm"
+                        >
+                            <Search className="w-4 h-4" />
+                            View all matching services for &quot;{query.trim()}&quot;
+                        </button>
+                    )}
                 </div>
 
                 <div className="overflow-y-auto p-6">

@@ -64,11 +64,11 @@ export default function TourCard({
   return (
     <>
       <div
-        className="group rounded-2xl bg-white shadow-lg hover:shadow-2xl border border-slate-200 overflow-hidden transition-all duration-300 hover:-translate-y-1 cursor-pointer"
+        className="group rounded-2xl bg-white shadow-lg hover:shadow-2xl border border-slate-200 overflow-hidden transition-all duration-300 hover:-translate-y-1 cursor-pointer flex flex-col h-full"
         onClick={() => setShowModal(true)}
       >
         {/* Image Section */}
-        <div className="relative h-52 overflow-hidden">
+        <div className="relative h-52 overflow-hidden shrink-0">
           {imageUrls[0] ? (
           <img
             src={imageUrls[0]}
@@ -109,7 +109,7 @@ export default function TourCard({
         </div>
 
         {/* Content Section */}
-        <div className="p-5">
+        <div className="p-5 flex flex-col grow">
           {/* Title */}
           <h3 className="text-lg font-bold text-slate-800 mb-2 line-clamp-2 group-hover:text-orange-600 transition-colors">
             {title}
@@ -163,8 +163,8 @@ export default function TourCard({
             </div>
           )}
 
-          {/* Divider + View Button */}
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+          {/* Divider + View Button - pushed to bottom */}
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between mt-auto">
             {price !== undefined && price > 0 ? (
               <div>
                 <span className="text-xs text-slate-400 block">Starting from</span>
