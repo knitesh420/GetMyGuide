@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -9,7 +9,7 @@ import { AppDispatch, RootState } from "@/lib/store";
 import { fetchBlogs } from "@/lib/redux/thunks/blog/blogThunks";
 import { Blog } from "@/lib/data";
 import { Button } from "@/components/ui/button";
-import { Plus, Play, Pause } from "lucide-react";
+import { Plus, Play } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -25,93 +25,64 @@ const CardSkeleton = () => (
   </div>
 );
 
-// --- Video Card Component with Play/Pause ---
+// --- YouTube Thumbnail Card Component ---
 function BlogVideoCard({ blog }: { blog: Blog }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [videoError, setVideoError] = useState(false);
   const router = useRouter();
-
-  const videoSrc = blog.videoFilename
-    ? `${API_URL}/media/blogs/${blog.videoFilename}`
-    : "";
-
-  const togglePlay = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const video = videoRef.current;
-      if (!video || videoError) return;
-
-      if (isPlaying) {
-        video.pause();
-        setIsPlaying(false);
-      } else {
-        video
-          .play()
-          .then(() => setIsPlaying(true))
-          .catch((err) => {
-            console.error("Video play failed:", err);
-            setIsPlaying(false);
-          });
-      }
-    },
-    [isPlaying, videoError],
-  );
 
   const handleCardClick = useCallback(() => {
     router.push(`/blogs/${blog.id}`);
   }, [router, blog.id]);
 
-  const handleVideoEnd = useCallback(() => {
-    setIsPlaying(false);
-    const video = videoRef.current;
-    if (video) video.currentTime = 0;
-  }, []);
+  const handlePlayClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsPlaying(true);
+    },
+    [],
+  );
 
   return (
     <div
       onClick={handleCardClick}
       className="group bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 ease-in-out h-full flex flex-col cursor-pointer"
     >
-      {/* Video with Play/Pause */}
+      {/* YouTube Thumbnail / Embedded Player */}
       <div className="relative w-full h-48 bg-gray-900 overflow-hidden">
-        {blog.videoFilename && !videoError ? (
-          <video
-            ref={videoRef}
-            className="w-full h-full object-cover"
-            preload="auto"
-            muted
-            playsInline
-            onEnded={handleVideoEnd}
-            onError={() => setVideoError(true)}
-            src={`${videoSrc}#t=0.1`}
-          />
+        {blog.videoId ? (
+          isPlaying ? (
+            <iframe
+              className="w-full h-full"
+              src={`https://www.youtube.com/embed/${blog.videoId}?autoplay=1`}
+              title="YouTube video player"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          ) : (
+            <>
+              <Image
+                src={blog.thumbnailUrl}
+                alt={blog.description.slice(0, 50)}
+                fill
+                className="object-cover group-hover:scale-105 transition-transform duration-300"
+              />
+              {/* Play Button Overlay */}
+              <button
+                onClick={handlePlayClick}
+                className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/20 transition-all duration-300"
+              >
+                <div className="bg-white/90 rounded-full p-3 shadow-lg opacity-80 group-hover:opacity-100 transition-opacity duration-300">
+                  <Play className="w-8 h-8 text-gray-900" />
+                </div>
+              </button>
+            </>
+          )
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
             <Play className="w-16 h-16 text-white opacity-50" />
           </div>
-        )}
-        {/* Play/Pause Button Overlay */}
-        {blog.videoFilename && !videoError && (
-          <button
-            onClick={togglePlay}
-            className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/20 transition-all duration-300"
-          >
-            <div
-              className={`bg-white/90 rounded-full p-3 shadow-lg transition-opacity duration-300 ${
-                isPlaying
-                  ? "opacity-0 group-hover:opacity-100"
-                  : "opacity-100"
-              }`}
-            >
-              {isPlaying ? (
-                <Pause className="w-8 h-8 text-gray-900" />
-              ) : (
-                <Play className="w-8 h-8 text-gray-900" />
-              )}
-            </div>
-          </button>
         )}
       </div>
 

@@ -3,7 +3,7 @@ import IBlog from '../types/blog';
 
 const BlogSchema = new mongoose.Schema<IBlog>(
 	{
-		videoFilename: {
+		videoId: {
 			type: String,
 			required: true,
 			trim: true,

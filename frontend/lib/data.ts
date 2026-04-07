@@ -373,7 +373,8 @@ export interface tourGuideBooking {
 
 export interface Blog {
   id: string;
-  videoFilename: string;
+  videoId: string;
+  thumbnailUrl: string;
   description: string;
   hasImage: boolean;
   imageFilename?: string;

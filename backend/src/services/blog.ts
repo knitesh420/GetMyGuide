@@ -2,9 +2,10 @@ import { BlogDB } from '@mongo';
 import IBlog from '@mongo/types/blog';
 import { Types } from 'mongoose';
 import { NotFoundError } from 'node-be-utilities';
+import { getYoutubeThumbnailUrl } from '@utils/youtube';
 
 interface BlogData {
-	videoFilename: string;
+	videoId: string;
 	description: string;
 	hasImage: boolean;
 	imageFilename?: string;
@@ -12,7 +13,8 @@ interface BlogData {
 
 interface TransformedBlog {
 	id: string;
-	videoFilename: string;
+	videoId: string;
+	thumbnailUrl: string;
 	description: string;
 	hasImage: boolean;
 	imageFilename?: string;
@@ -27,7 +29,8 @@ interface TransformedBlog {
 function transformBlog(blog: IBlog): TransformedBlog {
 	const transformed: TransformedBlog = {
 		id: blog._id.toString(),
-		videoFilename: blog.videoFilename,
+		videoId: blog.videoId,
+		thumbnailUrl: getYoutubeThumbnailUrl(blog.videoId),
 		description: blog.description,
 		hasImage: blog.hasImage,
 		imageFilename: blog.imageFilename,

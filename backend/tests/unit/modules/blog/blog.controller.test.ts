@@ -11,11 +11,6 @@ import {
 } from '../../../helpers/testHelpers';
 import { clearDatabase, connectTestDB, disconnectTestDB } from '../../../setup/db.setup';
 
-// Mock fs/promises to avoid actual file operations in tests
-jest.mock('fs/promises', () => ({
-	rename: jest.fn().mockResolvedValue(undefined),
-}));
-
 describe('Blog Controller', () => {
 	beforeAll(async () => {
 		await connectTestDB();
@@ -30,24 +25,17 @@ describe('Blog Controller', () => {
 	});
 
 	describe('createBlog', () => {
-		it('should successfully create a blog with video only', async () => {
+		it('should successfully create a blog with YouTube URL only', async () => {
 			const mockUser = createMockUser({ role: 'admin' });
-			const videoFile = createMockFile({
-				fieldname: 'video',
-				filename: 'test-video.mp4',
-				mimetype: 'video/mp4',
-			});
 
 			const mockRequest = createMockRequest({
 				locals: {
 					data: {
 						description: 'Test blog description',
+						youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
 						hasImage: false,
 					},
 					user: mockUser,
-				},
-				files: {
-					video: [videoFile],
 				},
 			}) as any;
 
@@ -66,16 +54,12 @@ describe('Blog Controller', () => {
 			expect(responseData).not.toHaveProperty('_id');
 			expect(responseData.description).toBe('Test blog description');
 			expect(responseData.hasImage).toBe(false);
-			expect(responseData.videoFilename).toBe('test-video.mp4');
+			expect(responseData.videoId).toBe('dQw4w9WgXcQ');
+			expect(responseData.thumbnailUrl).toBe('https://img.youtube.com/vi/dQw4w9WgXcQ/0.jpg');
 		});
 
-		it('should successfully create a blog with video and image', async () => {
+		it('should successfully create a blog with YouTube URL and image', async () => {
 			const mockUser = createMockUser({ role: 'admin' });
-			const videoFile = createMockFile({
-				fieldname: 'video',
-				filename: 'test-video.mp4',
-				mimetype: 'video/mp4',
-			});
 			const imageFile = createMockFile({
 				fieldname: 'image',
 				filename: 'test-image.jpg',
@@ -86,12 +70,12 @@ describe('Blog Controller', () => {
 				locals: {
 					data: {
 						description: 'Test blog with image',
+						youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
 						hasImage: true,
 					},
 					user: mockUser,
 				},
 				files: {
-					video: [videoFile],
 					image: [imageFile],
 				},
 			}) as any;
@@ -111,13 +95,39 @@ describe('Blog Controller', () => {
 			expect(responseData.imageFilename).toBe('test-image.jpg');
 		});
 
-		it('should return 400 when video file is missing', async () => {
+		it('should return 400 when YouTube URL is invalid', async () => {
 			const mockUser = createMockUser({ role: 'admin' });
 			const mockRequest = createMockRequest({
 				locals: {
 					data: {
 						description: 'Test blog',
+						youtubeUrl: 'https://example.com/not-youtube',
 						hasImage: false,
+					},
+					user: mockUser,
+				},
+			}) as any;
+
+			const mockResponse = createMockResponse();
+			const mockNext = createMockNext();
+
+			await Controller.createBlog(mockRequest, mockResponse as any, mockNext);
+
+			expect(mockNext).toHaveBeenCalled();
+			const error = (mockNext as jest.Mock).mock.calls[0][0];
+			expect(error).toBeInstanceOf(BadRequestError);
+			expect(error.message).toContain('Invalid YouTube URL');
+		});
+
+		it('should return 400 when hasImage is true but image is missing', async () => {
+			const mockUser = createMockUser({ role: 'admin' });
+
+			const mockRequest = createMockRequest({
+				locals: {
+					data: {
+						description: 'Test blog',
+						youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+						hasImage: true,
 					},
 					user: mockUser,
 				},
@@ -132,123 +142,20 @@ describe('Blog Controller', () => {
 			expect(mockNext).toHaveBeenCalled();
 			const error = (mockNext as jest.Mock).mock.calls[0][0];
 			expect(error).toBeInstanceOf(BadRequestError);
-			expect(error.message).toContain('Video file is required');
-		});
-
-		it('should return 400 when video file type is invalid', async () => {
-			const mockUser = createMockUser({ role: 'admin' });
-			const invalidVideoFile = createMockFile({
-				fieldname: 'video',
-				filename: 'test.txt',
-				mimetype: 'text/plain',
-			});
-
-			const mockRequest = createMockRequest({
-				locals: {
-					data: {
-						description: 'Test blog',
-						hasImage: false,
-					},
-					user: mockUser,
-				},
-				files: {
-					video: [invalidVideoFile],
-				},
-			}) as any;
-
-			const mockResponse = createMockResponse();
-			const mockNext = createMockNext();
-
-			await Controller.createBlog(mockRequest, mockResponse as any, mockNext);
-
-			expect(mockNext).toHaveBeenCalled();
-			const error = (mockNext as jest.Mock).mock.calls[0][0];
-			expect(error).toBeInstanceOf(BadRequestError);
-			expect(error.message).toContain('video files are allowed');
-		});
-
-		it('should return 400 when hasImage is true but image is missing', async () => {
-			const mockUser = createMockUser({ role: 'admin' });
-			const videoFile = createMockFile({
-				fieldname: 'video',
-				filename: 'test-video.mp4',
-				mimetype: 'video/mp4',
-			});
-
-			const mockRequest = createMockRequest({
-				locals: {
-					data: {
-						description: 'Test blog',
-						hasImage: true,
-					},
-					user: mockUser,
-				},
-				files: {
-					video: [videoFile],
-				},
-			}) as any;
-
-			const mockResponse = createMockResponse();
-			const mockNext = createMockNext();
-
-			await Controller.createBlog(mockRequest, mockResponse as any, mockNext);
-
-			expect(mockNext).toHaveBeenCalled();
-			const error = (mockNext as jest.Mock).mock.calls[0][0];
-			expect(error).toBeInstanceOf(BadRequestError);
 			expect(error.message).toContain('Image file is required');
-		});
-
-		it('should return 400 when image file type is invalid', async () => {
-			const mockUser = createMockUser({ role: 'admin' });
-			const videoFile = createMockFile({
-				fieldname: 'video',
-				filename: 'test-video.mp4',
-				mimetype: 'video/mp4',
-			});
-			const invalidImageFile = createMockFile({
-				fieldname: 'image',
-				filename: 'test.pdf',
-				mimetype: 'application/pdf',
-			});
-
-			const mockRequest = createMockRequest({
-				locals: {
-					data: {
-						description: 'Test blog',
-						hasImage: true,
-					},
-					user: mockUser,
-				},
-				files: {
-					video: [videoFile],
-					image: [invalidImageFile],
-				},
-			}) as any;
-
-			const mockResponse = createMockResponse();
-			const mockNext = createMockNext();
-
-			await Controller.createBlog(mockRequest, mockResponse as any, mockNext);
-
-			expect(mockNext).toHaveBeenCalled();
-			const error = (mockNext as jest.Mock).mock.calls[0][0];
-			expect(error).toBeInstanceOf(BadRequestError);
-			expect(error.message).toContain('images are allowed');
 		});
 	});
 
 	describe('getBlogs', () => {
 		it('should return all blogs', async () => {
-			// Create test blogs
 			await BlogDB.create([
 				{
-					videoFilename: 'video1.mp4',
+					videoId: 'abc123def45',
 					description: 'First blog',
 					hasImage: false,
 				},
 				{
-					videoFilename: 'video2.mp4',
+					videoId: 'xyz789ghi01',
 					description: 'Second blog',
 					hasImage: true,
 					imageFilename: 'image2.jpg',
@@ -287,7 +194,7 @@ describe('Blog Controller', () => {
 	describe('getBlogById', () => {
 		it('should return a blog by id', async () => {
 			const blog = await BlogDB.create({
-				videoFilename: 'video.mp4',
+				videoId: 'dQw4w9WgXcQ',
 				description: 'Test blog',
 				hasImage: false,
 			});

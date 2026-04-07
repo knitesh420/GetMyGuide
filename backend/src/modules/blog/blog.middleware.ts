@@ -14,21 +14,6 @@ const storage = multer.diskStorage({
 	},
 });
 
-// File filter for video files
-const videoFileFilter = (
-	req: Request,
-	file: Express.Multer.File,
-	cb: multer.FileFilterCallback
-) => {
-	if (file.fieldname === 'video') {
-		if (file.mimetype.startsWith('video/')) {
-			return cb(null, true);
-		}
-		return cb(new Error('Only video files are allowed for video field'));
-	}
-	cb(null, true);
-};
-
 // File filter for image files
 const imageFileFilter = (
 	req: Request,
@@ -45,28 +30,14 @@ const imageFileFilter = (
 	cb(null, true);
 };
 
-// Combined file filter
-const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-	if (file.fieldname === 'video') {
-		return videoFileFilter(req, file, cb);
-	}
-	if (file.fieldname === 'image') {
-		return imageFileFilter(req, file, cb);
-	}
-	cb(null, true);
-};
-
 // Multer middleware
 const multerMiddleware = multer({
 	storage,
-	fileFilter,
+	fileFilter: imageFileFilter,
 	limits: {
-		fileSize: 2048 * 1024 * 1024, // 2GB limit
+		fileSize: 10 * 1024 * 1024, // 10MB limit for images
 	},
-}).fields([
-	{ name: 'video', maxCount: 1 },
-	{ name: 'image', maxCount: 1 },
-]);
+}).fields([{ name: 'image', maxCount: 1 }]);
 
 // Middleware to parse multipart form data (both files and body fields)
 // This makes req.body available for validation

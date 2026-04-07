@@ -13,8 +13,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Upload, X, Video, Image as ImageIcon } from "lucide-react";
+import { Loader2, X, Youtube, Image as ImageIcon, CheckCircle2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+
+/** Extract YouTube video ID from a URL for preview purposes */
+function extractVideoId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?.*v=)([\w-]{11})/,
+    /(?:youtu\.be\/)([\w-]{11})/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
 
 interface BlogFormModalProps {
   isOpen: boolean;
@@ -30,29 +43,12 @@ export function BlogFormModal({
   isLoading = false,
 }: BlogFormModalProps) {
   const [description, setDescription] = useState("");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
   const [hasImage, setHasImage] = useState(false);
-  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-  const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && file.type.startsWith("video/")) {
-      setVideoFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setVideoPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      toast({
-        title: "Invalid file type",
-        description: "Please select a valid video file",
-        variant: "destructive",
-      });
-    }
-  };
+  const videoId = extractVideoId(youtubeUrl);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -74,12 +70,15 @@ export function BlogFormModal({
     }
   };
 
-  const removeVideo = () => {
-    setVideoFile(null);
-    setVideoPreview(null);
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
   };
 
-  const removeImage = () => {
+  const resetForm = () => {
+    setDescription("");
+    setYoutubeUrl("");
+    setHasImage(false);
     setImageFile(null);
     setImagePreview(null);
   };
@@ -96,10 +95,19 @@ export function BlogFormModal({
       return;
     }
 
-    if (!videoFile) {
+    if (!youtubeUrl.trim()) {
       toast({
         title: "Validation Error",
-        description: "Please upload a video file",
+        description: "YouTube URL is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!videoId) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter a valid YouTube URL",
         variant: "destructive",
       });
       return;
@@ -116,33 +124,20 @@ export function BlogFormModal({
 
     const formData = new FormData();
     formData.append("description", description.trim());
+    formData.append("youtubeUrl", youtubeUrl.trim());
     formData.append("hasImage", String(hasImage));
-    formData.append("video", videoFile);
 
     if (hasImage && imageFile) {
       formData.append("image", imageFile);
     }
 
     onSubmit(formData);
-
-    // Reset form after submission
-    setDescription("");
-    setHasImage(false);
-    setVideoFile(null);
-    setImageFile(null);
-    setVideoPreview(null);
-    setImagePreview(null);
+    resetForm();
   };
 
   const handleClose = () => {
     if (!isLoading) {
-      // Reset form when closing
-      setDescription("");
-      setHasImage(false);
-      setVideoFile(null);
-      setImageFile(null);
-      setVideoPreview(null);
-      setImagePreview(null);
+      resetForm();
       onClose();
     }
   };
@@ -153,7 +148,7 @@ export function BlogFormModal({
         <DialogHeader>
           <DialogTitle>Create New Blog Post</DialogTitle>
           <DialogDescription>
-            Share an amazing tour experience. Upload a video and add a
+            Share an amazing tour experience. Add a YouTube video and a
             description.
           </DialogDescription>
         </DialogHeader>
@@ -178,58 +173,51 @@ export function BlogFormModal({
             </p>
           </div>
 
-          {/* Video Upload */}
+          {/* YouTube URL */}
           <div className="space-y-2">
-            <Label htmlFor="video-upload">
-              Video <span className="text-red-500">*</span>
+            <Label htmlFor="youtube-url">
+              YouTube Video URL <span className="text-red-500">*</span>
             </Label>
-            <div className="space-y-3">
+            <div className="relative">
+              <Youtube className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-red-500" />
               <Input
-                id="video-upload"
-                type="file"
-                accept="video/*"
-                onChange={handleVideoChange}
-                className="hidden"
+                id="youtube-url"
+                type="url"
+                value={youtubeUrl}
+                onChange={(e) => setYoutubeUrl(e.target.value)}
+                placeholder="https://www.youtube.com/watch?v=..."
+                className="pl-10"
+                required
               />
-              {!videoPreview ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    document.getElementById("video-upload")?.click()
-                  }
-                  className="w-full h-32 border-2 border-dashed hover:border-primary"
-                >
-                  <div className="flex flex-col items-center gap-2">
-                    <Video className="w-8 h-8 text-gray-400" />
-                    <span>Click to upload video</span>
-                    <span className="text-xs text-gray-500">
-                      MP4, WebM, or other video formats
-                    </span>
-                  </div>
-                </Button>
-              ) : (
-                <div className="relative border rounded-lg p-4 bg-black">
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="icon"
-                    className="absolute top-2 right-2 z-10"
-                    onClick={removeVideo}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                  <video
-                    src={videoPreview}
-                    controls
-                    className="w-full rounded-md max-h-64"
-                  />
-                  {videoFile && (
-                    <p className="text-xs text-white mt-2">{videoFile.name}</p>
-                  )}
-                </div>
-              )}
             </div>
+
+            {/* YouTube Preview */}
+            {videoId && (
+              <div className="mt-2 border rounded-lg overflow-hidden">
+                <div className="aspect-video">
+                  <iframe
+                    className="w-full h-full"
+                    src={`https://www.youtube.com/embed/${videoId}`}
+                    title="YouTube video preview"
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+                <div className="p-2 bg-gray-50 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-600" />
+                  <span className="text-xs font-medium text-gray-700">
+                    Video ID: {videoId}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {youtubeUrl.trim() && !videoId && (
+              <p className="text-xs text-red-500 mt-1">
+                Could not detect a valid YouTube video ID from this URL.
+              </p>
+            )}
           </div>
 
           {/* Include Image Checkbox */}

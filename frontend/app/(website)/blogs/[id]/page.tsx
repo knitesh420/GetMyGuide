@@ -18,7 +18,6 @@ export default function BlogDetailPage() {
   const dispatch = useDispatch<AppDispatch>();
   const { blogs, loading } = useSelector((state: RootState) => state.blogs);
   const [blog, setBlog] = useState<Blog | null>(null);
-  const [videoError, setVideoError] = useState(false);
 
   useEffect(() => {
     // If blogs not loaded, fetch them
@@ -34,11 +33,6 @@ export default function BlogDetailPage() {
       setBlog(foundBlog || null);
     }
   }, [blogs, params.id]);
-
-  const handleVideoError = () => {
-    console.error("Video failed to load");
-    setVideoError(true);
-  };
 
   if (loading) {
     return (
@@ -81,7 +75,7 @@ export default function BlogDetailPage() {
                 Blog Not Found
               </h1>
               <p className="text-gray-600 mb-6">
-                The blog post you're looking for doesn't exist or has been
+                The blog post you&apos;re looking for doesn&apos;t exist or has been
                 removed.
               </p>
               <Button onClick={() => router.push("/blogs")} className="gap-2">
@@ -108,60 +102,24 @@ export default function BlogDetailPage() {
           Back to All Experiences
         </Button>
 
-        {/* Video Player */}
+        {/* YouTube Video Player */}
         <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-6">
           <div className="relative aspect-video bg-gray-900">
-            {blog.videoFilename ? (
-              videoError ? (
-                <div className="w-full h-full flex flex-col items-center justify-center text-white p-8">
-                  <svg
-                    className="w-16 h-16 text-red-400 mb-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                    />
-                  </svg>
-                  <p className="text-lg font-semibold mb-2">Video Loading Error</p>
-                  <p className="text-sm text-gray-400 text-center">
-                    Unable to load the video. The file may be missing or in an unsupported format.
-                  </p>
-                </div>
-              ) : (
-                <video
-                  controls
-                  className="w-full h-full"
-                  controlsList="nodownload"
-                  preload="metadata"
-                  onError={handleVideoError}
-                  key={blog.videoFilename}
-                >
-                  <source
-                    src={`${API_URL}/media/blogs/${blog.videoFilename}`}
-                    type="video/mp4"
-                  />
-                  <source
-                    src={`${API_URL}/media/blogs/${blog.videoFilename}`}
-                    type="video/webm"
-                  />
-                  <source
-                    src={`${API_URL}/media/blogs/${blog.videoFilename}`}
-                    type="video/ogg"
-                  />
-                  Your browser does not support the video tag.
-                </video>
-              )
+            {blog.videoId ? (
+              <iframe
+                className="w-full h-full"
+                src={`https://www.youtube.com/embed/${blog.videoId}`}
+                title="YouTube video player"
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center text-white p-8">
                 <Play className="w-16 h-16 text-gray-500 mb-4" />
                 <p className="text-lg font-semibold">No Video Available</p>
                 <p className="text-sm text-gray-400 mt-2">
-                  This blog post doesn't have a video attached.
+                  This blog post doesn&apos;t have a video attached.
                 </p>
               </div>
             )}

@@ -5,11 +5,13 @@ import { z } from 'zod';
 export type CreateBlogValidationResult = {
 	description: string;
 	hasImage: boolean;
+	youtubeUrl : string;
 };
 
 export async function CreateBlogValidator(req: Request, res: Response, next: NextFunction) {
 	const reqValidator = z.object({
 		description: z.string().trim().min(1, 'Description is required'),
+		youtubeUrl: z.string().trim().url('Invalid YouTube URL').min(1, 'YouTube URL is required'),
 		hasImage: z
 			.preprocess(
 				(val) => {

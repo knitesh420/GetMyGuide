@@ -43,7 +43,7 @@ export const fetchBlogById = createAsyncThunk<Blog, string>(
   async (id, { rejectWithValue }) => {
     try {
       const response = await apiService.get<Blog>(`${RESOURCE_PATH}/${id}`);
-      // Respond() spreads data at root: { id, videoFilename, ..., success: true }
+      // Respond() spreads data at root: { id, videoId, ..., success: true }
       const blog = response.data || (response as unknown as Blog);
       return blog;
     } catch (error: any) {
@@ -53,23 +53,13 @@ export const fetchBlogById = createAsyncThunk<Blog, string>(
 );
 
 /**
- * Creates a new blog post. Expects `FormData` for file uploads.
+ * Creates a new blog post. Expects `FormData` with youtubeUrl and optional image.
  * The thunk is typed to return the newly created `Blog` object.
  */
 export const createBlog = createAsyncThunk<Blog, FormData>(
   "blogs/create",
   async (blogFormData, { rejectWithValue }) => {
     try {
-      // Make sure the FormData has a field named "thumbnail"
-      // Example of how it should be created:
-      // const formData = new FormData();
-      // formData.append('title', title);
-      // formData.append('content', content);
-      // formData.append('slug', slug);
-      // formData.append('tags', JSON.stringify(tags));
-      // formData.append('published', published);
-      // formData.append('thumbnail', imageFile); // ✅ Must be "thumbnail"
-
       const response = await apiService.post<Blog>(
         RESOURCE_PATH,
         blogFormData,
@@ -77,7 +67,7 @@ export const createBlog = createAsyncThunk<Blog, FormData>(
           headers: { "Content-Type": "multipart/form-data" },
         }
       );
-      // Respond() spreads data at root: { id, videoFilename, ..., success: true }
+      // Respond() spreads data at root: { id, videoId, ..., success: true }
       return response.data || (response as unknown as Blog);
     } catch (error: any) {
       return rejectWithValue(error.message || "Failed to create blog post");

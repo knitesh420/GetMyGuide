@@ -20,7 +20,7 @@ describe('BlogService', () => {
 	describe('createBlog', () => {
 		it('should create a blog and transform _id to id', async () => {
 			const blogData = {
-				videoFilename: 'test-video.mp4',
+				videoId: 'dQw4w9WgXcQ',
 				description: 'Test blog description',
 				hasImage: false,
 			};
@@ -29,7 +29,7 @@ describe('BlogService', () => {
 
 			expect(result).toHaveProperty('id');
 			expect(result).not.toHaveProperty('_id');
-			expect(result.videoFilename).toBe(blogData.videoFilename);
+			expect(result.videoId).toBe(blogData.videoId);
 			expect(result.description).toBe(blogData.description);
 			expect(result.hasImage).toBe(false);
 			expect(typeof result.id).toBe('string');
@@ -37,7 +37,7 @@ describe('BlogService', () => {
 
 		it('should create a blog with image and transform correctly', async () => {
 			const blogData = {
-				videoFilename: 'test-video.mp4',
+				videoId: 'dQw4w9WgXcQ',
 				description: 'Test blog with image',
 				hasImage: true,
 				imageFilename: 'test-image.jpg',
@@ -55,13 +55,13 @@ describe('BlogService', () => {
 		it('should return all blogs with transformed _id to id', async () => {
 			// Create multiple blogs
 			await BlogDB.create({
-				videoFilename: 'video1.mp4',
+				videoId: 'abc123def45',
 				description: 'First blog',
 				hasImage: false,
 			});
 
 			await BlogDB.create({
-				videoFilename: 'video2.mp4',
+				videoId: 'xyz789ghi01',
 				description: 'Second blog',
 				hasImage: true,
 				imageFilename: 'image2.jpg',
@@ -80,7 +80,7 @@ describe('BlogService', () => {
 		it('should return blogs sorted by createdAt descending', async () => {
 			// Create blogs with delay to ensure different timestamps
 			await BlogDB.create({
-				videoFilename: 'video1.mp4',
+				videoId: 'abc123def45',
 				description: 'First blog',
 				hasImage: false,
 			});
@@ -88,7 +88,7 @@ describe('BlogService', () => {
 			await new Promise((resolve) => setTimeout(resolve, 10));
 
 			await BlogDB.create({
-				videoFilename: 'video2.mp4',
+				videoId: 'xyz789ghi01',
 				description: 'Second blog',
 				hasImage: false,
 			});
@@ -112,7 +112,7 @@ describe('BlogService', () => {
 	describe('getBlogById', () => {
 		it('should return a blog by id with transformed _id to id', async () => {
 			const blog = await BlogDB.create({
-				videoFilename: 'test-video.mp4',
+				videoId: 'dQw4w9WgXcQ',
 				description: 'Test blog',
 				hasImage: false,
 			});
@@ -133,7 +133,7 @@ describe('BlogService', () => {
 
 		it('should handle blog with image correctly', async () => {
 			const blog = await BlogDB.create({
-				videoFilename: 'test-video.mp4',
+				videoId: 'dQw4w9WgXcQ',
 				description: 'Test blog with image',
 				hasImage: true,
 				imageFilename: 'test-image.jpg',
