@@ -4,6 +4,7 @@
  *   - https://www.youtube.com/watch?v=VIDEO_ID
  *   - https://youtu.be/VIDEO_ID
  *   - https://youtube.com/watch?v=VIDEO_ID
+ *   - https://youtube.com/shorts/VIDEO_ID
  *
  * @returns The video ID string, or null if the URL is invalid.
  */
@@ -11,6 +12,7 @@ export function extractYoutubeVideoId(url: string): string | null {
 	const patterns = [
 		/(?:youtube\.com\/watch\?.*v=)([\w-]{11})/,
 		/(?:youtu\.be\/)([\w-]{11})/,
+		/(?:youtube\.com\/shorts\/)([\w-]{11})/,
 	];
 
 	for (const pattern of patterns) {
