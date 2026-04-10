@@ -1,4 +1,5 @@
 import express from 'express';
+import idempotency from '../../middleware/idempotency';
 import IDValidator from '../../middleware/idValidator';
 import VerifySession, { VerifyMinLevel } from '../../middleware/VerifySession';
 import Controller from './guide.controller';
@@ -12,7 +13,9 @@ import {
 const router = express.Router();
 
 // Public routes
-router.route('/enroll').post(parseGuideEnrollmentFormData, EnrollValidator, Controller.enroll);
+router
+	.route('/enroll')
+	.post(parseGuideEnrollmentFormData, EnrollValidator, idempotency, Controller.enroll);
 
 router.route('/enroll-status/:id').get(IDValidator, Controller.getEnrollStatus);
 

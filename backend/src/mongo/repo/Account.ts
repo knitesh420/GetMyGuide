@@ -40,6 +40,11 @@ const AccountSchema = new mongoose.Schema<IAccount>(
 			enum: ['non_verified', 'verified'],
 			default: 'non_verified',
 		},
+		paymentStatus: {
+			type: String,
+			enum: ['pending', 'success', 'failed', 'na'],
+			default: 'na',
+		},
 		unavailableDates: {
 			type: [Date],
 			default: [],

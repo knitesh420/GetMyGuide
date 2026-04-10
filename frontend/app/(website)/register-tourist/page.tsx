@@ -667,7 +667,10 @@ export default function CombinedGuideBookingForm() {
 
       const res = await fetch(`${API_BASE_URL}/booking/guest-booking`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-idempotency-key": crypto.randomUUID(),
+        },
         body: JSON.stringify(payload),
       });
 

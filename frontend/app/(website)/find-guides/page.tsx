@@ -226,9 +226,7 @@ const GuideGrid: FC<GuideGridProps> = ({ guides, location, language, t }) => (
       {t("find_guides_results_title")}
     </h2>
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-      {guides.map((guide, index) => {
-        const bookHref = `/find-guides/${guide._id}/book?location=${encodeURIComponent(location)}&language=${encodeURIComponent(language)}`;
-        return (
+      {guides.map((guide, index) => (
           <div
             key={guide._id}
             className="animate-fade-in-up"
@@ -240,12 +238,10 @@ const GuideGrid: FC<GuideGridProps> = ({ guides, location, language, t }) => (
           >
             <GuideCard
               guide={guide}
-              checkoutHref={bookHref}
-              buttonText={t("find_guides_book_button")}
+              buttonText={t("find_guides_book_button") || "Book Now"}
             />
           </div>
-        );
-      })}
+      ))}
     </div>
   </div>
 );

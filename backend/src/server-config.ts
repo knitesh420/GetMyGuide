@@ -46,7 +46,15 @@ export default function (app: Express) {
 	//Initialize all the middleware
 	app.use(cookieParser());
 	app.use(express.urlencoded({ extended: true, limit: '2048mb' }));
-	app.use(express.json({ limit: '2048mb' }));
+	app.use(
+		express.json({
+			limit: '2048mb',
+			verify: (req: any, _res, buf) => {
+				// Capture raw body for webhook signature verification
+				req.rawBody = buf;
+			},
+		})
+	);
 	app.use(cors(corsOptionsDelegate));
 	app.use(express.static(__basedir + 'static'));
 

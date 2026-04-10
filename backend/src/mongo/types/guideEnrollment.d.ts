@@ -12,6 +12,7 @@ export default interface IGuideEnrollment extends Document {
 	aadhar: string; // filename
 	languages: string[];
 	photo: string; // filename
+	status: 'pending_payment' | 'completed' | 'failed';
 	createdAt: Date;
 	updatedAt: Date;
 }

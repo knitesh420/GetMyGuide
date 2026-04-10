@@ -65,6 +65,7 @@ describe('Transaction Service', () => {
 			const result = await TransactionService.createTransaction(customerInfo, 500, {
 				reference_id: 'ref123',
 				reference_type: 'enrollment',
+				type: 'guide',
 				data: { enrollment_id: 'ref123' },
 				description: 'Test Payment',
 			});
@@ -109,6 +110,7 @@ describe('Transaction Service', () => {
 				TransactionService.createTransaction(customerInfo, 500, {
 					reference_id: 'ref123',
 					reference_type: 'enrollment',
+					type: 'guide',
 				})
 			).rejects.toThrow(ServerError);
 		});
@@ -119,6 +121,7 @@ describe('Transaction Service', () => {
 			await TransactionDB.create({
 				reference_id: 'ref123',
 				reference_type: 'enrollment',
+				type: 'guide',
 				razorpay_order_id: 'order_test123',
 				razorpay_customer_id: 'cust_test123',
 				transaction_id: 'trans_test123',
@@ -147,6 +150,7 @@ describe('Transaction Service', () => {
 			await TransactionDB.create({
 				reference_id: 'ref123',
 				reference_type: 'enrollment',
+				type: 'guide',
 				razorpay_order_id: 'order_test123',
 				razorpay_customer_id: 'cust_test123',
 				transaction_id: 'trans_test123',
@@ -159,7 +163,7 @@ describe('Transaction Service', () => {
 
 			const result = await TransactionService.getTransactionStatus('trans_test123');
 
-			expect(result.status).toBe('created');
+			expect(result.status).toBe('pending');
 			expect(result.order_status).toBe('created');
 		});
 
@@ -177,6 +181,7 @@ describe('Transaction Service', () => {
 			await TransactionDB.create({
 				reference_id: 'ref123',
 				reference_type: 'enrollment',
+				type: 'guide',
 				razorpay_order_id: 'order_test123',
 				razorpay_customer_id: 'cust_test123',
 				transaction_id: 'trans_test123',
@@ -205,6 +210,7 @@ describe('Transaction Service', () => {
 			await TransactionDB.create({
 				reference_id: 'ref123',
 				reference_type: 'enrollment',
+				type: 'guide',
 				razorpay_order_id: 'order_old',
 				razorpay_customer_id: 'cust_test123',
 				transaction_id: 'trans_old',
@@ -219,6 +225,7 @@ describe('Transaction Service', () => {
 			await TransactionDB.create({
 				reference_id: 'ref123',
 				reference_type: 'enrollment',
+				type: 'guide',
 				razorpay_order_id: 'order_new',
 				razorpay_customer_id: 'cust_test123',
 				transaction_id: 'trans_new',

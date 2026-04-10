@@ -163,6 +163,7 @@ class BookingService {
 			{
 				reference_id: tempReference,
 				reference_type: 'pending_booking',
+				type: 'tourist',
 				description: 'Get My Guide Customised Booking Payment',
 			}
 		);
@@ -225,6 +226,7 @@ class BookingService {
 			{
 				reference_id: transaction_id,
 				reference_type: 'pending_booking',
+				type: 'tourist',
 				description: 'Get My Guide Customised Booking Payment',
 			}
 		);

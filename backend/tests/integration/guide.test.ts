@@ -280,6 +280,7 @@ describe('Guide API Integration Tests', () => {
 			await TransactionDB.create({
 				reference_id: enrollment._id.toString(),
 				reference_type: 'enrollment',
+				type: 'guide',
 				razorpay_order_id: 'order_test123',
 				razorpay_customer_id: 'cust_test123',
 				transaction_id: 'trans_test123',
@@ -348,6 +349,7 @@ describe('Guide API Integration Tests', () => {
 			await TransactionDB.create({
 				reference_id: enrollment._id.toString(),
 				reference_type: 'enrollment',
+				type: 'guide',
 				razorpay_order_id: 'order_test123',
 				razorpay_customer_id: 'cust_test123',
 				transaction_id: 'trans_test123',

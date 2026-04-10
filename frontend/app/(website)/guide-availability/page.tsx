@@ -3,6 +3,135 @@ import { useState, useEffect } from "react";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+function BookNowForm({ guide }: { guide: Guide }) {
+  const [showForm, setShowForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [message, setMessage] = useState("");
+
+  const resetForm = () => {
+    setFullName("");
+    setEmail("");
+    setPhone("");
+    setMessage("");
+    setError("");
+    setSubmitted(false);
+    setShowForm(false);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/guide/contact-inquiry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName,
+          phoneNumber: phone,
+          email,
+          nationality: "N/A",
+          category: "tour booking" as const,
+          subject: `Booking inquiry for guide: ${guide.name}`,
+          message: message || `I would like to book guide ${guide.name}.`,
+        }),
+      });
+      if (res.ok) {
+        setSubmitted(true);
+      } else {
+        const data = await res.json();
+        setError(data.message || "Failed to submit. Please try again.");
+      }
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!showForm) {
+    return (
+      <button
+        onClick={() => setShowForm(true)}
+        className="w-full py-2 bg-indigo-600 text-white text-sm font-bold rounded-md hover:bg-indigo-700 transition-colors"
+      >
+        Book Now
+      </button>
+    );
+  }
+
+  if (submitted) {
+    return (
+      <div className="text-center py-2 space-y-2">
+        <p className="text-green-600 font-semibold text-sm">Inquiry Submitted!</p>
+        <p className="text-xs text-gray-500">We will connect you with {guide.name} shortly.</p>
+        <button
+          onClick={resetForm}
+          className="text-xs text-indigo-600 hover:underline"
+        >
+          Back to Guide
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-2">
+      <input
+        value={fullName}
+        onChange={(e) => setFullName(e.target.value)}
+        placeholder="Full Name *"
+        required
+        className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+      />
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Email *"
+        required
+        className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+      />
+      <input
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+        placeholder="Phone *"
+        required
+        className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+      />
+      <textarea
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        placeholder="Message (optional)"
+        rows={2}
+        className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
+      />
+      {error && <p className="text-xs text-red-500">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={resetForm}
+          className="flex-1 py-1.5 border border-gray-300 text-gray-700 text-xs font-medium rounded hover:bg-gray-50 transition-colors"
+        >
+          Back
+        </button>
+        <button
+          type="submit"
+          disabled={submitting}
+          className="flex-1 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded hover:bg-indigo-700 transition-colors disabled:opacity-50"
+        >
+          {submitting ? "Submitting..." : "Submit"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 interface Guide {
   id: string;
   name: string;
@@ -227,10 +356,10 @@ export default function GuideAvailabilityPage() {
                 {filteredGuides.map((guide) => (
                   <div
                     key={guide.id}
-                    className="bg-white rounded-lg shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden border border-gray-200 flex flex-col h-[320px]"
+                    className="bg-white rounded-lg shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden border border-gray-200 flex flex-col"
                   >
-                    {/* Guide Image - Fixed Height */}
-                    <div className="relative h-36 bg-gradient-to-br from-indigo-100 to-purple-100 flex-shrink-0">
+                    {/* Guide Image */}
+                    <div className="relative h-36 bg-gradient-to-br from-indigo-100 to-purple-100 shrink-0">
                       {getImageUrl(guide) ? (
                         <img
                           src={getImageUrl(guide)!}
@@ -273,14 +402,13 @@ export default function GuideAvailabilityPage() {
                       </div>
                     </div>
 
-                    {/* Guide Info - Fixed Height with Overflow */}
-                    <div className="p-3 flex flex-col flex-1 overflow-hidden">
-                      {/* Guide Name and Location - Side by Side */}
+                    {/* Guide Info */}
+                    <div className="p-3 flex flex-col flex-1">
                       <div className="flex items-center justify-between mb-2 gap-2">
                         <h3 className="text-base font-bold text-gray-900 truncate">
                           {guide.name}
                         </h3>
-                        <div className="flex items-center text-gray-700 flex-shrink-0">
+                        <div className="flex items-center text-gray-700 shrink-0">
                           <svg
                             className="w-3 h-3 mr-1 text-indigo-600"
                             fill="none"
@@ -306,28 +434,31 @@ export default function GuideAvailabilityPage() {
                         </div>
                       </div>
 
-                      {/* Languages - Improved Display */}
-                      <div className="flex-1 overflow-hidden">
-                        <div className="mb-2">
-                          <h4 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                            Languages
-                          </h4>
-                          <div className="flex flex-wrap gap-1.5">
-                            {guide.languages.slice(0, 3).map((lang, idx) => (
-                              <span
-                                key={idx}
-                                className="px-2 py-1 bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-700 border border-indigo-200 rounded-md text-[10px] font-medium shadow-sm hover:shadow-md transition-shadow"
-                              >
-                                {lang}
-                              </span>
-                            ))}
-                            {guide.languages.length > 3 && (
-                              <span className="px-2 py-1 bg-gray-50 text-gray-600 border border-gray-200 rounded-md text-[10px] font-medium">
-                                +{guide.languages.length - 3}
-                              </span>
-                            )}
-                          </div>
+                      {/* Languages */}
+                      <div className="mb-3">
+                        <h4 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                          Languages
+                        </h4>
+                        <div className="flex flex-wrap gap-1.5">
+                          {guide.languages.slice(0, 3).map((lang, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2 py-1 bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-700 border border-indigo-200 rounded-md text-[10px] font-medium shadow-sm hover:shadow-md transition-shadow"
+                            >
+                              {lang}
+                            </span>
+                          ))}
+                          {guide.languages.length > 3 && (
+                            <span className="px-2 py-1 bg-gray-50 text-gray-600 border border-gray-200 rounded-md text-[10px] font-medium">
+                              +{guide.languages.length - 3}
+                            </span>
+                          )}
                         </div>
+                      </div>
+
+                      {/* Book Now Button / Form */}
+                      <div className="mt-auto">
+                        <BookNowForm guide={guide} />
                       </div>
                     </div>
                   </div>

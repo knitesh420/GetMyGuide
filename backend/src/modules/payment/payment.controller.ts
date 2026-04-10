@@ -1,0 +1,46 @@
+import PaymentService from '@services/payment';
+import { NextFunction, Request, Response } from 'express';
+import { BadRequestError, Respond, ServerError } from 'node-be-utilities';
+
+/**
+ * POST /payment/webhook
+ * Handles Razorpay webhook events.
+ */
+async function handleWebhook(req: Request, res: Response, next: NextFunction) {
+	try {
+		const signature = req.headers['x-razorpay-signature'] as string;
+
+		if (!signature) {
+			return next(new BadRequestError('Missing x-razorpay-signature header'));
+		}
+
+		// Use raw body for signature verification
+		const rawBody = (req as any).rawBody as Buffer;
+		if (!rawBody) {
+			return next(new ServerError('Raw body not available for signature verification'));
+		}
+
+		// Verify webhook signature
+		const isValid = PaymentService.verifyWebhookSignature(rawBody, signature);
+		if (!isValid) {
+			return next(new BadRequestError('Invalid webhook signature'));
+		}
+
+		// Process the webhook event
+		const result = await PaymentService.handleWebhookEvent(req.body);
+
+		return Respond({
+			res,
+			status: 200,
+			data: result,
+		});
+	} catch (error) {
+		return next(error);
+	}
+}
+
+const Controller = {
+	handleWebhook,
+};
+
+export default Controller;

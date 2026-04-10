@@ -14,13 +14,14 @@ const storage = multer.diskStorage({
 	},
 });
 
-// File filter for PDF files (licence and aadhar)
-const pdfFileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+// File filter for document files (licence and aadhar) — PDF + images
+const documentFileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
 	if (file.fieldname === 'licence' || file.fieldname === 'aadhar') {
-		if (file.mimetype === 'application/pdf') {
+		const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+		if (allowedTypes.includes(file.mimetype)) {
 			return cb(null, true);
 		}
-		return cb(new Error('Only PDF files are allowed for licence and aadhar fields'));
+		return cb(new Error('Only PDF, PNG, JPG, JPEG files are allowed for licence and aadhar fields'));
 	}
 	cb(null, true);
 };
@@ -44,7 +45,7 @@ const imageFileFilter = (
 // Combined file filter
 const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
 	if (file.fieldname === 'licence' || file.fieldname === 'aadhar') {
-		return pdfFileFilter(req, file, cb);
+		return documentFileFilter(req, file, cb);
 	}
 	if (file.fieldname === 'photo') {
 		return imageFileFilter(req, file, cb);

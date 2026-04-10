@@ -1,9 +1,11 @@
 import { RAZORPAY_API_KEY } from '@config/const';
 import { TransactionDB } from '@mongo';
+import type { TransactionType } from '@mongo/types/transaction';
 import RazorpayCustomers from '@provider/razorpay/api/customers';
 import RazorpayOrders from '@provider/razorpay/api/orders';
+import RazorpayRefunds from '@provider/razorpay/api/refunds';
 import { randomBytes } from 'crypto';
-import { NotFoundError, ServerError } from 'node-be-utilities';
+import { NotFoundError, ServerError, error as logError, info } from 'node-be-utilities';
 
 interface CustomerInfo {
 	name: string;
@@ -18,6 +20,7 @@ interface TransactionData {
 interface CreateTransactionOptions {
 	reference_id: string;
 	reference_type: string;
+	type: TransactionType;
 	data?: TransactionData;
 	description?: string;
 }
@@ -48,7 +51,7 @@ class TransactionService {
 		amount: number,
 		options: CreateTransactionOptions
 	): Promise<CreateTransactionResult> {
-		const { reference_id, reference_type, data = {}, description = 'Payment' } = options;
+		const { reference_id, reference_type, type, data = {}, description = 'Payment' } = options;
 		// Create Razorpay customer
 		const customer = await RazorpayCustomers.createCustomer({
 			name: customerInfo.name,
@@ -75,10 +78,11 @@ class TransactionService {
 		await TransactionDB.create({
 			reference_id,
 			reference_type,
+			type,
 			razorpay_order_id: order.id,
 			razorpay_customer_id: customer.id,
 			transaction_id,
-			status: order.status,
+			status: 'pending',
 			amount: order.amount,
 			currency: order.currency,
 		});
@@ -121,9 +125,16 @@ class TransactionService {
 		// Get current order status from Razorpay
 		const orderStatus = await RazorpayOrders.getOrderStatus(transaction.razorpay_order_id);
 
-		// Update transaction status if it has changed
-		if (transaction.status !== orderStatus) {
-			transaction.status = orderStatus;
+		// Map Razorpay order status to our transaction status
+		const statusMap: Record<string, string> = {
+			created: 'pending',
+			attempted: 'pending',
+			paid: 'paid',
+		};
+		const mappedStatus = statusMap[orderStatus] || transaction.status;
+
+		if (transaction.status !== mappedStatus) {
+			transaction.status = mappedStatus as any;
 			await transaction.save();
 		}
 
@@ -159,6 +170,59 @@ class TransactionService {
 		}).sort({ createdAt: -1 }); // Get most recent transaction
 
 		return transaction;
+	}
+
+	/**
+	 * Check if a payment ID has already been recorded as successful.
+	 * Used to detect duplicate payments.
+	 */
+	async isDuplicatePayment(razorpay_payment_id: string): Promise<boolean> {
+		const existing = await TransactionDB.findOne({
+			razorpay_payment_id,
+			status: { $in: ['success', 'paid'] },
+		});
+		return !!existing;
+	}
+
+	/**
+	 * Trigger a refund for a payment.
+	 */
+	async refundPayment(
+		paymentId: string,
+		amount: number,
+		referenceId: string,
+		reason: string = 'duplicate_payment'
+	) {
+		try {
+			const refund = await RazorpayRefunds.createRefund({
+				payment_id: paymentId,
+				amount,
+				reference_id: referenceId,
+				data: { reason },
+			});
+
+			// Update transaction status
+			await TransactionDB.findOneAndUpdate(
+				{ razorpay_payment_id: paymentId },
+				{ status: 'refunded' }
+			);
+
+			info('Transaction: Refund processed', {
+				paymentId,
+				refundId: refund.id,
+				amount,
+			});
+
+			return refund;
+		} catch (err) {
+			logError('Transaction: Refund failed', {
+				paymentId,
+				amount,
+				referenceId,
+				error: err,
+			});
+			throw new ServerError('Failed to process refund');
+		}
 	}
 }
 

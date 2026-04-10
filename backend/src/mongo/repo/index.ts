@@ -4,6 +4,8 @@ export { default as BlogDB } from './Blog';
 export { default as BookingDB } from './Booking';
 export { default as ContactInquiryDB } from './ContactInquiry';
 export { default as GuideEnrollmentDB } from './GuideEnrollment';
+export { default as IdempotencyKeyDB } from './IdempotencyKey';
 export { default as PackageDB } from './Package';
 export { default as StorageDB } from './Storage';
 export { default as TransactionDB } from './Transaction';
+export { default as WebhookEventDB } from './WebhookEvent';

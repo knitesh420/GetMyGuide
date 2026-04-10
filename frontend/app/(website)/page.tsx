@@ -8,7 +8,7 @@ export default function HomePage() {
   return (
     <main className="min-h-screen">
       <HeroCarousel />
-      {/* <TourCategories /> */}
+      <TourCategories />
       <GuideRegistration />
       <BookingProcess />
     </main>

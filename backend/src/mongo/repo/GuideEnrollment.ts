@@ -54,6 +54,12 @@ const GuideEnrollmentSchema = new mongoose.Schema<IGuideEnrollment>(
 			required: true,
 			trim: true,
 		},
+		status: {
+			type: String,
+			enum: ['pending_payment', 'completed', 'failed'],
+			required: true,
+			default: 'pending_payment',
+		},
 	},
 	{
 		timestamps: true,

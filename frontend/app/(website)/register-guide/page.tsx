@@ -266,6 +266,9 @@ export default function BecomeGuidePage() {
     try {
       const res = await fetch(`${API_BASE_URL}/guide/enroll`, {
         method: "POST",
+        headers: {
+          "x-idempotency-key": crypto.randomUUID(),
+        },
         body: formData,
         credentials: "include",
       });
@@ -317,39 +320,41 @@ export default function BecomeGuidePage() {
               const verifyData = await verifyRes.json();
               if (verifyRes.ok && verifyData.success) {
                 setMessage(
-                  "Payment completed successfully! Your guide account has been created.",
+                  "Registration successful! Your payment has been received and your guide account has been created. Please check your email for login credentials.",
                 );
-
-                // Reset form
-                setName("");
-                setPan("");
-                setEmail("");
-                setAadhaarFile(null);
-                setAadhaarPreview(null);
-                setProfileFile(null);
-                setProfilePreview(null);
-                setLocation("");
-                setLanguages([]);
-                setShowLangError(false);
-                setFile(null);
-                setPreview(null);
-                setGuideType("");
-                setNameError("");
-                setEmailError("");
-                setLocationError("");
-                setPhone("");
-                setPhoneError("");
-                setDisclaimerAccepted(false);
-                setDisclaimerError("");
-
-                // Refetch guide application
-                fetchMyGuideApplication().then((g) => setMyGuide(g));
               } else {
-                setMessage(verifyData.message || "Payment verification failed.");
+                setMessage(
+                  "Payment received successfully! Your registration is being processed. You will receive a confirmation email shortly.",
+                );
               }
+
+              // Reset form
+              setName("");
+              setPan("");
+              setEmail("");
+              setAadhaarFile(null);
+              setAadhaarPreview(null);
+              setProfileFile(null);
+              setProfilePreview(null);
+              setLocation("");
+              setLanguages([]);
+              setShowLangError(false);
+              setFile(null);
+              setPreview(null);
+              setGuideType("");
+              setNameError("");
+              setEmailError("");
+              setLocationError("");
+              setPhone("");
+              setPhoneError("");
+              setDisclaimerAccepted(false);
+              setDisclaimerError("");
+
+              // Refetch guide application
+              fetchMyGuideApplication().then((g) => setMyGuide(g));
             } catch (err) {
               setMessage(
-                "Payment completed but verification failed. Please contact support.",
+                "Payment received successfully! Your registration is being processed. You will receive a confirmation email shortly.",
               );
             }
             setSubmitting(false);
@@ -364,9 +369,7 @@ export default function BecomeGuidePage() {
           },
           modal: {
             ondismiss: () => {
-              setMessage(
-                "Payment was cancelled. No data has been saved.",
-              );
+              setMessage("Payment was cancelled. No data has been saved.");
               setSubmitting(false);
             },
           },
@@ -669,7 +672,7 @@ export default function BecomeGuidePage() {
                 {/* License/ID Upload */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    ID / License (PDF) <span className="text-red-500">*</span>
+                    ID / License <span className="text-red-500">*</span>
                   </label>
                   <label className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-500 transition-colors cursor-pointer flex items-center justify-center">
                     <svg
@@ -690,7 +693,7 @@ export default function BecomeGuidePage() {
                     </span>
                     <input
                       type="file"
-                      accept="application/pdf"
+                      accept="application/pdf,image/png,image/jpeg,image/jpg"
                       onChange={handleLicenseFileChange}
                       className="hidden"
                     />
@@ -744,7 +747,7 @@ export default function BecomeGuidePage() {
                 {/* Aadhaar Upload */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Aadhaar Card (PDF) <span className="text-red-500">*</span>
+                    Aadhaar Card<span className="text-red-500">*</span>
                   </label>
                   <label className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-500 transition-colors cursor-pointer flex items-center justify-center">
                     <svg
@@ -765,7 +768,7 @@ export default function BecomeGuidePage() {
                     </span>
                     <input
                       type="file"
-                      accept="application/pdf"
+                      accept="application/pdf,image/png,image/jpeg,image/jpg"
                       onChange={handleAadhaarFileChange}
                       className="hidden"
                     />

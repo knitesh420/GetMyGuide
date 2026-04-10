@@ -114,6 +114,7 @@ class GuideService {
 			{
 				reference_id: tempReference,
 				reference_type: 'pending_enrollment',
+				type: 'guide',
 				description: 'Guide Registration Fee - Rs 500',
 			}
 		);
@@ -239,7 +240,7 @@ class GuideService {
 		}
 
 		// Step 5: NOW save enrollment to DB (only after verification)
-		const enrollment = await GuideEnrollmentDB.create(data);
+		const enrollment = await GuideEnrollmentDB.create({ ...data, status: 'completed' });
 
 		// Step 6: Update transaction with enrollment reference and mark as paid
 		transaction.reference_id = enrollment._id.toString();

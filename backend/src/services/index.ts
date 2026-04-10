@@ -5,4 +5,5 @@ export { default as GuideService } from './guide';
 export { default as BookingService } from './booking';
 export { default as JWTService } from './jwt';
 export { default as PackageService } from './package';
+export { default as PaymentService } from './payment';
 export { default as TransactionService } from './transaction';

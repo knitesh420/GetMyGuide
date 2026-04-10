@@ -1,5 +1,5 @@
 import express from 'express';
-import { VerifyMinLevel, VerifySession } from '../../middleware';
+import { idempotency, VerifyMinLevel, VerifySession } from '../../middleware';
 import IDValidator from '../../middleware/idValidator';
 import Controller from './booking.controller';
 import { AllocateGuideValidator, CreateBookingValidator } from './booking.validator';
@@ -8,7 +8,9 @@ const router = express.Router();
 
 // Public routes
 router.route('/key').get(Controller.getRazorpayKey);
-router.route('/guest-booking').post(CreateBookingValidator, Controller.createGuestBooking);
+router
+	.route('/guest-booking')
+	.post(CreateBookingValidator, idempotency, Controller.createGuestBooking);
 router.route('/verify-guest-booking').post(Controller.verifyAndCreateGuestBooking);
 
 // Tourist routes
@@ -18,6 +20,7 @@ router
 		VerifySession,
 		VerifyMinLevel('tourist'),
 		CreateBookingValidator,
+		idempotency,
 		Controller.createCustomisedBooking
 	);
 

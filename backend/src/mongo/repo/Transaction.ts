@@ -23,6 +23,16 @@ const TransactionSchema = new mongoose.Schema<ITransaction>(
 			required: true,
 			trim: true,
 		},
+		razorpay_payment_id: {
+			type: String,
+			trim: true,
+		},
+		type: {
+			type: String,
+			enum: ['guide', 'tourist'],
+			required: true,
+			trim: true,
+		},
 		transaction_id: {
 			type: String,
 			required: true,
@@ -31,8 +41,10 @@ const TransactionSchema = new mongoose.Schema<ITransaction>(
 		},
 		status: {
 			type: String,
+			enum: ['pending', 'paid', 'success', 'failed', 'refunded', 'pending_verification'],
 			required: true,
 			trim: true,
+			default: 'pending',
 		},
 		amount: {
 			type: Number,

@@ -4,6 +4,7 @@ import BlogRoute from './blog/blog.route';
 import BookingRoute from './booking/booking.route';
 import GuideRoute from './guide/guide.route';
 import PackageRoute from './package/package.route';
+import PaymentRoute from './payment/payment.route';
 import SessionRoute from './session/session.route';
 import LeadRoute from './lead/lead.route';
 import UserRoute from './user/user.route';
@@ -14,7 +15,8 @@ import fs from 'fs';
 
 const router = express.Router();
 
-// Next routes will be webhooks routes
+// Webhook and payment routes
+router.use('/payment', PaymentRoute);
 
 router.use('/advertisement', AdvertisementRoute);
 router.use('/session', SessionRoute);
