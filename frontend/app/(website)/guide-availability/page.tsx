@@ -12,11 +12,13 @@ function BookNowForm({ guide }: { guide: Guide }) {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [message, setMessage] = useState("");
+  const [travelingDate, setTravelingDate] = useState("");
 
   const resetForm = () => {
     setFullName("");
     setEmail("");
     setPhone("");
+    setTravelingDate("");
     setMessage("");
     setError("");
     setSubmitted(false);
@@ -38,7 +40,7 @@ function BookNowForm({ guide }: { guide: Guide }) {
           nationality: "N/A",
           category: "tour booking" as const,
           subject: `Booking inquiry for guide: ${guide.name}`,
-          message: message || `I would like to book guide ${guide.name}.`,
+          message: `${travelingDate ? `Traveling Date: ${travelingDate}. ` : ""}${message || `I would like to book guide ${guide.name}.`}`,
         }),
       });
       if (res.ok) {
@@ -104,6 +106,19 @@ function BookNowForm({ guide }: { guide: Guide }) {
         required
         className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
       />
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-0.5">
+          Traveling Date <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="date"
+          value={travelingDate}
+          onChange={(e) => setTravelingDate(e.target.value)}
+          required
+          min={new Date().toISOString().split("T")[0]}
+          className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        />
+      </div>
       <textarea
         value={message}
         onChange={(e) => setMessage(e.target.value)}
