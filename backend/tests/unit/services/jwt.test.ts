@@ -6,6 +6,7 @@ describe('JWTService', () => {
 		role: 'tourist',
 		email: 'test@example.com',
 		name: 'Test User',
+		tokenVersion: 0,
 	};
 
 	describe('generateToken', () => {
@@ -79,6 +80,7 @@ describe('JWTService', () => {
 				role: 'admin',
 				email: 'admin@example.com',
 				name: 'Admin User',
+				tokenVersion: 0,
 			};
 
 			const token = JWTService.generateToken(originalPayload);

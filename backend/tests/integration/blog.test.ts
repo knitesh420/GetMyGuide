@@ -44,11 +44,11 @@ describe('Blog API Integration Tests', () => {
 		// Create admin user
 		const adminData = { ...testSignupData, email: 'admin@example.com', role: 'admin' as const };
 		const adminResult = await AuthService.signup(adminData);
-		adminToken = adminResult.token;
+		adminToken = adminResult.accessToken;
 
 		// Create regular user
 		const userResult = await AuthService.signup(testUser);
-		userToken = userResult.token;
+		userToken = userResult.accessToken;
 	});
 
 	afterAll(async () => {
@@ -72,10 +72,10 @@ describe('Blog API Integration Tests', () => {
 		// Recreate admin and user after clearing database
 		const adminData = { ...testSignupData, email: 'admin@example.com', role: 'admin' as const };
 		const adminResult = await AuthService.signup(adminData);
-		adminToken = adminResult.token;
+		adminToken = adminResult.accessToken;
 
 		const userResult = await AuthService.signup(testUser);
-		userToken = userResult.token;
+		userToken = userResult.accessToken;
 	});
 
 	describe('POST /blog', () => {

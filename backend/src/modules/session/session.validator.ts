@@ -7,7 +7,6 @@ export type SignupValidationResult = {
 	email: string;
 	phone: string;
 	password: string;
-	role?: 'tourist' | 'guide' | 'admin';
 };
 
 export type LoginValidationResult = {
@@ -25,12 +24,14 @@ export type ResetPasswordValidationResult = {
 };
 
 export async function SignupValidator(req: Request, res: Response, next: NextFunction) {
+	// Note: `role` is intentionally NOT accepted here. Public signup always
+	// creates a tourist; admin/guide accounts are provisioned by seed scripts
+	// or protected internal endpoints.
 	const reqValidator = z.object({
 		name: z.string().min(1, 'Name is required').trim(),
 		email: z.string().email('Invalid email address').toLowerCase(),
 		phone: z.string().min(1, 'Phone is required').trim(),
-		password: z.string().min(6, 'Password must be at least 6 characters'),
-		role: z.enum(['tourist', 'guide', 'admin']).optional().default('tourist'),
+		password: z.string().min(8, 'Password must be at least 8 characters'),
 	});
 
 	const reqValidatorResult = reqValidator.safeParse(req.body);

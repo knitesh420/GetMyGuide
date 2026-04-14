@@ -50,18 +50,18 @@ describe('Booking API Integration Tests', () => {
 		// Create admin user
 		const adminData = { ...testSignupData, email: 'admin@example.com', role: 'admin' as const };
 		const adminResult = await AuthService.signup(adminData);
-		adminToken = adminResult.token;
+		adminToken = adminResult.accessToken;
 
 		// Create tourist user
 		const touristResult = await AuthService.signup(testUser);
-		touristToken = touristResult.token;
+		touristToken = touristResult.accessToken;
 		const tourist = await AccountDB.findOne({ email: testUser.email });
 		touristId = tourist!._id.toString();
 
 		// Create guide user
 		const guideData = { ...testSignupData, email: 'guide@example.com', role: 'guide' as const };
 		const guideResult = await AuthService.signup(guideData);
-		guideToken = guideResult.token;
+		guideToken = guideResult.accessToken;
 		const guide = await AccountDB.findOne({ email: 'guide@example.com' });
 		guideId = guide!._id.toString();
 

@@ -1,4 +1,12 @@
 // lib/redux/authSlice.ts
+//
+// Auth tokens live ONLY in HTTP-only cookies (set by the backend). We
+// deliberately avoid localStorage / sessionStorage / window globals for
+// tokens — those are shared across the whole window and aren't readable from
+// SSR, which is exactly what caused the "one admin logs in, everyone is
+// logged in" bug. The Redux store here keeps only display state (the user
+// object), and the source of truth for "am I logged in" is always a
+// fresh /session/validate-auth round-trip.
 import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
 import { apiService } from "../service/api";
 import {
@@ -10,33 +18,13 @@ import {
   AuthResponse,
 } from "@/types/auth";
 
-// Initialize state from localStorage if available
-const getInitialState = (): AuthState => {
-  if (typeof window !== "undefined") {
-    const token = localStorage.getItem("authToken");
-    const user = localStorage.getItem("authUser");
-    if (token) {
-      // Token exists — set isAuthenticated to null (pending validation)
-      // Protected pages should wait for validation before redirecting
-      return {
-        user: user ? JSON.parse(user) : null,
-        token,
-        isAuthenticated: null,
-        loading: false,
-        error: null,
-      };
-    }
-  }
-  return {
-    user: null,
-    token: null,
-    isAuthenticated: false,
-    loading: false,
-    error: null,
-  };
+const initialState: AuthState = {
+  user: null,
+  token: null,
+  isAuthenticated: null, // null = unknown until validate-auth resolves
+  loading: false,
+  error: null,
 };
-
-const initialState: AuthState = getInitialState();
 
 const handleError = (err: any) =>
   err.response?.data?.message || err.message || "An error occurred";
@@ -55,18 +43,16 @@ export const loginUser = createAsyncThunk<AuthResponse, LoginRequest>(
   },
 );
 
-// Register/Signup user directly (backend doesn't use OTP)
+// Register/Signup
 export const registerUser = createAsyncThunk<AuthResponse, any>(
   "auth/registerUser",
   async (data, { rejectWithValue }) => {
     try {
-      // Transform data to match backend expectations
       const payload = {
         name: data.name,
         email: data.email,
-        phone: data.mobile || data.phone, // Backend uses 'phone', frontend uses 'mobile'
+        phone: data.mobile || data.phone,
         password: data.password,
-        role: data.role || data.userType || "tourist",
       };
       const result = await apiService.post("/session/signup", payload);
       if (!result.success) return rejectWithValue(result.message);
@@ -105,7 +91,6 @@ export const loginWithOtp = createAsyncThunk<AuthResponse, OtpLoginRequest>(
   },
 );
 
-// Keep sendOTP for backward compatibility (not used by backend)
 export const sendOTP = createAsyncThunk<AuthResponse, OTPRequest>(
   "auth/sendOTP",
   async (data, { rejectWithValue }) => {
@@ -119,18 +104,15 @@ export const sendOTP = createAsyncThunk<AuthResponse, OTPRequest>(
   },
 );
 
-// Verify OTP and Register (simplified to direct signup)
 export const verifyOtpAndRegister = createAsyncThunk<AuthResponse, FormData>(
   "auth/verifyOtpAndRegister",
   async (formData, { rejectWithValue }) => {
     try {
-      // Extract form data and send as JSON
       const payload = {
         name: formData.get("name") as string,
         email: formData.get("email") as string,
         phone: formData.get("mobile") as string,
         password: formData.get("password") as string,
-        role: (formData.get("role") as string) || "tourist",
       };
       const result = await apiService.post("/session/signup", payload);
       if (!result.success) return rejectWithValue(result.message);
@@ -141,7 +123,7 @@ export const verifyOtpAndRegister = createAsyncThunk<AuthResponse, FormData>(
   },
 );
 
-// Get current user - Updated with better error handling
+// Get current user
 export const getCurrentUser = createAsyncThunk<AuthResponse>(
   "auth/getCurrentUser",
   async (_, { rejectWithValue }) => {
@@ -155,7 +137,7 @@ export const getCurrentUser = createAsyncThunk<AuthResponse>(
   },
 );
 
-// Refresh token (backend may not have this endpoint, keeping for compatibility)
+// Refresh token (cookie-based; body is ignored)
 export const refreshToken = createAsyncThunk<AuthResponse>(
   "auth/refreshToken",
   async (_, { rejectWithValue }) => {
@@ -181,7 +163,18 @@ export const logoutUser = createAsyncThunk<void, void>(
   },
 );
 
-// --- Slice ---
+const setUserFromResponse = (state: AuthState, payload: AuthResponse) => {
+  const userData =
+    (payload as any).user ?? (payload as any).data?.user ?? null;
+  if (userData && userData.phone) {
+    userData.mobile = userData.phone;
+  }
+  state.user = userData;
+  state.isAuthenticated = !!userData;
+  state.token = null; // Tokens never live in client memory anymore
+  state.error = null;
+};
+
 const authSlice = createSlice({
   name: "auth",
   initialState,
@@ -198,16 +191,10 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.loading = false;
       state.error = null;
-
-      // Clear token from localStorage
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("authToken");
-      }
     },
     clearAuthError: (state) => {
       state.error = null;
     },
-    // New reducer for setting auth state from external sources
     setAuthState: (
       state,
       action: PayloadAction<{ user: User; isAuthenticated: boolean }>,
@@ -227,61 +214,24 @@ const authSlice = createSlice({
       state.loading = false;
       state.error = action.payload as string;
     };
+    const setFulfilled = (
+      state: AuthState,
+      action: { payload: AuthResponse },
+    ) => {
+      state.loading = false;
+      setUserFromResponse(state, action.payload);
+    };
 
-    // Login
     builder
       .addCase(loginUser.pending, setPending)
-      .addCase(loginUser.fulfilled, (state, action) => {
-        state.loading = false;
-        // Backend returns { data: { token, user } }
-        const responseData = action.payload.user;
-        const userData = responseData;
-        if (userData && userData.phone) {
-          // Map phone to mobile for backward compatibility
-          userData.mobile = userData.phone;
-        }
-        const token = action.payload.token;
-        localStorage.setItem("authToken", token);
-
-        state.user = userData;
-        state.token = token;
-        state.isAuthenticated = true;
-        state.error = null;
-
-        // Store token in localStorage for persistence
-        if (token && typeof window !== "undefined") {
-          localStorage.setItem("authToken", token);
-          localStorage.setItem("authUser", JSON.stringify(userData));
-        }
-      })
+      .addCase(loginUser.fulfilled, setFulfilled)
       .addCase(loginUser.rejected, setRejected);
 
-    // Register User
     builder
       .addCase(registerUser.pending, setPending)
-      .addCase(registerUser.fulfilled, (state, action) => {
-        state.loading = false;
-        // Backend returns { data: { token, user } }
-        const responseData = action.payload.data as any;
-        const userData = responseData?.user || responseData || null;
-        if (userData && userData.phone) {
-          // Map phone to mobile for backward compatibility
-          userData.mobile = userData.phone;
-        }
-        const token = responseData?.token || null;
-        state.user = userData;
-        state.token = token;
-        state.isAuthenticated = true;
-        state.error = null;
-
-        // Store token in localStorage for persistence
-        if (token && typeof window !== "undefined") {
-          localStorage.setItem("authToken", token);
-        }
-      })
+      .addCase(registerUser.fulfilled, setFulfilled)
       .addCase(registerUser.rejected, setRejected);
 
-    // Send Login OTP
     builder
       .addCase(sendLoginOtp.pending, setPending)
       .addCase(sendLoginOtp.fulfilled, (state) => {
@@ -290,32 +240,11 @@ const authSlice = createSlice({
       })
       .addCase(sendLoginOtp.rejected, setRejected);
 
-    // Login with OTP
     builder
       .addCase(loginWithOtp.pending, setPending)
-      .addCase(loginWithOtp.fulfilled, (state, action) => {
-        state.loading = false;
-        const responseData = action.payload.user;
-        const userData = responseData;
-        if (userData && userData.phone) {
-          userData.mobile = userData.phone;
-        }
-        const token = action.payload.token;
-        localStorage.setItem("authToken", token);
-
-        state.user = userData;
-        state.token = token;
-        state.isAuthenticated = true;
-        state.error = null;
-
-        if (token && typeof window !== "undefined") {
-          localStorage.setItem("authToken", token);
-          localStorage.setItem("authUser", JSON.stringify(userData));
-        }
-      })
+      .addCase(loginWithOtp.fulfilled, setFulfilled)
       .addCase(loginWithOtp.rejected, setRejected);
 
-    // Send OTP (not used by backend, kept for compatibility)
     builder
       .addCase(sendOTP.pending, setPending)
       .addCase(sendOTP.fulfilled, (state) => {
@@ -324,83 +253,34 @@ const authSlice = createSlice({
       })
       .addCase(sendOTP.rejected, setRejected);
 
-    // Verify OTP and Register (direct signup)
     builder
       .addCase(verifyOtpAndRegister.pending, setPending)
-      .addCase(verifyOtpAndRegister.fulfilled, (state, action) => {
-        state.loading = false;
-        const responseData = action.payload.data as any;
-        const userData = responseData?.user || null;
-        if (userData && userData.phone) {
-          // Map phone to mobile for backward compatibility
-          userData.mobile = userData.phone;
-        }
-        const token = responseData?.token || null;
-        state.user = userData;
-        state.token = token;
-        state.isAuthenticated = true;
-        state.error = null;
-
-        // Store token in localStorage for persistence
-        if (token && typeof window !== "undefined") {
-          localStorage.setItem("authToken", token);
-        }
-      })
+      .addCase(verifyOtpAndRegister.fulfilled, setFulfilled)
       .addCase(verifyOtpAndRegister.rejected, setRejected);
 
-    // Get Current User
     builder
       .addCase(getCurrentUser.pending, setPending)
-      .addCase(getCurrentUser.fulfilled, (state, action) => {
-        state.loading = false;
-        // Backend returns { data: { user } }
-        const responseData = action.payload.user as any;
-        const userData = responseData || null;
-        if (userData && userData.phone) {
-          // Map phone to mobile for backward compatibility
-          userData.mobile = userData.phone;
-        }
-        state.user = userData;
-        state.isAuthenticated = true;
-        state.error = null;
-      })
+      .addCase(getCurrentUser.fulfilled, setFulfilled)
       .addCase(getCurrentUser.rejected, (state) => {
         state.loading = false;
         state.error = null;
-        // Validation failed — clear auth state so protected pages redirect
         state.isAuthenticated = false;
         state.user = null;
         state.token = null;
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("authToken");
-          localStorage.removeItem("authUser");
-        }
       });
 
-    // Refresh Token
     builder
       .addCase(refreshToken.pending, (state) => {
-        // Don't set loading for silent refresh
         state.error = null;
       })
-      .addCase(refreshToken.fulfilled, (state, action) => {
-        const responseData = action.payload.data as any;
-        const userData = responseData || null;
-        if (userData && userData.phone) {
-          // Map phone to mobile for backward compatibility
-          userData.mobile = userData.phone;
-        }
-        state.user = userData;
-        state.isAuthenticated = true;
-        state.error = null;
-      })
+      .addCase(refreshToken.fulfilled, setFulfilled)
       .addCase(refreshToken.rejected, (state) => {
         state.isAuthenticated = false;
         state.user = null;
+        state.token = null;
         state.error = null;
       });
 
-    // Logout
     builder
       .addCase(logoutUser.fulfilled, (state) => {
         state.user = null;
@@ -408,24 +288,13 @@ const authSlice = createSlice({
         state.isAuthenticated = false;
         state.loading = false;
         state.error = null;
-
-        // Clear token from localStorage
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("authToken");
-        }
       })
       .addCase(logoutUser.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
-        // Still clear auth state even if logout failed
         state.user = null;
         state.token = null;
         state.isAuthenticated = false;
-
-        // Clear token from localStorage
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("authToken");
-        }
       });
   },
 });

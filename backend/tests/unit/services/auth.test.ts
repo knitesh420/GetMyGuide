@@ -31,13 +31,13 @@ describe('AuthService', () => {
 		it('should successfully register a new user', async () => {
 			const result = await AuthService.signup(testSignupData);
 
-			expect(result).toHaveProperty('token');
+			expect(result).toHaveProperty('accessToken');
 			expect(result).toHaveProperty('user');
 			expect(result.user.email).toBe(testSignupData.email.toLowerCase());
 			expect(result.user.name).toBe(testSignupData.name);
 			expect(result.user.role).toBe('tourist');
 			expect(result.user.status).toBe('non_verified');
-			expect(result.token).toBeDefined();
+			expect(result.accessToken).toBeDefined();
 		});
 
 		it('should throw ConflictError if email already exists', async () => {
@@ -77,10 +77,10 @@ describe('AuthService', () => {
 		it('should successfully login with valid credentials', async () => {
 			const result = await AuthService.login(testLoginData);
 
-			expect(result).toHaveProperty('token');
+			expect(result).toHaveProperty('accessToken');
 			expect(result).toHaveProperty('user');
 			expect(result.user.email).toBe(testUser.email);
-			expect(result.token).toBeDefined();
+			expect(result.accessToken).toBeDefined();
 		});
 
 		it('should throw UnauthorizedError for invalid email', async () => {
@@ -156,7 +156,7 @@ describe('AuthService', () => {
 			const newPassword = 'newpassword123';
 			const result = await AuthService.resetPassword(resetToken, newPassword);
 
-			expect(result).toHaveProperty('token');
+			expect(result).toHaveProperty('accessToken');
 			expect(result).toHaveProperty('user');
 
 			// Verify new password works

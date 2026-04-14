@@ -1,15 +1,22 @@
-import { randomBytes } from 'crypto';
-import { ConflictError, NotFoundError, ServerError, UnauthorizedError } from 'node-be-utilities';
+import bcrypt from 'bcrypt';
+import { randomBytes, randomInt } from 'crypto';
+import {
+	BadRequestError,
+	ConflictError,
+	NotFoundError,
+	ServerError,
+	UnauthorizedError,
+} from 'node-be-utilities';
 import { AccountDB, StorageDB } from '@mongo';
 import { sendAdminOtpEmail, sendPasswordResetEmail } from '@provider/email';
 import JWTService, { JWTPayload } from '@services/jwt';
+import { OTP_MAX_VERIFY_ATTEMPTS, OTP_TTL_SECONDS } from '@config/const';
 
 interface SignupData {
 	name: string;
 	email: string;
 	phone: string;
 	password: string;
-	role?: 'tourist' | 'guide' | 'admin';
 }
 
 interface LoginData {
@@ -17,122 +24,138 @@ interface LoginData {
 	password: string;
 }
 
-interface AuthResponse {
-	token: string;
-	user: {
-		id: string;
-		name: string;
-		email: string;
-		phone: string;
-		role: string;
-		status: string;
+interface TokenPair {
+	accessToken: string;
+	refreshToken: string;
+}
+
+interface PublicUser {
+	id: string;
+	name: string;
+	email: string;
+	phone: string;
+	role: 'tourist' | 'guide' | 'admin';
+	status: string;
+}
+
+interface AuthResponse extends TokenPair {
+	user: PublicUser;
+}
+
+function toPublicUser(user: any): PublicUser {
+	return {
+		id: user._id.toString(),
+		name: user.name,
+		email: user.email,
+		phone: user.phone,
+		role: user.role,
+		status: user.status,
 	};
+}
+
+function issueTokens(user: any): TokenPair {
+	const accessPayload: JWTPayload = {
+		userId: user._id.toString(),
+		role: user.role,
+		email: user.email,
+		name: user.name,
+		tokenVersion: user.tokenVersion ?? 0,
+	};
+	const accessToken = JWTService.generateAccessToken(accessPayload);
+	const refreshToken = JWTService.generateRefreshToken({
+		userId: user._id.toString(),
+		tokenVersion: user.tokenVersion ?? 0,
+	});
+	return { accessToken, refreshToken };
 }
 
 class AuthService {
 	/**
-	 * Register a new user
+	 * Public signup — always creates a tourist account.
+	 * Admin and guide accounts must be created via seed / internal flows.
 	 */
 	async signup(data: SignupData): Promise<AuthResponse> {
-		// Check if email already exists
 		const existingUser = await AccountDB.findOne({ email: data.email.toLowerCase() });
 		if (existingUser) {
 			throw new ConflictError('User with this email already exists');
 		}
 
-		// Create new user
 		const user = await AccountDB.create({
 			name: data.name,
 			email: data.email.toLowerCase(),
 			phone: data.phone,
-			password: data.password, // Will be hashed by pre-save hook
-			role: data.role || 'tourist',
+			password: data.password,
+			role: 'tourist',
 			status: 'non_verified',
 			isActive: true,
 		});
 
-		// Generate JWT token
-		const payload: JWTPayload = {
-			userId: user._id.toString(),
-			role: user.role,
-			email: user.email,
-			name: user.name,
-		};
-		const token = JWTService.generateToken(payload);
-
-		return {
-			token,
-			user: {
-				id: user._id.toString(),
-				name: user.name,
-				email: user.email,
-				phone: user.phone,
-				role: user.role,
-				status: user.status,
-			},
-		};
+		return { ...issueTokens(user), user: toPublicUser(user) };
 	}
 
-	/**
-	 * Login with email and password
-	 */
 	async login(data: LoginData): Promise<AuthResponse> {
-		// Find user by email and include password field
 		const user = await AccountDB.findOne({ email: data.email.toLowerCase() }).select('+password');
 		if (!user) {
 			throw new UnauthorizedError('Invalid email or password');
 		}
 
-		// Verify password
 		const isPasswordValid = await user.verifyPassword(data.password);
 		if (!isPasswordValid) {
 			throw new UnauthorizedError('Invalid email or password');
 		}
 
-		// Check if user is active
 		if (!user.isActive) {
 			throw new UnauthorizedError('Account is deactivated');
 		}
 
-		// Generate JWT token
-		const payload: JWTPayload = {
-			userId: user._id.toString(),
-			role: user.role,
-			email: user.email,
-			name: user.name,
-		};
-		const token = JWTService.generateToken(payload);
+		// Admin accounts must go through OTP — block password-only login.
+		if (user.role === 'admin') {
+			throw new UnauthorizedError('Admin accounts must log in via OTP');
+		}
 
-		return {
-			token,
-			user: {
-				id: user._id.toString(),
-				name: user.name,
-				email: user.email,
-				phone: user.phone,
-				role: user.role,
-				status: user.status,
-			},
-		};
+		return { ...issueTokens(user), user: toPublicUser(user) };
 	}
 
 	/**
-	 * Generate password reset token and send email
+	 * Rotate refresh token. Verifies the token, checks tokenVersion against DB,
+	 * and returns a fresh access + refresh pair.
 	 */
+	async refresh(refreshToken: string): Promise<AuthResponse> {
+		const payload = JWTService.verifyRefreshToken(refreshToken);
+		if (!payload) {
+			throw new UnauthorizedError('Invalid or expired refresh token');
+		}
+
+		const user = await AccountDB.findById(payload.userId);
+		if (!user || !user.isActive) {
+			throw new UnauthorizedError('Account not available');
+		}
+
+		if ((user.tokenVersion ?? 0) !== payload.tokenVersion) {
+			throw new UnauthorizedError('Refresh token has been revoked');
+		}
+
+		return { ...issueTokens(user), user: toPublicUser(user) };
+	}
+
+	/**
+	 * Invalidate every token previously issued for this user by bumping
+	 * tokenVersion. Existing access/refresh tokens fail verification on next use.
+	 */
+	async logout(userId: string): Promise<void> {
+		await AccountDB.findByIdAndUpdate(userId, { $inc: { tokenVersion: 1 } });
+	}
+
 	async forgotPassword(email: string): Promise<void> {
 		const user = await AccountDB.findOne({ email: email.toLowerCase() });
 		if (!user) {
-			// Don't reveal if user exists for security
+			// Don't reveal existence
 			return;
 		}
 
-		// Generate reset token
 		const resetToken = randomBytes(32).toString('hex');
+		await StorageDB.setString('pwreset:' + resetToken, user._id.toString());
 
-		// Store reset token in StorageDB with 20 minutes expiry
-		await StorageDB.setString(resetToken, user._id.toString());
-
-		// Send password reset email with a proper reset URL
 		const resetBaseUrl =
 			process.env.PASSWORD_RESET_BASE_URL ?? 'http://localhost:5173/reset-password';
 		const emailSent = await sendPasswordResetEmail(user.email, resetToken, resetBaseUrl);
@@ -141,127 +164,111 @@ class AuthService {
 		}
 	}
 
-	/**
-	 * Send OTP to admin email for login
-	 */
 	async sendLoginOtp(email: string): Promise<void> {
 		const user = await AccountDB.findOne({ email: email.toLowerCase() });
-		if (!user) {
-			throw new UnauthorizedError('Invalid email or not an admin account');
+		// Uniform response to avoid account enumeration
+		if (!user || user.role !== 'admin' || !user.isActive) {
+			return;
 		}
 
-		if (user.role !== 'admin') {
-			throw new UnauthorizedError('Invalid email or not an admin account');
-		}
+		// Generate 6-digit OTP using a crypto-secure RNG
+		const otp = randomInt(0, 1_000_000).toString().padStart(6, '0');
+		const otpHash = await bcrypt.hash(otp, 10);
 
-		if (!user.isActive) {
-			throw new UnauthorizedError('Account is deactivated');
-		}
+		const key = 'admin-otp:' + email.toLowerCase();
+		// Overwrite any previous OTP with an explicit 5-minute expiry
+		await StorageDB.deleteOne({ key });
+		await StorageDB.create({
+			key,
+			object: { hash: otpHash, attempts: 0 },
+			expireAt: new Date(Date.now() + OTP_TTL_SECONDS * 1000),
+		});
 
-		// Generate 6-digit OTP
-		const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-		// Store OTP in StorageDB (20 min TTL by default)
-		await StorageDB.setString('admin-otp:' + email.toLowerCase(), otp);
-
-		// Send OTP email
 		const emailSent = await sendAdminOtpEmail(user.email, otp);
 		if (!emailSent) {
 			throw new ServerError('Failed to send OTP email');
 		}
 	}
 
-	/**
-	 * Login admin with OTP
-	 */
 	async loginWithOtp(email: string, otp: string): Promise<AuthResponse> {
-		const user = await AccountDB.findOne({ email: email.toLowerCase() });
-		if (!user) {
+		const normalized = email.toLowerCase();
+		const user = await AccountDB.findOne({ email: normalized });
+		if (!user || user.role !== 'admin' || !user.isActive) {
 			throw new UnauthorizedError('Invalid email or OTP');
 		}
 
-		if (user.role !== 'admin') {
-			throw new UnauthorizedError('Invalid email or OTP');
-		}
-
-		if (!user.isActive) {
-			throw new UnauthorizedError('Account is deactivated');
-		}
-
-		// Verify OTP
-		const storedOtp = await StorageDB.getString('admin-otp:' + email.toLowerCase());
-		if (!storedOtp || storedOtp !== otp) {
+		const key = 'admin-otp:' + normalized;
+		const record = await StorageDB.findOne({ key });
+		if (!record || !record.object) {
 			throw new UnauthorizedError('Invalid or expired OTP');
 		}
 
-		// Delete used OTP
-		await StorageDB.deleteOne({ key: 'admin-otp:' + email.toLowerCase() });
+		const stored = record.object as { hash: string; attempts: number };
 
-		// Generate JWT token
-		const payload: JWTPayload = {
-			userId: user._id.toString(),
-			role: user.role,
-			email: user.email,
-			name: user.name,
-		};
-		const token = JWTService.generateToken(payload);
+		if (stored.attempts >= OTP_MAX_VERIFY_ATTEMPTS) {
+			await StorageDB.deleteOne({ key });
+			throw new UnauthorizedError('Too many OTP attempts; request a new code');
+		}
 
-		return {
-			token,
-			user: {
-				id: user._id.toString(),
-				name: user.name,
-				email: user.email,
-				phone: user.phone,
-				role: user.role,
-				status: user.status,
-			},
-		};
+		const valid = await bcrypt.compare(otp, stored.hash);
+		if (!valid) {
+			record.object = { ...stored, attempts: stored.attempts + 1 };
+			record.markModified('object');
+			await record.save();
+			throw new UnauthorizedError('Invalid or expired OTP');
+		}
+
+		// OTP is single-use — delete immediately on success
+		await StorageDB.deleteOne({ key });
+
+		return { ...issueTokens(user), user: toPublicUser(user) };
 	}
 
-	/**
-	 * Reset password using reset token
-	 */
 	async resetPassword(token: string, newPassword: string): Promise<AuthResponse> {
-		// Get user ID from reset token
-		const userId = await StorageDB.getString(token);
+		const storageKey = 'pwreset:' + token;
+		const userId = await StorageDB.getString(storageKey);
 		if (!userId) {
 			throw new UnauthorizedError('Invalid or expired reset token');
 		}
 
-		// Find user
 		const user = await AccountDB.findById(userId).select('+password');
 		if (!user) {
 			throw new NotFoundError('User not found');
 		}
 
-		// Update password (will be hashed by pre-save hook)
 		user.password = newPassword;
+		// Invalidate every previously-issued token on password change
+		user.tokenVersion = (user.tokenVersion ?? 0) + 1;
 		await user.save();
 
-		// Delete reset token
-		await StorageDB.deleteOne({ key: token });
+		await StorageDB.deleteOne({ key: storageKey });
 
-		// Generate new JWT token
-		const payload: JWTPayload = {
-			userId: user._id.toString(),
-			role: user.role,
-			email: user.email,
-			name: user.name,
-		};
-		const jwtToken = JWTService.generateToken(payload);
+		return { ...issueTokens(user), user: toPublicUser(user) };
+	}
 
-		return {
-			token: jwtToken,
-			user: {
-				id: user._id.toString(),
-				name: user.name,
-				email: user.email,
-				phone: user.phone,
-				role: user.role,
-				status: user.status,
-			},
-		};
+	/**
+	 * Used only by seed scripts / protected internal routes to create admins.
+	 * Never invoked from a public HTTP handler.
+	 */
+	async createAdmin(data: SignupData): Promise<PublicUser> {
+		const existing = await AccountDB.findOne({ email: data.email.toLowerCase() });
+		if (existing) {
+			throw new ConflictError('Account with this email already exists');
+		}
+		if (!data.password || data.password.length < 12) {
+			throw new BadRequestError('Admin password must be at least 12 characters');
+		}
+
+		const user = await AccountDB.create({
+			name: data.name,
+			email: data.email.toLowerCase(),
+			phone: data.phone,
+			password: data.password,
+			role: 'admin',
+			status: 'verified',
+			isActive: true,
+		});
+		return toPublicUser(user);
 	}
 }
 

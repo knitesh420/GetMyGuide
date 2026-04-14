@@ -49,6 +49,10 @@ const AccountSchema = new mongoose.Schema<IAccount>(
 			type: [Date],
 			default: [],
 		},
+		tokenVersion: {
+			type: Number,
+			default: 0,
+		},
 	},
 	{
 		timestamps: true,

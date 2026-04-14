@@ -11,6 +11,7 @@ export default interface IAccount extends Document {
 	status: 'non_verified' | 'verified';
 	paymentStatus: 'pending' | 'success' | 'failed' | 'na';
 	unavailableDates: Date[];
+	tokenVersion: number;
 	createdAt: Date;
 	updatedAt: Date;
 

@@ -1,41 +1,63 @@
-import { JWT_EXPIRE, JWT_SECRET } from '@config/const';
+import {
+	JWT_ACCESS_EXPIRE,
+	JWT_ACCESS_SECRET,
+	JWT_REFRESH_EXPIRE,
+	JWT_REFRESH_SECRET,
+} from '@config/const';
 import jwt, { SignOptions } from 'jsonwebtoken';
 
 export interface JWTPayload {
 	userId: string;
-	role: string;
+	role: 'tourist' | 'guide' | 'admin';
 	email: string;
 	name: string;
+	tokenVersion: number;
+}
+
+export interface RefreshPayload {
+	userId: string;
+	tokenVersion: number;
+}
+
+function normalizeExpire(value: string): string {
+	return value.replace('minutes', 'm').replace('minute', 'm');
 }
 
 class JWTService {
-	/**
-	 * Generate a JWT token with user information
-	 */
-	generateToken(payload: JWTPayload): string {
-		// Convert '3minutes' to '3m' format if needed
-		const expiresInStr = String(JWT_EXPIRE).replace('minutes', 'm').replace('minute', 'm');
-
-		return jwt.sign(
-			payload,
-			JWT_SECRET as string,
-			{
-				expiresIn: expiresInStr,
-			} as SignOptions
-		);
+	generateAccessToken(payload: JWTPayload): string {
+		return jwt.sign(payload, JWT_ACCESS_SECRET, {
+			expiresIn: normalizeExpire(String(JWT_ACCESS_EXPIRE)),
+		} as SignOptions);
 	}
 
-	/**
-	 * Verify and decode a JWT token
-	 * Returns the payload if valid, null otherwise
-	 */
-	verifyToken(token: string): JWTPayload | null {
+	generateRefreshToken(payload: RefreshPayload): string {
+		return jwt.sign(payload, JWT_REFRESH_SECRET, {
+			expiresIn: normalizeExpire(String(JWT_REFRESH_EXPIRE)),
+		} as SignOptions);
+	}
+
+	verifyAccessToken(token: string): JWTPayload | null {
 		try {
-			const decoded = jwt.verify(token, JWT_SECRET as string) as JWTPayload;
-			return decoded;
+			return jwt.verify(token, JWT_ACCESS_SECRET) as JWTPayload;
 		} catch {
 			return null;
 		}
+	}
+
+	verifyRefreshToken(token: string): RefreshPayload | null {
+		try {
+			return jwt.verify(token, JWT_REFRESH_SECRET) as RefreshPayload;
+		} catch {
+			return null;
+		}
+	}
+
+	// Back-compat shims
+	generateToken(payload: JWTPayload): string {
+		return this.generateAccessToken(payload);
+	}
+	verifyToken(token: string): JWTPayload | null {
+		return this.verifyAccessToken(token);
 	}
 }
 

@@ -66,7 +66,7 @@ describe('Guide API Integration Tests', () => {
 
 		// Create user
 		const userResult = await AuthService.signup(testSignupData);
-		userToken = userResult.token;
+		userToken = userResult.accessToken;
 	});
 
 	afterAll(async () => {
@@ -89,7 +89,7 @@ describe('Guide API Integration Tests', () => {
 
 		// Recreate user after clearing database
 		const userResult = await AuthService.signup(testSignupData);
-		userToken = userResult.token;
+		userToken = userResult.accessToken;
 
 		jest.clearAllMocks();
 		(sendGuidePaymentConfirmationEmail as jest.Mock).mockResolvedValue(true);

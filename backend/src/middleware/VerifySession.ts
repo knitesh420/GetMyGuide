@@ -1,98 +1,95 @@
+import { Cookie } from '@config/const';
+import { AccountDB } from '@mongo';
 import JWTService, { JWTPayload } from '@services/jwt';
 import { NextFunction, Request, Response } from 'express';
-import { UnauthorizedError } from 'node-be-utilities';
+import { ForbiddenError, UnauthorizedError } from 'node-be-utilities';
 
-/**
- * Middleware to verify JWT token from Authorization header or cookie
- * Attaches user info to req.locals.user if valid
- */
-export default function VerifySession(req: Request, res: Response, next: NextFunction) {
-	// Extract token from Authorization header (Bearer token)
-	let token: string | undefined;
+function extractToken(req: Request): string | undefined {
+	// Cookie is the primary transport. Authorization header is accepted as a
+	// fallback for non-browser clients (mobile apps, server-to-server, etc.).
+	const cookieToken = req.cookies?.[Cookie.Auth];
+	if (cookieToken) return cookieToken;
 
 	const authHeader = req.headers.authorization;
-	if (authHeader && authHeader.startsWith('Bearer ')) {
-		token = authHeader.substring(7);
-	} else if (req.cookies && req.cookies['auth-cookie']) {
-		// Fallback to cookie if Authorization header is not present
-		token = req.cookies['auth-cookie'];
+	if (authHeader?.startsWith('Bearer ')) {
+		return authHeader.substring(7);
 	}
-
-	if (!token) {
-		return next(new UnauthorizedError('Authentication token is required'));
-	}
-
-	// Verify token
-	const payload = JWTService.verifyToken(token);
-	if (!payload) {
-		return next(new UnauthorizedError('Invalid or expired token'));
-	}
-
-	// Attach user info to request locals
-	req.locals.user = payload;
-
-	next();
+	return undefined;
 }
 
 /**
- * Optional middleware to verify JWT token if present
- * Attaches user info to req.locals.user if valid token is found
- * Does not throw errors if token is missing (for public routes with optional auth)
+ * Verifies the access token from cookie (or Authorization header fallback),
+ * checks that the token's version matches the user's current tokenVersion
+ * (invalidation on logout / password reset), and attaches the payload to
+ * req.locals.user. This is the single source of truth for "who is this
+ * request" — never read auth state from anywhere else.
  */
-export function VerifySessionOptional(req: Request, res: Response, next: NextFunction) {
-	// Extract token from Authorization header (Bearer token)
-	let token: string | undefined;
+export default async function VerifySession(req: Request, res: Response, next: NextFunction) {
+	try {
+		const token = extractToken(req);
+		if (!token) {
+			return next(new UnauthorizedError('Authentication token is required'));
+		}
 
-	const authHeader = req.headers.authorization;
-	if (authHeader && authHeader.startsWith('Bearer ')) {
-		token = authHeader.substring(7);
-	} else if (req.cookies && req.cookies['auth-cookie']) {
-		// Fallback to cookie if Authorization header is not present
-		token = req.cookies['auth-cookie'];
-	}
+		const payload = JWTService.verifyAccessToken(token);
+		if (!payload) {
+			return next(new UnauthorizedError('Invalid or expired token'));
+		}
 
-	// If no token, just continue without setting user
-	if (!token) {
-		return next();
-	}
+		// Token-version check — ensures logouts / password resets invalidate
+		// previously issued tokens without needing a blacklist.
+		const user = await AccountDB.findById(payload.userId).select('tokenVersion isActive role');
+		if (!user || !user.isActive) {
+			return next(new UnauthorizedError('Account not available'));
+		}
+		if ((user.tokenVersion ?? 0) !== payload.tokenVersion) {
+			return next(new UnauthorizedError('Session has been revoked'));
+		}
 
-	// Verify token if present
-	const payload = JWTService.verifyToken(token);
-	if (payload) {
-		// Attach user info to request locals if token is valid
 		req.locals.user = payload;
+		next();
+	} catch (err) {
+		next(err);
 	}
-
-	// Continue regardless of whether token was valid or not
-	next();
 }
 
-/**
- * Middleware factory to verify minimum user level/role
- * @param minRole - Minimum role required ('tourist', 'guide', or 'admin')
- */
-export function VerifyMinLevel(minRole: 'tourist' | 'guide' | 'admin') {
-	return (req: Request, res: Response, next: NextFunction) => {
-		const user = req.locals.user as JWTPayload | undefined;
+export async function VerifySessionOptional(req: Request, _res: Response, next: NextFunction) {
+	try {
+		const token = extractToken(req);
+		if (!token) return next();
 
+		const payload = JWTService.verifyAccessToken(token);
+		if (!payload) return next();
+
+		const user = await AccountDB.findById(payload.userId).select('tokenVersion isActive');
+		if (!user || !user.isActive) return next();
+		if ((user.tokenVersion ?? 0) !== payload.tokenVersion) return next();
+
+		req.locals.user = payload;
+		next();
+	} catch {
+		next();
+	}
+}
+
+export function VerifyMinLevel(minRole: 'tourist' | 'guide' | 'admin') {
+	return (req: Request, _res: Response, next: NextFunction) => {
+		const user = req.locals.user as JWTPayload | undefined;
 		if (!user) {
 			return next(new UnauthorizedError('User information not found'));
 		}
 
-		// Role hierarchy: admin > guide > tourist
 		const roleHierarchy: Record<string, number> = {
 			tourist: 1,
 			guide: 5,
 			admin: 10,
 		};
+		const userLevel = roleHierarchy[user.role] || 0;
+		const required = roleHierarchy[minRole] || 0;
 
-		const userRoleLevel = roleHierarchy[user.role] || 0;
-		const minRoleLevel = roleHierarchy[minRole] || 0;
-
-		if (userRoleLevel < minRoleLevel) {
-			return next(new UnauthorizedError('Insufficient permissions'));
+		if (userLevel < required) {
+			return next(new ForbiddenError('Insufficient permissions'));
 		}
-
 		next();
 	};
 }

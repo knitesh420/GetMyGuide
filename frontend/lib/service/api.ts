@@ -23,46 +23,59 @@ const apiClient = axios.create({
 });
 
 // Request interceptor
+//
+// Auth is carried via HTTP-only cookies (`auth-cookie` / `refresh-cookie`)
+// set by the backend. We deliberately do NOT read a token from localStorage
+// or attach a global Authorization header — doing so creates shared/global
+// auth state that can leak between users (e.g. SSR rendering with the wrong
+// caller's token, or one tab affecting another via storage events).
 apiClient.interceptors.request.use(
   (config) => {
     config.withCredentials = true;
-
-    // Add Authorization header with token from localStorage
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-
     return config;
   },
   (error) => Promise.reject(error),
 );
 
+// Single-flight refresh: if multiple requests 401 concurrently, only one
+// /session/refresh call is made; the rest await its result.
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function attemptRefresh(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = apiClient
+      .post("/session/refresh")
+      .then(() => true)
+      .catch(() => false)
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+  return refreshInFlight;
+}
+
 apiClient.interceptors.response.use(
-  (response) => {
-    return response;
-  },
-  (error: AxiosError) => {
+  (response) => response,
+  async (error: AxiosError) => {
     if (error.response) {
       const errorData = error.response.data as ApiResponse;
+      const original = error.config as
+        | (AxiosRequestConfig & { _retried?: boolean })
+        | undefined;
 
-      if (error.response.status === 401) {
-        if (typeof window !== "undefined") {
-          const currentPath = window.location.pathname;
-          const publicRoutes = [
-            "/",
-            "/login",
-            "/register",
-            "/about",
-            "/contact",
-            "/services",
-            "/session/validate-auth",
-          ];
-          const isPublicRoute = publicRoutes.some(
-            (route) =>
-              currentPath === route || currentPath.startsWith("/public"),
-          );
+      // Try a one-shot refresh on 401 (except for the refresh / login routes
+      // themselves to avoid loops).
+      if (
+        error.response.status === 401 &&
+        original &&
+        !original._retried &&
+        !original.url?.includes("/session/refresh") &&
+        !original.url?.includes("/session/login")
+      ) {
+        original._retried = true;
+        const ok = await attemptRefresh();
+        if (ok) {
+          return apiClient.request(original);
         }
       }
 

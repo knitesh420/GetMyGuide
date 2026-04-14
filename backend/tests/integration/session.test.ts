@@ -206,7 +206,7 @@ describe('Session API Integration Tests', () => {
 
 		beforeEach(async () => {
 			const signupResult = await AuthService.signup(testUser);
-			authToken = signupResult.token;
+			authToken = signupResult.accessToken;
 		});
 
 		it('should validate auth with Bearer token', async () => {
@@ -251,7 +251,7 @@ describe('Session API Integration Tests', () => {
 
 		beforeEach(async () => {
 			const signupResult = await AuthService.signup(testUser);
-			authToken = signupResult.token;
+			authToken = signupResult.accessToken;
 		});
 
 		it('should successfully logout', async () => {
@@ -278,10 +278,10 @@ describe('Session API Integration Tests', () => {
 		beforeEach(async () => {
 			const adminData = { ...testSignupData, email: 'admin@example.com', role: 'admin' as const };
 			const adminResult = await AuthService.signup(adminData);
-			adminToken = adminResult.token;
+			adminToken = adminResult.accessToken;
 
 			const userResult = await AuthService.signup(testUser);
-			userToken = userResult.token;
+			userToken = userResult.accessToken;
 		});
 
 		it('should allow admin to access admin route', async () => {

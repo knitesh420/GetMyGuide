@@ -4,6 +4,8 @@ import { debugPrint, getFormattedDateTimestamp } from "../utils";
 interface RequestOptions extends RequestInit {
   tags?: string[];
   userId?: string;
+  /** Force a per-user cached fetch. Defaults to false (no shared cache). */
+  cache?: RequestCache;
 }
 
 const SERVER_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -13,68 +15,88 @@ if (!SERVER_URL) {
 
 const isServer = typeof window === "undefined";
 
+/**
+ * Endpoints whose response depends on the caller's identity. These MUST never
+ * hit Next.js's server-side data cache, which is keyed by URL and shared
+ * across all visitors. Caching them is what causes the "log in as admin and
+ * everyone else sees the admin" bug.
+ */
+const PER_USER_PATH_PREFIXES = [
+  "/session",
+  "/sessions",
+  "/auth",
+  "/user",
+  "/users",
+  "/me",
+  "/admin",
+  "/booking",
+  "/bookings",
+  "/cart",
+  "/payment",
+  "/payments",
+  "/dashboard",
+];
+
+function isPerUserPath(path: string): boolean {
+  return PER_USER_PATH_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
+interface RequestContext {
+  cookiesString: string | null;
+  userId: string | undefined;
+  refreshToken: string | undefined;
+}
+
+async function buildRequestContext(): Promise<RequestContext> {
+  if (!isServer) {
+    return { cookiesString: null, userId: undefined, refreshToken: undefined };
+  }
+  const { cookies } = await import("next/headers");
+  const cookieStore = cookies();
+  const cookiesString = cookieStore
+    .getAll()
+    .map((cookie) => `${cookie.name}=${cookie.value}`)
+    .join("; ");
+  return {
+    cookiesString,
+    userId: cookieStore.get("user-id")?.value,
+    refreshToken: cookieStore.get("refresh-cookie")?.value,
+  };
+}
+
 async function rawRequest(
   path: string,
   options: RequestOptions
 ): Promise<Response> {
-  let cookiesString: string | null = null;
-  if (isServer) {
-    const { cookies } = await import("next/headers");
-    const cookieStore = cookies();
-    cookiesString = cookieStore
-      .getAll()
-      .map((cookie) => `${cookie.name}=${cookie.value}`)
-      .join("; ");
-  }
+  const { cookiesString } = await buildRequestContext();
 
-  const response = await fetch(`${SERVER_URL}${path}`, {
+  return fetch(`${SERVER_URL}${path}`, {
     ...options,
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
       ...options.headers,
-      ...(isServer &&
-        cookiesString && {
-          Cookie: cookiesString,
-        }),
+      ...(isServer && cookiesString && { Cookie: cookiesString }),
     },
   });
-
-  return response;
 }
 
+/**
+ * Mutating / non-cacheable request. Bypasses the Next.js data cache entirely.
+ */
 async function request<T>(path: string, options: RequestOptions): Promise<T> {
-  let cookiesString: string | null = null;
-  let refreshToken: string | undefined;
-  let userId: string | undefined;
-  if (isServer) {
-    const { cookies } = await import("next/headers");
-    const cookieStore = cookies();
-    cookiesString = cookieStore
-      .getAll()
-      .map((cookie) => `${cookie.name}=${cookie.value}`)
-      .join("; ");
-    refreshToken = cookieStore.get("refresh-cookie")?.value;
-    userId = cookieStore.get("user-id")?.value;
-  }
+  const { cookiesString, userId } = await buildRequestContext();
 
   const response = await fetch(`${SERVER_URL}${path}`, {
     ...options,
     credentials: "include",
+    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
       ...options.headers,
-      ...(isServer &&
-        cookiesString && {
-          Cookie: cookiesString,
-        }),
-    },
-    next: {
-      revalidate: 3600,
-      ...options.next,
-      tags: options.tags?.map((tag) => `${tag}-${refreshToken}`),
+      ...(isServer && cookiesString && { Cookie: cookiesString }),
     },
   });
 
@@ -82,7 +104,7 @@ async function request<T>(path: string, options: RequestOptions): Promise<T> {
     debugPrint(
       `API - [${path}] - ${getFormattedDateTimestamp()} - ${
         userId || "unknown"
-      } - CACHE : ${response.headers.get("X-Cache-Status") ?? "HIT"}`
+      } - CACHE : ${response.headers.get("X-Cache-Status") ?? "MISS"}`
     );
   }
 
@@ -92,46 +114,51 @@ async function request<T>(path: string, options: RequestOptions): Promise<T> {
   throw await RequestError.fromResponse(response);
 }
 
+/**
+ * GET request. For per-user paths, ALWAYS bypasses the Next.js shared data
+ * cache; for genuinely public paths, allows revalidation but scopes any tags
+ * with the caller's session id so invalidation is correct.
+ */
 async function cachedRequest<T>(
   path: string,
   options: RequestOptions
 ): Promise<T> {
-  let cookiesString: string | null = null;
-  let userId: string | undefined;
-  if (isServer) {
-    const { cookies } = await import("next/headers");
-    const cookieStore = cookies();
-    cookiesString = cookieStore
-      .getAll()
-      .map((cookie) => `${cookie.name}=${cookie.value}`)
-      .join("; ");
-    userId = cookieStore.get("user-id")?.value;
-  }
+  const { cookiesString, userId, refreshToken } = await buildRequestContext();
 
-  const response = await fetch(`${SERVER_URL}${path}`, {
+  const perUser = isPerUserPath(path);
+
+  const fetchInit: RequestInit & { next?: any } = {
     ...options,
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
       ...options.headers,
-      ...(isServer &&
-        cookiesString && {
-          Cookie: cookiesString,
-        }),
+      ...(isServer && cookiesString && { Cookie: cookiesString }),
     },
-    next: {
+  };
+
+  if (perUser) {
+    // Per-user data MUST NOT be cached server-side. The Next.js data cache is
+    // shared across visitors; caching even one authenticated response leaks it
+    // to every subsequent caller.
+    fetchInit.cache = "no-store";
+  } else {
+    fetchInit.next = {
       revalidate: 3600,
       ...options.next,
-      tags: options.tags,
-    },
-  });
+      // Scope tags by the caller so revalidations are user-specific.
+      tags: options.tags?.map((tag) => `${tag}-${refreshToken ?? "anon"}`),
+    };
+  }
+
+  const response = await fetch(`${SERVER_URL}${path}`, fetchInit);
 
   if (!["/sessions/validate-auth", "/sessions/details"].includes(path)) {
     debugPrint(
       `API - [${path}] - ${getFormattedDateTimestamp()} - ${
         userId || "unknown"
-      } - CACHE : ${response.headers.get("X-Cache-Status") ?? "HIT"}`
+      } - CACHE : ${response.headers.get("X-Cache-Status") ?? (perUser ? "BYPASS" : "HIT")}`
     );
   }
 
@@ -142,10 +169,7 @@ async function cachedRequest<T>(
 }
 
 function getMethod<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  return cachedRequest(path, {
-    ...options,
-    method: "GET",
-  });
+  return cachedRequest(path, { ...options, method: "GET" });
 }
 
 function postMethod<T>(
@@ -156,9 +180,7 @@ function postMethod<T>(
   return request(path, {
     ...options,
     method: "POST",
-    ...(body && {
-      body: JSON.stringify(body),
-    }),
+    ...(body && { body: JSON.stringify(body) }),
   });
 }
 
@@ -204,20 +226,14 @@ function getWithoutCacheMethod<T>(
 ): Promise<T> {
   return cachedRequest(path, {
     ...options,
-    next: {
-      revalidate: 0,
-    },
-    headers: {
-      "Cache-Control": "no-cache",
-    },
+    cache: "no-store",
+    next: { revalidate: 0 },
+    headers: { "Cache-Control": "no-cache" },
   });
 }
 
 function headMethod<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  return cachedRequest(path, {
-    ...options,
-    method: "HEAD",
-  });
+  return cachedRequest(path, { ...options, method: "HEAD" });
 }
 
 async function revalidateTag(tag: string): Promise<void> {

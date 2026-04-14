@@ -36,6 +36,7 @@ export function createMockUser(payload?: Partial<JWTPayload>): JWTPayload {
 		role: 'tourist',
 		email: 'test@example.com',
 		name: 'Test User',
+		tokenVersion: 0,
 		...payload,
 	};
 }
