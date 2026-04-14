@@ -22,4 +22,12 @@ router
 		Controller.createBlog
 	);
 
+router.delete(
+	'/:id',
+	VerifySession,
+	VerifyMinLevel('admin'),
+	IDValidator,
+	Controller.deleteBlog
+);
+
 export default router;

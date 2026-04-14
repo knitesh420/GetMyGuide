@@ -1,5 +1,8 @@
 import BlogService from '@services/blog';
+import { Path } from '@config/const';
 import { NextFunction, Request, Response } from 'express';
+import fs from 'fs/promises';
+import path from 'path';
 import { BadRequestError, Respond } from 'node-be-utilities';
 import { CreateBlogValidationResult } from './blog.validator';
 import { extractYoutubeVideoId } from '@utils/youtube';
@@ -74,10 +77,40 @@ async function getBlogById(req: Request, res: Response, next: NextFunction) {
 	}
 }
 
+async function deleteBlog(req: Request, res: Response, next: NextFunction) {
+	try {
+		const blogId = req.locals.id!;
+		const blog = await BlogService.deleteBlog(blogId);
+
+		if (blog.hasImage && blog.imageFilename) {
+			const candidates = [
+				path.join(global.__basedir, Path.Blogs, blog.imageFilename),
+				path.join(global.__basedir, Path.Misc, blog.imageFilename),
+			];
+			for (const candidate of candidates) {
+				try {
+					await fs.unlink(candidate);
+				} catch {
+					// Ignore missing files — image may have been cleaned up already
+				}
+			}
+		}
+
+		return Respond({
+			res,
+			status: 200,
+			data: { message: 'Blog deleted successfully' },
+		});
+	} catch (error) {
+		return next(error);
+	}
+}
+
 const Controller = {
 	createBlog,
 	getBlogs,
 	getBlogById,
+	deleteBlog,
 };
 
 export default Controller;

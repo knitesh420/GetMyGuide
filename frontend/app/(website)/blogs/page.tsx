@@ -6,10 +6,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { AppDispatch, RootState } from "@/lib/store";
-import { fetchBlogs } from "@/lib/redux/thunks/blog/blogThunks";
+import { fetchBlogs, deleteBlog } from "@/lib/redux/thunks/blog/blogThunks";
 import { Blog } from "@/lib/data";
 import { Button } from "@/components/ui/button";
-import { Plus, Play } from "lucide-react";
+import { Plus, Play, Trash2 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -26,8 +26,17 @@ const CardSkeleton = () => (
 );
 
 // --- YouTube Thumbnail Card Component ---
-function BlogVideoCard({ blog }: { blog: Blog }) {
+function BlogVideoCard({
+  blog,
+  isAdmin,
+  onDelete,
+}: {
+  blog: Blog;
+  isAdmin: boolean;
+  onDelete: (id: string) => void;
+}) {
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const router = useRouter();
 
   const handleCardClick = useCallback(() => {
@@ -43,11 +52,41 @@ function BlogVideoCard({ blog }: { blog: Blog }) {
     [],
   );
 
+  const handleDeleteClick = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (isDeleting) return;
+      const confirmed = window.confirm(
+        "Are you sure you want to delete this blog? This action cannot be undone.",
+      );
+      if (!confirmed) return;
+      setIsDeleting(true);
+      try {
+        await onDelete(blog.id);
+      } finally {
+        setIsDeleting(false);
+      }
+    },
+    [blog.id, isDeleting, onDelete],
+  );
+
   return (
     <div
       onClick={handleCardClick}
-      className="group bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 ease-in-out h-full flex flex-col cursor-pointer"
+      className="group relative bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 ease-in-out h-full flex flex-col cursor-pointer"
     >
+      {isAdmin && (
+        <button
+          type="button"
+          onClick={handleDeleteClick}
+          disabled={isDeleting}
+          aria-label="Delete blog"
+          className="absolute top-3 right-3 z-10 inline-flex items-center justify-center w-9 h-9 rounded-full bg-white/90 text-red-600 shadow-md hover:bg-red-600 hover:text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      )}
       {/* YouTube Thumbnail / Embedded Player */}
       <div className="relative w-full h-48 bg-gray-900 overflow-hidden">
         {blog.videoId ? (
@@ -121,6 +160,24 @@ export default function BlogListPage() {
     dispatch(fetchBlogs({ limit: 100 }));
   }, [dispatch]);
 
+  const handleDeleteBlog = useCallback(
+    async (id: string) => {
+      try {
+        const result = await dispatch(deleteBlog(id));
+        if (deleteBlog.rejected.match(result)) {
+          alert(
+            typeof result.payload === "string"
+              ? result.payload
+              : "Failed to delete blog",
+          );
+        }
+      } catch {
+        alert("Failed to delete blog");
+      }
+    },
+    [dispatch],
+  );
+
   return (
     <div className="bg-gray-50 min-h-screen py-5">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
@@ -177,7 +234,12 @@ export default function BlogListPage() {
               {blogs
                 .filter((blog) => blog && blog.id)
                 .map((blog: Blog) => (
-                  <BlogVideoCard key={blog.id} blog={blog} />
+                  <BlogVideoCard
+                    key={blog.id}
+                    blog={blog}
+                    isAdmin={admin}
+                    onDelete={handleDeleteBlog}
+                  />
                 ))}
             </div>
           ) : (

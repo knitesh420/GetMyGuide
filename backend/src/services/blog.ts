@@ -71,6 +71,20 @@ class BlogService {
 
 		return transformBlog(blog as IBlog);
 	}
+
+	/**
+	 * Delete a blog by ID. Returns the deleted blog (pre-delete) so the
+	 * caller can clean up any associated files.
+	 */
+	async deleteBlog(blogId: Types.ObjectId): Promise<TransformedBlog> {
+		const blog = await BlogDB.findByIdAndDelete(blogId).lean();
+
+		if (!blog) {
+			throw new NotFoundError('Blog not found');
+		}
+
+		return transformBlog(blog as IBlog);
+	}
 }
 
 export default new BlogService();
