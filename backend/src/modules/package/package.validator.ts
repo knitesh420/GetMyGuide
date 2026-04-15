@@ -66,8 +66,36 @@ export type UpdatePackageValidationResult = {
 	places?: string[];
 	price?: number;
 	shortDescription?: string;
+	description?: string;
 	numberOfPeople?: number;
 	numberOfDays?: number;
+	inclusions?: string[];
+	exclusions?: string[];
+	featured?: boolean;
+	status?: 'inactive' | 'active';
+};
+
+const stringArrayPreprocess = (val: unknown) => {
+	if (val === undefined || val === null || val === '') return undefined;
+	if (typeof val === 'string') {
+		try {
+			const parsed = JSON.parse(val);
+			return Array.isArray(parsed) ? parsed : [parsed];
+		} catch {
+			return val.split(',').map((s) => s.trim());
+		}
+	}
+	return Array.isArray(val) ? val : [val];
+};
+
+const booleanPreprocess = (val: unknown) => {
+	if (val === undefined || val === null || val === '') return undefined;
+	if (typeof val === 'boolean') return val;
+	if (typeof val === 'string') {
+		if (val === 'true') return true;
+		if (val === 'false') return false;
+	}
+	return val;
 };
 
 export async function UpdatePackageValidator(req: Request, res: Response, next: NextFunction) {
@@ -94,6 +122,7 @@ export async function UpdatePackageValidator(req: Request, res: Response, next: 
 			z.number().min(0, 'Price must be a positive number').optional()
 		),
 		shortDescription: z.string().trim().optional(),
+		description: z.string().trim().optional(),
 		numberOfPeople: z.preprocess(
 			(val) => (val !== undefined && val !== '' ? Number(val) : undefined),
 			z.number().int().min(1, 'Number of people must be at least 1').optional()
@@ -102,6 +131,20 @@ export async function UpdatePackageValidator(req: Request, res: Response, next: 
 			(val) => (val !== undefined && val !== '' ? Number(val) : undefined),
 			z.number().int().min(1, 'Number of days must be at least 1').optional()
 		),
+		inclusions: z.preprocess(
+			stringArrayPreprocess,
+			z.array(z.string().trim().min(1)).optional()
+		),
+		exclusions: z.preprocess(
+			stringArrayPreprocess,
+			z.array(z.string().trim().min(1)).optional()
+		),
+		featured: z.preprocess(booleanPreprocess, z.boolean().optional()),
+		status: z
+			.enum(['inactive', 'active'], {
+				message: 'Status must be either inactive or active',
+			})
+			.optional(),
 	});
 
 	const reqValidatorResult = reqValidator.safeParse(req.body);

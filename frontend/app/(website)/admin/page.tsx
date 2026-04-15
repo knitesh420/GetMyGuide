@@ -21,6 +21,7 @@ import {
   Film,
   Upload,
   Plus,
+  Pencil,
   ToggleLeft,
   ToggleRight,
 } from "lucide-react";
@@ -130,8 +131,16 @@ interface ServicePackage {
   city: string;
   places: string[];
   images: string[];
-  status: string;
+  status: "active" | "inactive" | string;
   createdAt: string;
+  shortDescription?: string;
+  description?: string;
+  price?: number;
+  numberOfPeople?: number;
+  numberOfDays?: number;
+  inclusions?: string[];
+  exclusions?: string[];
+  featured?: boolean;
 }
 
 interface Lead {
@@ -179,6 +188,9 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [selectedGuide, setSelectedGuide] = useState<Guide | null>(null);
   const [loadingGuideDetails, setLoadingGuideDetails] = useState(false);
+  const [editingPackage, setEditingPackage] = useState<ServicePackage | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -299,6 +311,124 @@ function AdminDashboard() {
     }
   };
 
+  const handleDeletePackage = async (packageId: string) => {
+    if (
+      !confirm(
+        "Are you sure you want to delete this service? This action cannot be undone.",
+      )
+    )
+      return;
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/package/${packageId}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        console.error("Delete failed:", res.status, txt);
+        alert(`Failed to delete service: ${res.status} ${res.statusText}`);
+        return;
+      }
+
+      const data = await res.json();
+      setPackages((prev) => prev.filter((p) => p.id !== packageId));
+      alert(data?.data?.message || data?.message || "Service deleted successfully");
+    } catch (err) {
+      console.error("Error deleting service:", err);
+      alert("Error deleting service");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdatePackage = async (
+    packageId: string,
+    updates: {
+      title?: string;
+      city?: string;
+      places?: string[];
+      shortDescription?: string;
+      description?: string;
+      price?: number;
+      numberOfPeople?: number;
+      numberOfDays?: number;
+      inclusions?: string[];
+      exclusions?: string[];
+      featured?: boolean;
+      status?: "active" | "inactive";
+      images?: File[];
+    },
+  ) => {
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      if (updates.title !== undefined) formData.append("title", updates.title);
+      if (updates.city !== undefined) formData.append("city", updates.city);
+      if (updates.places !== undefined)
+        formData.append("places", JSON.stringify(updates.places));
+      if (updates.shortDescription !== undefined)
+        formData.append("shortDescription", updates.shortDescription);
+      if (updates.description !== undefined)
+        formData.append("description", updates.description);
+      if (updates.price !== undefined)
+        formData.append("price", String(updates.price));
+      if (updates.numberOfPeople !== undefined)
+        formData.append("numberOfPeople", String(updates.numberOfPeople));
+      if (updates.numberOfDays !== undefined)
+        formData.append("numberOfDays", String(updates.numberOfDays));
+      if (updates.inclusions !== undefined)
+        formData.append("inclusions", JSON.stringify(updates.inclusions));
+      if (updates.exclusions !== undefined)
+        formData.append("exclusions", JSON.stringify(updates.exclusions));
+      if (updates.featured !== undefined)
+        formData.append("featured", String(updates.featured));
+      if (updates.status !== undefined)
+        formData.append("status", updates.status);
+      if (updates.images && updates.images.length > 0) {
+        for (const file of updates.images) {
+          formData.append("images", file);
+        }
+      }
+
+      const res = await fetch(`${API_BASE}/package/${packageId}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        console.error("Update failed:", res.status, txt);
+        alert(`Failed to update service: ${res.status} ${res.statusText}`);
+        return;
+      }
+
+      const data = await res.json();
+      const updated = data?.data ?? data;
+      setPackages((prev) =>
+        prev.map((p) =>
+          p.id === packageId ? { ...p, ...updates, ...updated } : p,
+        ),
+      );
+      setEditingPackage(null);
+      alert("Service updated successfully");
+    } catch (err) {
+      console.error("Error updating service:", err);
+      alert("Error updating service");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const menuItems = [
     {
       id: "dashboard",
@@ -319,6 +449,11 @@ function AdminDashboard() {
       id: "bookings",
       label: "Contact Inquiries",
       icon: MessageSquare,
+    },
+    {
+      id: "services",
+      label: "Services",
+      icon: Package,
     },
     {
       id: "advertisements",
@@ -557,6 +692,38 @@ function AdminDashboard() {
           }
           break;
 
+        case "services":
+          try {
+            const pkgRes = await fetch(`${API_BASE}/package`, {
+              credentials: "include",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            });
+
+            if (pkgRes.ok) {
+              const pkgData = await pkgRes.json();
+              const pkgArray =
+                pkgData.data?.packages || pkgData.packages || [];
+              setPackages(pkgArray);
+            } else {
+              const errorText = await pkgRes.text();
+              console.error(
+                "Failed to fetch services:",
+                pkgRes.status,
+                errorText,
+              );
+              alert(`Failed to fetch services: ${pkgRes.status}`);
+              setPackages([]);
+            }
+          } catch (error) {
+            console.error("Error fetching services:", error);
+            alert(`Error fetching services: ${error}`);
+            setPackages([]);
+          }
+          break;
+
         case "advertisements":
           try {
             const adsRes = await fetch(`${API_BASE}/advertisement/admin/all`, {
@@ -736,6 +903,7 @@ function AdminDashboard() {
                     {activeTab === "guides" && guides.length}
                     {activeTab === "tourists" && tourists.length}
                     {activeTab === "bookings" && leads.length}
+                    {activeTab === "services" && packages.length}
                     {activeTab === "advertisements" && advertisements.length}
                   </span>
                 </p>
@@ -821,6 +989,23 @@ function AdminDashboard() {
                 )}
               </>
             )}
+            {activeTab === "services" && (
+              <>
+                {packages.length === 0 && !loading && (
+                  <div className="text-center py-8">
+                    <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500">No services found.</p>
+                  </div>
+                )}
+                {packages.length > 0 && (
+                  <ServicesTable
+                    packages={packages}
+                    onEdit={setEditingPackage}
+                    onDelete={handleDeletePackage}
+                  />
+                )}
+              </>
+            )}
             {activeTab === "advertisements" && (
               <AdvertisementsSection
                 advertisements={advertisements}
@@ -841,6 +1026,16 @@ function AdminDashboard() {
           guide={selectedGuide}
           loading={loadingGuideDetails}
           onClose={() => setSelectedGuide(null)}
+        />
+      )}
+
+      {/* Edit Service Modal */}
+      {editingPackage && (
+        <EditServiceModal
+          pkg={editingPackage}
+          loading={loading}
+          onClose={() => setEditingPackage(null)}
+          onSave={(updates) => handleUpdatePackage(editingPackage.id, updates)}
         />
       )}
     </div>
@@ -2245,7 +2440,16 @@ function BookingsTable({ bookings }: { bookings: Booking[] }) {
 }
 
 // Services Table Component
-function ServicesTable({ packages }: { packages: ServicePackage[] }) {
+function ServicesTable({
+  packages,
+  onEdit,
+  onDelete,
+}: {
+  packages: ServicePackage[];
+  onEdit: (pkg: ServicePackage) => void;
+  onDelete: (id: string) => void;
+}) {
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   return (
     <div className="overflow-x-auto">
       <table className="w-full">
@@ -2269,12 +2473,15 @@ function ServicesTable({ packages }: { packages: ServicePackage[] }) {
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
               Created
             </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              Actions
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
           {packages.length === 0 ? (
             <tr>
-              <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+              <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                 No services found
               </td>
             </tr>
@@ -2312,11 +2519,349 @@ function ServicesTable({ packages }: { packages: ServicePackage[] }) {
                 <td className="px-6 py-4 text-sm text-gray-600">
                   {new Date(pkg.createdAt).toLocaleDateString()}
                 </td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => onEdit(pkg)}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                      title="Edit service"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => onDelete(pkg.id)}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                      title="Delete service"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </td>
               </tr>
             ))
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// Edit Service Modal Component
+function EditServiceModal({
+  pkg,
+  loading,
+  onClose,
+  onSave,
+}: {
+  pkg: ServicePackage;
+  loading: boolean;
+  onClose: () => void;
+  onSave: (updates: {
+    title?: string;
+    city?: string;
+    places?: string[];
+    shortDescription?: string;
+    description?: string;
+    price?: number;
+    numberOfPeople?: number;
+    numberOfDays?: number;
+    inclusions?: string[];
+    exclusions?: string[];
+    featured?: boolean;
+    status?: "active" | "inactive";
+    images?: File[];
+  }) => void;
+}) {
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const [title, setTitle] = useState(pkg.title);
+  const [city, setCity] = useState(pkg.city);
+  const [places, setPlaces] = useState(pkg.places.join(", "));
+  const [shortDescription, setShortDescription] = useState(
+    pkg.shortDescription ?? "",
+  );
+  const [description, setDescription] = useState(pkg.description ?? "");
+  const [price, setPrice] = useState<string>(
+    pkg.price !== undefined ? String(pkg.price) : "",
+  );
+  const [numberOfPeople, setNumberOfPeople] = useState<string>(
+    pkg.numberOfPeople !== undefined ? String(pkg.numberOfPeople) : "",
+  );
+  const [numberOfDays, setNumberOfDays] = useState<string>(
+    pkg.numberOfDays !== undefined ? String(pkg.numberOfDays) : "",
+  );
+  const [inclusions, setInclusions] = useState<string>(
+    (pkg.inclusions ?? []).join("\n"),
+  );
+  const [exclusions, setExclusions] = useState<string>(
+    (pkg.exclusions ?? []).join("\n"),
+  );
+  const [featured, setFeatured] = useState<boolean>(pkg.featured ?? false);
+  const [status, setStatus] = useState<"active" | "inactive">(
+    pkg.status === "inactive" ? "inactive" : "active",
+  );
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const placesArr = places
+      .split(",")
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
+    if (!title.trim() || !city.trim() || placesArr.length === 0) {
+      alert("Title, city, and at least one place are required.");
+      return;
+    }
+    const inclusionsArr = inclusions
+      .split("\n")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    const exclusionsArr = exclusions
+      .split("\n")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    if (imageFiles.length > 0) {
+      const ok = confirm(
+        `Uploading ${imageFiles.length} new image(s) will REPLACE all existing images. Continue?`,
+      );
+      if (!ok) return;
+    }
+
+    onSave({
+      title: title.trim(),
+      city: city.trim(),
+      places: placesArr,
+      shortDescription: shortDescription.trim(),
+      description: description.trim(),
+      price: price !== "" ? Number(price) : undefined,
+      numberOfPeople:
+        numberOfPeople !== "" ? Number(numberOfPeople) : undefined,
+      numberOfDays: numberOfDays !== "" ? Number(numberOfDays) : undefined,
+      inclusions: inclusionsArr,
+      exclusions: exclusionsArr,
+      featured,
+      status,
+      images: imageFiles.length > 0 ? imageFiles : undefined,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+      <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-gray-800">Edit Service</h2>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+          >
+            <XCircle className="w-6 h-6 text-gray-600" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Title
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              City
+            </label>
+            <input
+              type="text"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Places (comma-separated)
+            </label>
+            <input
+              type="text"
+              value={places}
+              onChange={(e) => setPlaces(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Short Description
+            </label>
+            <textarea
+              value={shortDescription}
+              onChange={(e) => setShortDescription(e.target.value)}
+              rows={2}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Full Description
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={4}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Price
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                People
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={numberOfPeople}
+                onChange={(e) => setNumberOfPeople(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Days
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={numberOfDays}
+                onChange={(e) => setNumberOfDays(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Inclusions (one per line)
+              </label>
+              <textarea
+                value={inclusions}
+                onChange={(e) => setInclusions(e.target.value)}
+                rows={4}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Hotel stay&#10;Breakfast&#10;Sightseeing"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Exclusions (one per line)
+              </label>
+              <textarea
+                value={exclusions}
+                onChange={(e) => setExclusions(e.target.value)}
+                rows={4}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Air fare&#10;Personal expenses"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Status
+              </label>
+              <select
+                value={status}
+                onChange={(e) =>
+                  setStatus(e.target.value as "active" | "inactive")
+                }
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+            <div className="flex items-end">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={featured}
+                  onChange={(e) => setFeatured(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                Featured service
+              </label>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Images
+            </label>
+            {pkg.images.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {pkg.images.map((img) => (
+                  <img
+                    key={img}
+                    src={`${API_BASE}/media/packages/${img}`}
+                    alt=""
+                    className="w-20 h-20 rounded object-cover border"
+                  />
+                ))}
+              </div>
+            )}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/jpg,image/webp"
+              multiple
+              onChange={(e) =>
+                setImageFiles(e.target.files ? Array.from(e.target.files) : [])
+              }
+              className="block w-full text-sm text-gray-700 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Selecting new images will REPLACE all existing images. Leave empty
+              to keep current images.
+            </p>
+            {imageFiles.length > 0 && (
+              <p className="text-xs text-blue-600 mt-1">
+                {imageFiles.length} new image(s) selected
+              </p>
+            )}
+          </div>
+          <div className="flex items-center justify-end gap-3 pt-4 border-t">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              {loading ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

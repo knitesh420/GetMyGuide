@@ -32,6 +32,7 @@ interface UpdatePackageData {
 	inclusions?: string[];
 	exclusions?: string[];
 	featured?: boolean;
+	status?: 'inactive' | 'active';
 }
 
 interface TransformedPackage {
