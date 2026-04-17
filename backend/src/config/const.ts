@@ -7,8 +7,8 @@ export const PORT = process.env.PORT || 8000;
 
 export const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET ?? process.env.JWT_SECRET ?? 'dev-access-secret-change-me';
 export const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET ?? 'dev-refresh-secret-change-me';
-export const JWT_ACCESS_EXPIRE = process.env.JWT_ACCESS_EXPIRE ?? '15m';
-export const JWT_REFRESH_EXPIRE = process.env.JWT_REFRESH_EXPIRE ?? '7d';
+export const JWT_ACCESS_EXPIRE = process.env.JWT_ACCESS_EXPIRE ?? '1d';
+export const JWT_REFRESH_EXPIRE = process.env.JWT_REFRESH_EXPIRE ?? '3d';
 
 // Back-compat aliases (some older code may still import these)
 export const JWT_SECRET = JWT_ACCESS_SECRET;
@@ -21,7 +21,7 @@ export const OTP_RATE_LIMIT_WINDOW_SECONDS = 10 * 60; // 10 minutes
 export const OTP_RATE_LIMIT_MAX = 5;
 export const OTP_MAX_VERIFY_ATTEMPTS = 5;
 
-export const ACCESS_COOKIE_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes
+export const ACCESS_COOKIE_MAX_AGE_MS = 1 * 24 * 60 * 60 * 1000; // 15 minutes
 export const REFRESH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 export const RESEND_API_KEY = process.env.RESEND_API_KEY ?? 'RESEND_API_KEY';
