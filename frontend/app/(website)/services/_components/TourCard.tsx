@@ -70,11 +70,11 @@ export default function TourCard({
         {/* Image Section */}
         <div className="relative h-52 overflow-hidden shrink-0">
           {imageUrls[0] ? (
-          <img
-            src={imageUrls[0]}
-            alt={title}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-          />
+            <img
+              src={imageUrls[0]}
+              alt={title}
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+            />
           ) : (
             <div className="w-full h-full bg-slate-200 flex items-center justify-center">
               <MapPin className="w-10 h-10 text-slate-400" />
@@ -117,9 +117,12 @@ export default function TourCard({
 
           {/* Short Description */}
           {shortDescription && (
-            <p className="text-sm text-slate-500 mb-3 line-clamp-2 leading-relaxed">
+            // <p className="text-sm text-slate-500 mb-3 line-clamp-2 leading-relaxed">
+            //   {shortDescription}
+            // </p>
+            <div className="text-sm text-slate-500 mb-3 leading-relaxed whitespace-pre-wrap">
               {shortDescription}
-            </p>
+            </div>
           )}
 
           {/* Meta Info Row */}
@@ -167,7 +170,9 @@ export default function TourCard({
           <div className="pt-3 border-t border-slate-100 flex items-center justify-between mt-auto">
             {price !== undefined && price > 0 ? (
               <div>
-                <span className="text-xs text-slate-400 block">Starting from</span>
+                <span className="text-xs text-slate-400 block">
+                  Starting from
+                </span>
                 <span className="flex items-center text-lg font-bold text-slate-800">
                   <IndianRupee className="w-4 h-4" />
                   {price.toLocaleString("en-IN")}
