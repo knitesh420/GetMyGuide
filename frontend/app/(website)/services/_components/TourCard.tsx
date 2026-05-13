@@ -65,7 +65,7 @@ export default function TourCard({
     <>
       <div
         className="group rounded-2xl bg-white shadow-lg hover:shadow-2xl border border-slate-200 overflow-hidden transition-all duration-300 hover:-translate-y-1 cursor-pointer flex flex-col h-full"
-        onClick={() => setShowModal(true)}
+        // onClick={() => setShowModal(true)}
       >
         {/* Image Section */}
         <div className="relative h-52 overflow-hidden shrink-0">
@@ -181,7 +181,17 @@ export default function TourCard({
             ) : (
               <span className="text-sm text-slate-400">Contact for price</span>
             )}
-            <button className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white text-sm font-semibold rounded-full hover:from-orange-600 hover:to-pink-600 transition-all shadow-md hover:shadow-lg">
+            {/* <button className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white text-sm font-semibold rounded-full hover:from-orange-600 hover:to-pink-600 transition-all shadow-md hover:shadow-lg">
+              <Eye className="w-4 h-4" />
+              View
+            </button> */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowModal(true);
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white text-sm font-semibold rounded-full hover:from-orange-600 hover:to-pink-600 transition-all shadow-md hover:shadow-lg"
+            >
               <Eye className="w-4 h-4" />
               View
             </button>
