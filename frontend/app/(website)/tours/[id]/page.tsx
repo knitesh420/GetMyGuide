@@ -192,9 +192,17 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
               <h2 className="text-3xl font-bold border-b pb-4 mb-4">
                 Tour Overview
               </h2>
-              <div className="text-lg text-foreground/80 leading-relaxed whitespace-pre-wrap">
-                {tour.description}
-              </div>
+              {/* Render content: handle both HTML (from Rich Text Editors) and Plain Text (with newlines) */}
+              {tour.description && /<[a-z][\s\S]*>/i.test(tour.description) ? (
+                <div
+                  className="prose prose-lg max-w-none text-foreground/80 leading-relaxed prose-headings:text-foreground prose-strong:text-foreground prose-ul:list-disc prose-ol:list-decimal prose-li:my-1"
+                  dangerouslySetInnerHTML={{ __html: tour.description }}
+                />
+              ) : (
+                <div className="text-lg text-foreground/80 leading-relaxed whitespace-pre-wrap">
+                  {tour.description}
+                </div>
+              )}
             </div>
 
             <div className="mt-12 animate-slide-in-left animate-delay-200">
