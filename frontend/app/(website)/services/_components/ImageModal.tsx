@@ -121,12 +121,14 @@ export default function ImageModal({
           </div>
 
           {/* Short Description */}
-          {shortDescription && (
+          {/* {shortDescription && (
             <p className="text-slate-600 text-sm leading-relaxed mb-4">
               {shortDescription}
             </p>
-          )}
-
+          )} */}
+          <div className="text-slate-600 text-sm leading-relaxed mb-4 whitespace-pre-wrap break-words">
+            {shortDescription}
+          </div>
           {/* Meta Chips */}
           {(numberOfDays || numberOfPeople) && (
             <div className="flex flex-wrap gap-3 mb-4">

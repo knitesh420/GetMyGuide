@@ -65,16 +65,16 @@ export default function TourCard({
     <>
       <div
         className="group rounded-2xl bg-white shadow-lg hover:shadow-2xl border border-slate-200 overflow-hidden transition-all duration-300 hover:-translate-y-1 cursor-pointer flex flex-col h-full"
-        // onClick={() => setShowModal(true)}
+        onClick={() => setShowModal(true)}
       >
         {/* Image Section */}
         <div className="relative h-52 overflow-hidden shrink-0">
           {imageUrls[0] ? (
-            <img
-              src={imageUrls[0]}
-              alt={title}
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-            />
+          <img
+            src={imageUrls[0]}
+            alt={title}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+          />
           ) : (
             <div className="w-full h-full bg-slate-200 flex items-center justify-center">
               <MapPin className="w-10 h-10 text-slate-400" />
@@ -117,12 +117,9 @@ export default function TourCard({
 
           {/* Short Description */}
           {shortDescription && (
-            // <p className="text-sm text-slate-500 mb-3 line-clamp-2 leading-relaxed">
-            //   {shortDescription}
-            // </p>
-            <div className="text-sm text-slate-500 mb-3 leading-relaxed whitespace-pre-wrap">
+            <p className="text-sm text-slate-500 mb-3 line-clamp-2 leading-relaxed">
               {shortDescription}
-            </div>
+            </p>
           )}
 
           {/* Meta Info Row */}
@@ -170,9 +167,7 @@ export default function TourCard({
           <div className="pt-3 border-t border-slate-100 flex items-center justify-between mt-auto">
             {price !== undefined && price > 0 ? (
               <div>
-                <span className="text-xs text-slate-400 block">
-                  Starting from
-                </span>
+                <span className="text-xs text-slate-400 block">Starting from</span>
                 <span className="flex items-center text-lg font-bold text-slate-800">
                   <IndianRupee className="w-4 h-4" />
                   {price.toLocaleString("en-IN")}
@@ -181,17 +176,7 @@ export default function TourCard({
             ) : (
               <span className="text-sm text-slate-400">Contact for price</span>
             )}
-            {/* <button className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white text-sm font-semibold rounded-full hover:from-orange-600 hover:to-pink-600 transition-all shadow-md hover:shadow-lg">
-              <Eye className="w-4 h-4" />
-              View
-            </button> */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowModal(true);
-              }}
-              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white text-sm font-semibold rounded-full hover:from-orange-600 hover:to-pink-600 transition-all shadow-md hover:shadow-lg"
-            >
+            <button className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white text-sm font-semibold rounded-full hover:from-orange-600 hover:to-pink-600 transition-all shadow-md hover:shadow-lg">
               <Eye className="w-4 h-4" />
               View
             </button>
