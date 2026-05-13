@@ -17,7 +17,10 @@ import { fetchPackages } from "@/lib/redux/thunks/admin/packageThunks";
 import { AdminPackage } from "@/types/admin";
 
 // ✅ Import BOTH thunks now
-import { fetchPackageById, fetchRecommendedPackages } from "@/lib/redux/thunks/admin/packageThunks";
+import {
+  fetchPackageById,
+  fetchRecommendedPackages,
+} from "@/lib/redux/thunks/admin/packageThunks";
 
 // ✅ Import the new slider component
 import { RecommendedPackagesSlider } from "@/components/RecommendedPackagesSlider";
@@ -86,7 +89,7 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
     // For efficiency, it's better to fetch only the specific package for this page.
     // fetchPackageById handles adding it to the 'items' list.
     dispatch(fetchPackageById(params.id));
-    
+
     // Fetch the list of recommended packages
     dispatch(fetchRecommendedPackages({ limit: 8 })); // Fetch more items for a better slider look
   }, [dispatch, params.id]);
@@ -113,7 +116,7 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
   if (loading === "succeeded" && !tour) {
     notFound();
   }
-  
+
   // This is a guard against accessing tour properties before it's found
   if (!tour) {
     return null; // Or another loading/error state
@@ -140,8 +143,8 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
       const formatDate = (date: Date) => {
         const year = date.getFullYear();
         // getMonth() is zero-based, so we add 1
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
         return `${year}-${month}-${day}`;
       };
 
@@ -151,7 +154,7 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
       const findGuidesHref = `/tours/${
         tour._id
       }/select-guide?startDate=${startDate}&endDate=${endDate}&tourists=${numberOfTourists}`;
-      
+
       router.push(findGuidesHref);
     }
   };
@@ -179,8 +182,8 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
 
         {/* Image Gallery */}
         <div className="my-8">
-        <TourImageGallery images={tour.images} title={tour.title} />
-      </div>
+          <TourImageGallery images={tour.images} title={tour.title} />
+        </div>
 
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-x-12">
@@ -189,9 +192,9 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
               <h2 className="text-3xl font-bold border-b pb-4 mb-4">
                 Tour Overview
               </h2>
-              <p className="text-lg text-foreground/80 leading-loose">
+              <div className="text-lg text-foreground/80 leading-relaxed whitespace-pre-wrap">
                 {tour.description}
-              </p>
+              </div>
             </div>
 
             <div className="mt-12 animate-slide-in-left animate-delay-200">
@@ -212,8 +215,8 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
                   Transportation
                 </li>
                 <li className="flex items-center gap-3">
-                  <CheckCircle className="w-6 h-6 text-primary" /> Entrance
-                  Fees to Monuments
+                  <CheckCircle className="w-6 h-6 text-primary" /> Entrance Fees
+                  to Monuments
                 </li>
               </ul>
             </div>
@@ -238,7 +241,7 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
                     {" "}
                     Save{" "}
                     {Math.round(
-                      ((tour.basePrice - tour.price) / tour.basePrice) * 100
+                      ((tour.basePrice - tour.price) / tour.basePrice) * 100,
                     )}
                     %
                   </span>
@@ -257,7 +260,9 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
                   type="number"
                   value={numberOfTourists}
                   onChange={(e) =>
-                    setNumberOfTourists(Math.max(1, parseInt(e.target.value) || 1))
+                    setNumberOfTourists(
+                      Math.max(1, parseInt(e.target.value) || 1),
+                    )
                   }
                   className="text-center h-12 text-base"
                   min="1"
@@ -303,14 +308,13 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
           </aside>
         </div>
         <div className="mt-24 border-t pt-16">
-            <RecommendedPackagesSlider
-                title="You Might Also Like"
-                // Filter out the current package from the recommendations
-                packages={recommended.filter(p => p._id !== tour._id)}
-                loading={loading === 'pending' && recommended.length === 0}
-            />
+          <RecommendedPackagesSlider
+            title="You Might Also Like"
+            // Filter out the current package from the recommendations
+            packages={recommended.filter((p) => p._id !== tour._id)}
+            loading={loading === "pending" && recommended.length === 0}
+          />
         </div>
-
       </div>
     </div>
   );
