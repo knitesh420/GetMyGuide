@@ -20,10 +20,11 @@ function baseCookie(): CookieOptions {
 	return {
 		httpOnly: true,
 		secure: IS_PRODUCTION,
-		sameSite: IS_PRODUCTION ? 'strict' : 'lax',
+		sameSite: IS_PRODUCTION ? 'none' : 'lax',
 		path: '/',
 	};
 }
+
 
 function setAuthCookies(res: Response, accessToken: string, refreshToken: string) {
 	res.cookie(Cookie.Auth, accessToken, {
