@@ -22,10 +22,9 @@ export default function PrivacyPolicyPage() {
 
           <div className="prose prose-lg max-w-none text-muted-foreground prose-headings:text-foreground prose-strong:text-foreground prose-a:text-primary">
             <p>
-              Welcome to GetMyGuide. Your privacy is critically important
-              to us. It is GetMyGuide's policy to respect your privacy
-              regarding any information we may collect while operating our
-              website.
+              Welcome to GetMyGuide. Your privacy is critically important to us.
+              It is GetMyGuide's policy to respect your privacy regarding any
+              information we may collect while operating our website.
             </p>
 
             <h2 className="text-2xl md:text-3xl font-bold mt-8 mb-4">
@@ -75,10 +74,7 @@ export default function PrivacyPolicyPage() {
             <p>
               If you have any questions about this Privacy Policy, please
               contact us at{" "}
-              <a href="mailto:privacy@bookmytourguide.in">
-                privacy@bookmytourguide.in
-              </a>
-              .
+              <a href="mailto:privacy@GetMyGuide.in">privacy@GetMyGuide.in</a>.
             </p>
           </div>
         </motion.div>

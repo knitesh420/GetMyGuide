@@ -70,7 +70,7 @@ export default function BookingDetailPage() {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: order.amount,
         currency: "INR",
-        name: "BookMyTourGuide",
+        name: "GetMyGuide",
         description: `Remaining payment for ${
           typeof booking.tour === "object" && booking.tour.title
         }`,

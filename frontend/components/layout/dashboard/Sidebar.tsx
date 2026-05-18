@@ -132,7 +132,7 @@ export default function Sidebar({
             href="/"
             className="text-2xl font-extrabold tracking-tight text-slate-900"
           >
-            BookMyTourGuide
+            GetMyGuide
           </Link>
           <div className="h-1 w-3/4 rounded-full bg-gradient-to-r from-teal-400 to-cyan-500" />
         </div>

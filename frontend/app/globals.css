@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap");
+
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -204,14 +206,26 @@
   animation: scaleIn 0.6s ease-out forwards;
 }
 
-.animate-delay-200 { animation-delay: 0.2s; }
-.animate-delay-400 { animation-delay: 0.4s; }
-.animate-delay-600 { animation-delay: 0.6s; }
-.animate-delay-800 { animation-delay: 0.8s; }
+.animate-delay-200 {
+  animation-delay: 0.2s;
+}
+.animate-delay-400 {
+  animation-delay: 0.4s;
+}
+.animate-delay-600 {
+  animation-delay: 0.6s;
+}
+.animate-delay-800 {
+  animation-delay: 0.8s;
+}
 
 /* --- Red / Black / White Themed Gradients --- */
 .red-gradient {
-  background: linear-gradient(135deg, oklch(0.6 0.25 25) 0%, oklch(0.25 0 0) 100%);
+  background: linear-gradient(
+    135deg,
+    oklch(0.6 0.25 25) 0%,
+    oklch(0.25 0 0) 100%
+  );
 }
 
 .black-gradient {
@@ -225,37 +239,89 @@
 .rdp-day_today:not(.rdp-day_selected) {
   background-color: transparent !important;
   font-weight: 600;
-  color: hsl(var(--primary)) !important; /* Use your primary color for the text */
+  color: hsl(
+    var(--primary)
+  ) !important; /* Use your primary color for the text */
   border: 1.5px solid hsl(var(--primary) / 0.5) !important; /* Outline with a semi-transparent primary color */
 }
 
 /* Style for the selected date(s): solid red background */
-.rdp-day_selected, .rdp-day_selected:focus-visible, .rdp-day_selected:hover {
-  background-color: hsl(var(--destructive)) !important; /* Use destructive (red) for background */
-  color: hsl(var(--destructive-foreground)) !important; /* White text for contrast */
+.rdp-day_selected,
+.rdp-day_selected:focus-visible,
+.rdp-day_selected:hover {
+  background-color: hsl(
+    var(--destructive)
+  ) !important; /* Use destructive (red) for background */
+  color: hsl(
+    var(--destructive-foreground)
+  ) !important; /* White text for contrast */
 }
 
 /* Style for dates within a selected range */
 .rdp-day_range_middle {
-    background-color: hsl(var(--destructive) / 0.1) !important; /* A very light red for the in-between dates */
-    border-radius: 0 !important;
-    color: hsl(var(--foreground));
+  background-color: hsl(
+    var(--destructive) / 0.1
+  ) !important; /* A very light red for the in-between dates */
+  border-radius: 0 !important;
+  color: hsl(var(--foreground));
 }
 .rdp-day_range_middle.rdp-day_today {
-    background-color: hsl(var(--destructive) / 0.1) !important;
-    color: hsl(var(--primary)) !important;
-    border-color: transparent !important;
+  background-color: hsl(var(--destructive) / 0.1) !important;
+  color: hsl(var(--primary)) !important;
+  border-color: transparent !important;
 }
-
 
 /* Style for the start of the range */
 .rdp-day_range_start {
-    border-top-right-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
 }
 
 /* Style for the end of the range */
 .rdp-day_range_end {
-    border-top-left-radius: 0 !important;
-    border-bottom-left-radius: 0 !important;
+  border-top-left-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+}
+/* ─── Premium additions (GetMyGuide redesign) ───────────────────────── */
+
+/* Google Fonts — Outfit for headings */
+
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Hide scrollbar utility */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Premium scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #e4e4e4;
+  border-radius: 99px;
+}
+
+/* Selection colour */
+::selection {
+  background: #fca5a5;
+  color: #fff;
+}
+
+/* Glass helper */
+.glass {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }

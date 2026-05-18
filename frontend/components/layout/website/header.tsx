@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/lib/hooks/useAuth";
 import {
   useLanguage,
@@ -35,14 +36,13 @@ export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
 
   const { language, setLanguage, t } = useLanguage();
-
   const pathname = usePathname();
   const router = useRouter();
   const profileRef = useRef<HTMLDivElement>(null);
-  const { user, isAuthenticated, loading, logout, fetchCurrentUser } =
-    useAuth();
+  const { user, isAuthenticated, loading, logout, fetchCurrentUser } = useAuth();
 
   const navigationItems = [
     { href: "/", labelKey: "nav_home", icon: Home },
@@ -50,28 +50,25 @@ export function Header() {
     { href: "/services", labelKey: "nav_tours", icon: MapPin },
     { href: "/register-tourist", labelKey: "nav_find_guides", icon: Users2 },
     { href: "/register-guide", labelKey: "nav_become_guide", icon: Users },
-    {
-      href: "/guide-availability",
-      labelKey: "nav_guide_availability",
-      icon: Shield,
-    },
+    { href: "/guide-availability", labelKey: "nav_guide_availability", icon: Shield },
     { href: "/how-it-works", labelKey: "nav_how_it_works", icon: HelpCircle },
     { href: "/contact", labelKey: "nav_contact", icon: Mail },
     { href: "/blogs", labelKey: "nav_blog", icon: Mail },
   ];
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      fetchCurrentUser();
-    }
+    if (!isAuthenticated) fetchCurrentUser();
   }, [isAuthenticated, fetchCurrentUser]);
 
   useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 50);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        profileRef.current &&
-        !profileRef.current.contains(event.target as Node)
-      ) {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
         setIsProfileOpen(false);
       }
     };
@@ -80,331 +77,324 @@ export function Header() {
   }, []);
 
   useEffect(() => {
-    // Close mobile menu on route change
     setIsMenuOpen(false);
   }, [pathname]);
 
   const handleLogin = () => router.push("/login");
-
-  const handleLogout = async () => {
-    await logout();
-    setIsProfileOpen(false);
-  };
-
+  const handleLogout = async () => { await logout(); setIsProfileOpen(false); };
   const handleProfileClick = () => {
     if (user) {
       const dashboardPath =
-        user.role === "guide"
-          ? "/dashboard/guide"
-          : user.role === "admin" || user.role === "manager"
-          ? "/admin"
-          : "/dashboard/user";
+        user.role === "guide" ? "/dashboard/guide"
+        : user.role === "admin" || user.role === "manager" ? "/admin"
+        : "/dashboard/user";
       router.push(dashboardPath);
       setIsProfileOpen(false);
     }
   };
-
   const isActive = (href: string) => pathname === href;
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-200/50 shadow-sm">
-      <div className="container max-w-7xl mx-auto px-4">
-        <div className="flex items-center justify-between h-20">
-          <Link href="/" className="flex items-center space-x-3 group">
-            <div className="relative w-20 h-20 overflow-hidden rounded-xl  p-0.5 transition-transform group-hover:scale-105">
-              <div className="w-full h-full rounded-lg overflow-hidden">
+    <>
+      <motion.header
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-400 ${
+          scrolled
+            ? "bg-white/97 backdrop-blur-xl shadow-md border-b border-gray-100"
+            : "bg-white/95 backdrop-blur-md border-b border-gray-200/60 shadow-sm"
+        }`}
+        initial={{ y: -80, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <div className="max-w-7xl mx-auto px-4 lg:px-6">
+          <div className="flex items-center justify-between h-14 lg:h-16">
+
+            {/* ── Logo ── */}
+            <Link href="/" className="flex items-center gap-2 shrink-0 group">
+              <motion.div
+                className="relative w-10 h-10 lg:w-12 lg:h-12 shrink-0"
+                whileHover={{ scale: 1.08, rotate: [0, -3, 3, 0] }}
+                transition={{ duration: 0.4 }}
+              >
                 <Image
-                  src="/images/logo.png"
-                  alt="Book My Tour Guide"
+                  src="/images/new_logo.jpeg"
+                  alt="GetMyGuide"
                   fill
-                  className="object-contain p-1"
+                  className="object-contain rounded-lg"
+                  priority
                 />
+              </motion.div>
+              <div className="hidden sm:block leading-tight">
+                <motion.p
+                  className="text-sm font-extrabold text-primary leading-none"
+                  style={{ fontFamily: "'Outfit', sans-serif" }}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  GetMyGuide
+                </motion.p>
+                <motion.p
+                  className="text-[10px] text-gray-400 font-medium"
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.28 }}
+                >
+                  getmyguide.in
+                </motion.p>
+              </div>
+            </Link>
+
+            {/* ── Desktop Nav ── */}
+            <nav className="hidden lg:flex items-center gap-0.5 mx-3 overflow-x-auto scrollbar-hide">
+              {navigationItems.map((item, i) => {
+                const active = isActive(item.href);
+                return (
+                  <motion.div
+                    key={item.href}
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.06 * i + 0.15 }}
+                  >
+                    <Link
+                      href={item.href}
+                      className={`relative flex items-center px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 whitespace-nowrap group ${
+                        active
+                          ? "text-primary bg-primary/8"
+                          : "text-gray-600 hover:text-primary hover:bg-primary/5"
+                      }`}
+                    >
+                      {t(item.labelKey)}
+                      {/* animated underline */}
+                      <span
+                        className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 h-0.5 bg-primary rounded-full transition-all duration-300 ${
+                          active ? "w-4" : "w-0 group-hover:w-4"
+                        }`}
+                      />
+                    </Link>
+                  </motion.div>
+                );
+              })}
+            </nav>
+
+            {/* ── Right actions ── */}
+            <div className="hidden lg:flex items-center gap-2 shrink-0">
+              {/* Search */}
+              <motion.button
+                onClick={() => setIsSearchOpen(true)}
+                className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600 hover:text-primary border border-gray-200"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                aria-label="Search"
+              >
+                <Search className="w-4 h-4" />
+              </motion.button>
+
+              {/* Language */}
+              <div className="relative">
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value as LanguageCode)}
+                  className="appearance-none bg-gray-50 border border-gray-200 rounded-lg pl-3 pr-7 py-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer min-w-[64px]"
+                >
+                  {supportedLanguages.map((lang) => (
+                    <option key={lang} value={lang}>{lang.toUpperCase()}</option>
+                  ))}
+                </select>
+                <Globe className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+              </div>
+
+              {/* Profile */}
+              <div className="relative" ref={profileRef}>
+                <motion.button
+                  onClick={() => setIsProfileOpen(!isProfileOpen)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all"
+                  disabled={loading}
+                  whileTap={{ scale: 0.97 }}
+                >
+                  <div className="relative">
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${isAuthenticated ? "bg-primary" : "bg-gray-100"}`}>
+                      <User className={`w-3.5 h-3.5 ${isAuthenticated ? "text-white" : "text-gray-600"}`} />
+                    </div>
+                    {isAuthenticated && (
+                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-white" />
+                    )}
+                  </div>
+                  <ChevronDown className={`w-3 h-3 text-gray-500 transition-transform duration-200 ${isProfileOpen ? "rotate-180" : ""}`} />
+                </motion.button>
+
+                <AnimatePresence>
+                  {isProfileOpen && (
+                    <motion.div
+                      className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 overflow-hidden"
+                      initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                      transition={{ duration: 0.18 }}
+                    >
+                      {!isAuthenticated ? (
+                        <>
+                          <div className="px-4 py-2.5 border-b border-gray-100">
+                            <p className="text-xs font-semibold text-gray-900">{t("profile_welcome")}</p>
+                            <p className="text-[11px] text-gray-500">{t("profile_signin_prompt")}</p>
+                          </div>
+                          <button
+                            onClick={handleLogin}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-gray-700 hover:bg-primary/5 hover:text-primary transition-colors"
+                          >
+                            <div className="w-7 h-7 bg-primary/10 rounded-lg flex items-center justify-center">
+                              <LogIn className="w-3.5 h-3.5 text-primary" />
+                            </div>
+                            <span className="font-semibold">{t("profile_login")}</span>
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <div className="px-4 py-2.5 border-b border-gray-100">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shrink-0">
+                                <User className="w-4 h-4 text-white" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-gray-900 truncate">{user?.name}</p>
+                                <p className="text-[11px] text-gray-500 truncate">{user?.email}</p>
+                                <p className="text-[11px] text-primary font-semibold capitalize">{user?.role}</p>
+                              </div>
+                            </div>
+                          </div>
+                          <button onClick={handleProfileClick} className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-gray-700 hover:bg-gray-50 transition-colors">
+                            <div className="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center">
+                              <Settings className="w-3.5 h-3.5 text-gray-600" />
+                            </div>
+                            <span className="font-semibold">{t("profile_dashboard")}</span>
+                          </button>
+                          <div className="mx-4 my-1 h-px bg-gray-100" />
+                          <button onClick={handleLogout} disabled={loading} className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
+                            <div className="w-7 h-7 bg-red-50 rounded-lg flex items-center justify-center">
+                              <LogOut className="w-3.5 h-3.5 text-red-500" />
+                            </div>
+                            <span className="font-semibold">{loading ? t("profile_logging_out") : t("profile_logout")}</span>
+                          </button>
+                        </>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
-            <div className="hidden sm:block">
-              <h1 className="text-xl font-bold text-primary">GetMyGuide</h1>
-              <p className="text-xs text-gray-500 font-medium">getmyguide.in</p>
-            </div>
-          </Link>
 
-          <nav className="hidden lg:flex items-center gap-1 flex-shrink-0 mx-4">
-            {navigationItems.map((item) => {
-              const active = isActive(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`relative flex items-center px-2.5 py-2.5 rounded-lg font-medium transition-all duration-300 group whitespace-nowrap ${
-                    active
-                      ? "text-primary bg-primary/10 shadow-sm"
-                      : "text-gray-700 hover:text-primary hover:bg-gray-50"
-                  }`}
-                >
-                  <span className="text-xs font-semibold">
-                    {t(item.labelKey)}
-                  </span>
-                  {active && (
-                    <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-6 h-0.5 bg-primary rounded-full" />
-                  )}
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="hidden lg:flex items-center space-x-4">
-            <button
-              onClick={() => setIsSearchOpen(true)}
-              className="p-2.5 rounded-xl hover:bg-gray-50 transition-all duration-300 border border-gray-200 text-gray-700 hover:text-primary group"
-              aria-label="Search"
-            >
-              <Search className="w-5 h-5 group-hover:scale-110 transition-transform" />
-            </button>
-
-            <div className="relative">
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value as LanguageCode)}
-                className="appearance-none bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 pr-10 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all min-w-[90px] cursor-pointer"
+            {/* ── Mobile right buttons ── */}
+            <div className="flex lg:hidden items-center gap-1.5">
+              <motion.button
+                onClick={() => setIsSearchOpen(true)}
+                className="p-2 rounded-lg border border-gray-200 text-gray-600"
+                whileTap={{ scale: 0.92 }}
+                aria-label="Search"
               >
-                {supportedLanguages.map((lang) => (
-                  <option key={lang} value={lang}>
-                    {lang.toUpperCase()}
-                  </option>
-                ))}
-              </select>
-              <Globe className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-            </div>
-            <div className="relative" ref={profileRef}>
-              <button
-                onClick={() => setIsProfileOpen(!isProfileOpen)}
-                className="flex items-center space-x-3 p-2.5 rounded-xl hover:bg-gray-50 transition-all duration-300 border border-gray-200 group"
-                disabled={loading}
+                <Search className="w-4 h-4" />
+              </motion.button>
+              <motion.button
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                className="p-2 rounded-lg border border-gray-200 text-gray-700"
+                whileTap={{ scale: 0.92 }}
+                aria-label="Toggle menu"
               >
-                <div className="relative">
-                  <div
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-sm ${
-                      isAuthenticated ? "bg-primary" : "bg-gray-100"
-                    }`}
-                  >
-                    <User
-                      className={`w-4 h-4 ${
-                        isAuthenticated
-                          ? "text-primary-foreground"
-                          : "text-gray-600"
-                      }`}
-                    />
-                  </div>
-                  {isAuthenticated && (
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white" />
-                  )}
-                </div>
-                <ChevronDown
-                  className={`w-4 h-4 text-gray-500 transition-all duration-300 group-hover:text-gray-700 ${
-                    isProfileOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-
-              {isProfileOpen && (
-                <div className="absolute right-0 mt-3 w-56 bg-white/98 backdrop-blur-xl rounded-2xl shadow-xl border border-gray-200 py-2 z-50 animate-in fade-in-0 zoom-in-95 duration-200">
-                  {!isAuthenticated ? (
-                    <>
-                      <div className="px-4 py-3 border-b border-gray-100">
-                        <p className="text-sm font-medium text-gray-900">
-                          {t("profile_welcome")}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {t("profile_signin_prompt")}
-                        </p>
-                      </div>
-                      <button
-                        onClick={handleLogin}
-                        className="w-full flex items-center space-x-3 px-4 py-3 text-sm text-gray-700 hover:bg-primary/10 hover:text-primary transition-all duration-200"
-                      >
-                        <div className="w-8 h-8 bg-primary/15 rounded-lg flex items-center justify-center">
-                          <LogIn className="w-4 h-4 text-primary" />
-                        </div>
-                        <span className="font-medium">
-                          {t("profile_login")}
-                        </span>
-                      </button>
-                    </>
+                <AnimatePresence mode="wait">
+                  {isMenuOpen ? (
+                    <motion.span key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.15 }}>
+                      <X className="w-4 h-4" />
+                    </motion.span>
                   ) : (
-                    <>
-                      <div className="px-4 py-3 border-b border-gray-100">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-                            <User className="w-5 h-5 text-primary-foreground" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">
-                              {user?.name}
-                            </p>
-                            <p className="text-xs text-gray-500 truncate">
-                              {user?.email}
-                            </p>
-                            <p className="text-xs text-primary font-medium capitalize">
-                              {user?.role}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={handleProfileClick}
-                        className="w-full flex items-center space-x-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-all duration-200"
-                      >
-                        <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
-                          <Settings className="w-4 h-4 text-gray-600" />
-                        </div>
-                        <span className="font-medium">
-                          {t("profile_dashboard")}
-                        </span>
-                      </button>
-
-                      <div className="mx-4 my-2 h-px bg-gray-200" />
-
-                      <button
-                        onClick={handleLogout}
-                        disabled={loading}
-                        className="w-full flex items-center space-x-3 px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-all duration-200 disabled:opacity-50"
-                      >
-                        <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
-                          <LogOut className="w-4 h-4 text-red-600" />
-                        </div>
-                        <span className="font-medium">
-                          {loading
-                            ? t("profile_logging_out")
-                            : t("profile_logout")}
-                        </span>
-                      </button>
-                    </>
+                    <motion.span key="menu" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.15 }}>
+                      <Menu className="w-4 h-4" />
+                    </motion.span>
                   )}
-                </div>
-              )}
+                </AnimatePresence>
+              </motion.button>
             </div>
           </div>
-
-          <button
-            onClick={() => setIsSearchOpen(true)}
-            className="lg:hidden p-2.5 mr-2 rounded-xl hover:bg-gray-50 transition-colors border border-gray-200"
-            aria-label="Search"
-          >
-            <Search className="w-5 h-5 text-gray-700" />
-          </button>
-
-          <button
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="lg:hidden p-2.5 rounded-xl hover:bg-gray-50 transition-colors border border-gray-200"
-            aria-label="Toggle menu"
-          >
-            {isMenuOpen ? (
-              <X className="w-5 h-5 text-gray-700" />
-            ) : (
-              <Menu className="w-5 h-5 text-gray-700" />
-            )}
-          </button>
         </div>
 
-        {isMenuOpen && (
-          <div className="lg:hidden py-4 border-t border-gray-200/50 bg-white/95 backdrop-blur-md animate-in fade-in-0 slide-in-from-top-2 duration-300">
-            <div className="flex flex-col space-y-4">
-              <nav className="flex flex-col space-y-1">
-                {navigationItems.map((item) => (
-                  <Link
+        {/* ── Mobile menu ── */}
+        <AnimatePresence>
+          {isMenuOpen && (
+            <motion.div
+              className="lg:hidden border-t border-gray-100 bg-white/98 backdrop-blur-xl"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div className="px-4 py-4 space-y-1 max-h-[70vh] overflow-y-auto">
+                {navigationItems.map((item, i) => (
+                  <motion.div
                     key={item.href}
-                    href={item.href}
-                    className={`flex items-center space-x-3 px-4 py-2.5 rounded-lg font-medium text-sm ${
-                      isActive(item.href)
-                        ? "text-primary bg-primary/10"
-                        : "text-gray-700 hover:bg-gray-50"
-                    }`}
+                    initial={{ opacity: 0, x: -16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.04 }}
                   >
-                    <item.icon
-                      className={`w-4 h-4 ${
-                        isActive(item.href) ? "text-primary" : "text-gray-500"
+                    <Link
+                      href={item.href}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                        isActive(item.href)
+                          ? "text-primary bg-primary/8 font-semibold"
+                          : "text-gray-700 hover:bg-gray-50 hover:text-primary"
                       }`}
-                    />
-                    <span>{t(item.labelKey)}</span>
-                  </Link>
+                    >
+                      <item.icon className={`w-4 h-4 shrink-0 ${isActive(item.href) ? "text-primary" : "text-gray-400"}`} />
+                      {t(item.labelKey)}
+                    </Link>
+                  </motion.div>
                 ))}
-              </nav>
 
-              <div className="px-4">
-                <div className="w-full h-px bg-gray-200" />
-              </div>
+                <div className="h-px bg-gray-100 my-3" />
 
-              {!isAuthenticated ? (
-                <div className="px-2 space-y-2">
-                  <button
-                    onClick={handleLogin}
-                    className="w-full flex items-center space-x-3 px-3 py-3 text-sm font-medium text-gray-700 hover:bg-primary/10 hover:text-primary transition-all duration-200 rounded-lg"
-                  >
-                    <LogIn className="w-4 h-4 text-primary" />
-                    <span>{t("profile_login")}</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="px-2 space-y-2">
-                  <div className="px-3 py-2">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {user?.name}
-                    </p>
-                    <p className="text-xs text-gray-500 truncate">
-                      {user?.email}
-                    </p>
-                  </div>
-                  <button
-                    onClick={handleProfileClick}
-                    className="w-full flex items-center space-x-3 px-3 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all duration-200 rounded-lg"
-                  >
-                    <Settings className="w-4 h-4 text-gray-600" />
-                    <span>{t("profile_dashboard")}</span>
-                  </button>
-                  <button
-                    onClick={handleLogout}
-                    disabled={loading}
-                    className="w-full flex items-center space-x-3 px-3 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition-all duration-200 rounded-lg"
-                  >
-                    <LogOut className="w-4 h-4 text-red-600" />
-                    <span>
-                      {loading ? t("profile_logging_out") : t("profile_logout")}
-                    </span>
-                  </button>
-                </div>
-              )}
-
-              <div className="px-4">
-                <div className="w-full h-px bg-gray-200" />
-              </div>
-
-              <div className="px-4">
-                <div className="relative">
+                {/* Mobile language */}
+                <div className="relative px-1">
                   <select
                     value={language}
-                    onChange={(e) =>
-                      setLanguage(e.target.value as LanguageCode)
-                    }
-                    className="w-full appearance-none bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 pr-10 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
+                    onChange={(e) => setLanguage(e.target.value as LanguageCode)}
+                    className="w-full appearance-none bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 pr-10 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
                   >
                     {supportedLanguages.map((lang) => (
-                      <option key={lang} value={lang}>
-                        {lang.toUpperCase()}
-                      </option>
+                      <option key={lang} value={lang}>{lang.toUpperCase()}</option>
                     ))}
                   </select>
-                  <Globe className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  <Globe className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                 </div>
-              </div>
-            </div>
-          </div>
-        )}
 
-        <SearchModal
-          isOpen={isSearchOpen}
-          onClose={() => setIsSearchOpen(false)}
-        />
-      </div>
-    </header>
+                {/* Mobile auth */}
+                {!isAuthenticated ? (
+                  <button
+                    onClick={handleLogin}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-primary bg-primary/8 rounded-xl hover:bg-primary/12 transition-colors"
+                  >
+                    <LogIn className="w-4 h-4" />
+                    {t("profile_login")}
+                  </button>
+                ) : (
+                  <div className="space-y-1">
+                    <div className="px-3 py-2 bg-gray-50 rounded-xl">
+                      <p className="text-sm font-bold text-gray-900">{user?.name}</p>
+                      <p className="text-xs text-gray-500">{user?.email}</p>
+                    </div>
+                    <button onClick={handleProfileClick} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-xl transition-colors">
+                      <Settings className="w-4 h-4 text-gray-500" />
+                      <span className="font-medium">{t("profile_dashboard")}</span>
+                    </button>
+                    <button onClick={handleLogout} disabled={loading} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-xl transition-colors">
+                      <LogOut className="w-4 h-4" />
+                      <span className="font-medium">{loading ? t("profile_logging_out") : t("profile_logout")}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+      </motion.header>
+    </>
   );
 }

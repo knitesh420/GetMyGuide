@@ -23,10 +23,10 @@ export default function TermsAndConditionsPage() {
           <div className="prose prose-lg max-w-none text-muted-foreground prose-headings:text-foreground prose-strong:text-foreground prose-a:text-primary">
             <p>
               Please read these Terms and Conditions ("Terms", "Terms and
-              Conditions") carefully before using the BookMyTourGuide website
-              (the "Service") operated by us. Your access to and use of the
-              Service is conditioned on your acceptance of and compliance with
-              these Terms.
+              Conditions") carefully before using the GetMyGuide website (the
+              "Service") operated by us. Your access to and use of the Service
+              is conditioned on your acceptance of and compliance with these
+              Terms.
             </p>
 
             <h2 className="text-2xl md:text-3xl font-bold mt-8 mb-4">
@@ -53,7 +53,7 @@ export default function TermsAndConditionsPage() {
               3. Limitation of Liability
             </h2>
             <p>
-              In no event shall BookMyTourGuide, nor its directors, employees,
+              In no event shall GetMyGuide, nor its directors, employees,
               partners, agents, suppliers, or affiliates, be liable for any
               indirect, incidental, special, consequential or punitive damages,
               including without limitation, loss of profits, data, use,

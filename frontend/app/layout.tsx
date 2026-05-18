@@ -10,7 +10,7 @@ import ToastProvider from "@/lib/ToastProvider";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import AuthInitializer from "@/components/AuthInitializer";
 export const metadata: Metadata = {
-  title: "BookMyTourGuide",
+  title: "GetMyGuide",
   description:
     "Connect with certified local guides for authentic eco tours, heritage walks, cooking classes, and cultural experiences worldwide.",
   generator: "v0.app",

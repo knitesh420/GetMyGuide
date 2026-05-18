@@ -2,7 +2,8 @@
 
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Globe, Instagram, Mail, MapPin, Phone, Youtube } from "lucide-react";
-import Link from "next/link"; 
+import Image from "next/image";
+import Link from "next/link";
 
 export function Footer() {
   const { t } = useLanguage();
@@ -56,9 +57,14 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Company Info */}
           <div className="lg:col-span-1 animate-fade-in-up">
-            <div className="flex items-center space-x-2 mb-4">
-              <div className="w-10 h-10 bg-secondary rounded-lg flex items-center justify-center">
-                <MapPin className="w-6 h-6 text-secondary-foreground" />
+              <div className="flex items-center space-x-2 mb-4">
+              <div className="relative w-12 h-12 shrink-0">
+                <Image
+                  src="/images/new_logo.jpeg"
+                  alt="GetMyGuide"
+                  fill
+                  className="object-contain rounded-lg"
+                />
               </div>
               <div>
                 <h3 className="text-xl font-bold">GetMyGuide</h3>

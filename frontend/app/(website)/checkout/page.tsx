@@ -36,10 +36,10 @@ function CheckoutContent() {
 
   const { currentUser } = useSelector((state: RootState) => state.user);
   const { items: packages, loading: packagesLoading } = useSelector(
-    (state: RootState) => state.packages
+    (state: RootState) => state.packages,
   );
   const { guides, loading: guidesLoading } = useSelector(
-    (state: RootState) => state.guide
+    (state: RootState) => state.guide,
   );
   const {
     loading: bookingLoading,
@@ -98,7 +98,7 @@ function CheckoutContent() {
         createRazorpayOrder({
           amount: advanceAmount,
           receipt: `receipt_tour_${Date.now()}`,
-        })
+        }),
       ).unwrap();
 
       const order = orderResult;
@@ -116,7 +116,7 @@ function CheckoutContent() {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: order.amount,
         currency: "INR",
-        name: "BookMyTourGuide",
+        name: "GetMyGuide",
         description: `Advance for ${tour.title}`,
         order_id: order.id,
         handler: function (response: any) {
@@ -130,7 +130,7 @@ function CheckoutContent() {
               startDate: startDate!,
               endDate: endDate!,
               numberOfTourists: touristsCount,
-            })
+            }),
           );
         },
         prefill: {

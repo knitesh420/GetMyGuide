@@ -12,7 +12,14 @@ import {
   createFinalPaymentOrder,
   verifyFinalPayment,
 } from "@/lib/redux/thunks/tourGuideBooking/userTourGuideBookingThunks";
-import { Loader2, XCircle, CheckCircle, CreditCard, MapPin, AlertCircle } from "lucide-react";
+import {
+  Loader2,
+  XCircle,
+  CheckCircle,
+  CreditCard,
+  MapPin,
+  AlertCircle,
+} from "lucide-react";
 
 // This ensures window.Razorpay is recognized by TypeScript
 declare global {
@@ -83,37 +90,49 @@ export default function TourGuideBookingDetailPage() {
     try {
       // Step 1: Create the Razorpay order using our thunk
       console.log("Creating final payment order for booking:", booking._id);
-      const order = await dispatch(createFinalPaymentOrder(booking._id)).unwrap();
-      
+      const order = await dispatch(
+        createFinalPaymentOrder(booking._id),
+      ).unwrap();
+
       console.log("✅ Order created successfully:", order);
       toast.dismiss(paymentToast);
-      
+
       // Step 2: Configure Razorpay options
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: order.amount,
         currency: "INR",
-        name: "BookMyTourGuide",
+        name: "GetMyGuide",
         description: `Final payment for tour in ${booking.location}`,
         order_id: order.id,
         // Step 3: The handler function is called ONLY on successful payment
         handler: function (response: any) {
           console.log("✅ Payment successful, response:", response);
-          const verificationToast = toast.loading("Verifying your payment, please wait...");
+          const verificationToast = toast.loading(
+            "Verifying your payment, please wait...",
+          );
           dispatch(
             verifyFinalPayment({
               bookingId: booking._id,
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
+            }),
+          )
+            .unwrap()
+            .then(() => {
+              toast.success("Payment successful! Your booking is confirmed.", {
+                id: verificationToast,
+              });
+              // Refresh the booking details
+              dispatch(fetchTourGuideBookingById(bookingId));
             })
-          ).unwrap()
-           .then(() => {
-             toast.success("Payment successful! Your booking is confirmed.", { id: verificationToast });
-             // Refresh the booking details
-             dispatch(fetchTourGuideBookingById(bookingId));
-           })
-           .catch((err) => toast.error(err || "Verification failed. Please contact support.", { id: verificationToast }));
+            .catch((err) =>
+              toast.error(
+                err || "Verification failed. Please contact support.",
+                { id: verificationToast },
+              ),
+            );
         },
         prefill: {
           name: currentUser.name,
@@ -122,22 +141,26 @@ export default function TourGuideBookingDetailPage() {
         },
         theme: { color: "#D9232D" },
         modal: {
-          ondismiss: function() {
+          ondismiss: function () {
             console.log("Payment modal closed by user");
             toast.info("Payment cancelled. You can try again when ready.");
-          }
-        }
+          },
+        },
       };
 
-      console.log("Opening Razorpay modal with options:", { ...options, key: "***" });
-      
+      console.log("Opening Razorpay modal with options:", {
+        ...options,
+        key: "***",
+      });
+
       // Step 4: Create a new Razorpay instance and open the modal
       const paymentObject = new window.Razorpay(options);
       paymentObject.open();
-
     } catch (err: any) {
       console.error("❌ Error in handleFinalPayment:", err);
-      toast.error(err || "Could not start payment. Please try again.", { id: paymentToast });
+      toast.error(err || "Could not start payment. Please try again.", {
+        id: paymentToast,
+      });
     }
   };
 
@@ -156,7 +179,9 @@ export default function TourGuideBookingDetailPage() {
         <h2 className="text-2xl font-bold">Could not load booking</h2>
         <p className="text-muted-foreground">{error}</p>
         <Link href="/dashboard/user/tour-guide-booking">
-            <button className="mt-6 px-4 py-2 bg-gray-200 rounded">Go Back to Bookings</button>
+          <button className="mt-6 px-4 py-2 bg-gray-200 rounded">
+            Go Back to Bookings
+          </button>
         </Link>
       </div>
     );
@@ -171,25 +196,31 @@ export default function TourGuideBookingDetailPage() {
       <div className="max-w-3xl mx-auto">
         <Link href="/dashboard/user/tour-guide-booking">
           <button className="mb-6 px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50">
-              &larr; Back to My Bookings
+            &larr; Back to My Bookings
           </button>
         </Link>
 
         <div className="bg-white rounded-xl shadow-lg p-6 sm:p-8">
           <div className="flex justify-between items-start gap-4">
-              <div>
-                  <h1 className="text-3xl font-bold capitalize">{booking.location}</h1>
-                  <p className="text-gray-500 flex items-center gap-2 mt-2">
-                      <MapPin className="w-4 h-4" /> {booking.location}
-                  </p>
-              </div>
-              <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                  booking.status === 'Cancelled' ? 'bg-red-100 text-red-800' : 
-                  booking.status === 'Completed' ? 'bg-green-100 text-green-800' :
-                  'bg-blue-100 text-blue-800'
-              }`}>
-                  {booking.status}
-              </span>
+            <div>
+              <h1 className="text-3xl font-bold capitalize">
+                {booking.location}
+              </h1>
+              <p className="text-gray-500 flex items-center gap-2 mt-2">
+                <MapPin className="w-4 h-4" /> {booking.location}
+              </p>
+            </div>
+            <span
+              className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                booking.status === "Cancelled"
+                  ? "bg-red-100 text-red-800"
+                  : booking.status === "Completed"
+                    ? "bg-green-100 text-green-800"
+                    : "bg-blue-100 text-blue-800"
+              }`}
+            >
+              {booking.status}
+            </span>
           </div>
 
           {/* Booking Details Section */}
@@ -197,7 +228,7 @@ export default function TourGuideBookingDetailPage() {
             <div>
               <p className="text-sm text-gray-500">Guide</p>
               <p className="font-semibold">
-                {typeof booking.guide === 'object' ? booking.guide.name : 'N/A'}
+                {typeof booking.guide === "object" ? booking.guide.name : "N/A"}
               </p>
             </div>
             <div>
@@ -206,11 +237,15 @@ export default function TourGuideBookingDetailPage() {
             </div>
             <div>
               <p className="text-sm text-gray-500">Start Date</p>
-              <p className="font-semibold">{new Date(booking.startDate).toLocaleDateString()}</p>
+              <p className="font-semibold">
+                {new Date(booking.startDate).toLocaleDateString()}
+              </p>
             </div>
             <div>
               <p className="text-sm text-gray-500">End Date</p>
-              <p className="font-semibold">{new Date(booking.endDate).toLocaleDateString()}</p>
+              <p className="font-semibold">
+                {new Date(booking.endDate).toLocaleDateString()}
+              </p>
             </div>
             <div>
               <p className="text-sm text-gray-500">Number of Travelers</p>
@@ -218,64 +253,86 @@ export default function TourGuideBookingDetailPage() {
             </div>
             <div>
               <p className="text-sm text-gray-500">Total Price</p>
-              <p className="font-semibold">₹{booking.totalPrice?.toLocaleString()}</p>
+              <p className="font-semibold">
+                ₹{booking.totalPrice?.toLocaleString()}
+              </p>
             </div>
             <div>
               <p className="text-sm text-gray-500">Advance Paid</p>
-              <p className="font-semibold text-green-600">₹{booking.advanceAmount?.toLocaleString()}</p>
+              <p className="font-semibold text-green-600">
+                ₹{booking.advanceAmount?.toLocaleString()}
+              </p>
             </div>
             {booking.remainingAmount > 0 && (
               <div>
                 <p className="text-sm text-gray-500">Remaining Amount</p>
-                <p className="font-semibold text-orange-600">₹{booking.remainingAmount?.toLocaleString()}</p>
+                <p className="font-semibold text-orange-600">
+                  ₹{booking.remainingAmount?.toLocaleString()}
+                </p>
               </div>
             )}
           </div>
 
           {/* Payment Action Section */}
           <div className="mt-6 border-t pt-6">
-            {booking.status === "Upcoming" && booking.paymentStatus === "Advance Paid" && (
+            {booking.status === "Upcoming" &&
+              booking.paymentStatus === "Advance Paid" && (
                 <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-md">
-                    <h3 className="font-bold text-yellow-800">Action Required</h3>
-                    <p className="text-yellow-700 text-sm">
-                        Please pay the remaining balance of <span className="font-bold">₹{booking.remainingAmount?.toLocaleString()}</span> to confirm your tour.
-                    </p>
-                    <div className="mt-4">
-                        <button 
-                          onClick={handleFinalPayment} 
-                          disabled={loading || !razorpayLoaded} 
-                          className="bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center"
-                        >
-                            <CreditCard className="w-4 h-4 mr-2" />
-                            {!razorpayLoaded ? "Loading Payment Gateway..." : loading ? "Processing..." : "Pay Remaining Amount"}
-                        </button>
-                    </div>
+                  <h3 className="font-bold text-yellow-800">Action Required</h3>
+                  <p className="text-yellow-700 text-sm">
+                    Please pay the remaining balance of{" "}
+                    <span className="font-bold">
+                      ₹{booking.remainingAmount?.toLocaleString()}
+                    </span>{" "}
+                    to confirm your tour.
+                  </p>
+                  <div className="mt-4">
+                    <button
+                      onClick={handleFinalPayment}
+                      disabled={loading || !razorpayLoaded}
+                      className="bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center"
+                    >
+                      <CreditCard className="w-4 h-4 mr-2" />
+                      {!razorpayLoaded
+                        ? "Loading Payment Gateway..."
+                        : loading
+                          ? "Processing..."
+                          : "Pay Remaining Amount"}
+                    </button>
+                  </div>
                 </div>
-            )}
+              )}
 
             {booking.paymentStatus === "Fully Paid" && (
-                  <div className="bg-green-50 border-l-4 border-green-400 text-green-800 p-4 rounded-md flex items-center">
-                    <CheckCircle className="h-5 w-5 mr-3" />
-                    <div>
-                        <h3 className="font-bold">All Set! Your Booking is Confirmed.</h3>
-                        <p className="text-sm">Your payment is complete. Enjoy your trip!</p>
-                    </div>
+              <div className="bg-green-50 border-l-4 border-green-400 text-green-800 p-4 rounded-md flex items-center">
+                <CheckCircle className="h-5 w-5 mr-3" />
+                <div>
+                  <h3 className="font-bold">
+                    All Set! Your Booking is Confirmed.
+                  </h3>
+                  <p className="text-sm">
+                    Your payment is complete. Enjoy your trip!
+                  </p>
                 </div>
+              </div>
             )}
 
             {booking.status === "Cancelled" && (
-                  <div className="bg-red-50 border-l-4 border-red-400 text-red-800 p-4 rounded-md flex items-center">
-                    <XCircle className="h-5 w-5 mr-3" />
-                    <div>
-                        <h3 className="font-bold">Booking Cancelled</h3>
-                        <p className="text-sm">
-                          {booking.cancellationReason || "This booking has been cancelled."}
-                        </p>
-                        {booking.paymentStatus === "Refunded" && (
-                          <p className="text-sm mt-1">Your advance payment has been refunded.</p>
-                        )}
-                    </div>
+              <div className="bg-red-50 border-l-4 border-red-400 text-red-800 p-4 rounded-md flex items-center">
+                <XCircle className="h-5 w-5 mr-3" />
+                <div>
+                  <h3 className="font-bold">Booking Cancelled</h3>
+                  <p className="text-sm">
+                    {booking.cancellationReason ||
+                      "This booking has been cancelled."}
+                  </p>
+                  {booking.paymentStatus === "Refunded" && (
+                    <p className="text-sm mt-1">
+                      Your advance payment has been refunded.
+                    </p>
+                  )}
                 </div>
+              </div>
             )}
           </div>
         </div>

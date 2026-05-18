@@ -8,6 +8,7 @@ import PaymentRoute from './payment/payment.route';
 import SessionRoute from './session/session.route';
 import LeadRoute from './lead/lead.route';
 import UserRoute from './user/user.route';
+import homepageBannerRoutes from './homepageBanner/homepageBanner.route';
 
 import { NotFoundError, Respond, ServerError } from 'node-be-utilities';
 import { FileUpload, ONLY_MEDIA_ALLOWED, SingleFileUploadOptions } from '../utils/files';
@@ -27,6 +28,8 @@ router.use('/guides', GuideRoute);
 router.use('/package', PackageRoute);
 router.use('/lead', LeadRoute);
 router.use('/user', UserRoute);
+
+router.use('/homepage-banner', homepageBannerRoutes);
 
 router.post('/upload-media', async function (req, res, next) {
 	const fileUploadOptions: SingleFileUploadOptions = {

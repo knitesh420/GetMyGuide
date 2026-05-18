@@ -361,7 +361,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           guide_page_title: "Registration for authorised Tour Guides",
           guide_page_desc:
             "Empower travelers with your local knowledge and earn while sharing your city’s unique stories.",
-          guide_page_why_join: "Why Join BookMyTourGuide?",
+          guide_page_why_join: "Why Join GetMyGuide?",
           guide_page_benefit_1_title: "Earn ₹500-2000/hour",
           guide_page_benefit_1_desc:
             "Set your own rates and earn competitive income.",
@@ -654,7 +654,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           app_step_2: "2. Verificación de documentos (2-3 días)",
           app_step_3: "3. Entrevista por video con nuestro equipo",
           app_step_4: "4. Finalización de la verificación de antecedentes",
-          app_step_5: "5. ¡Bienvenido a la familia BookMyTourGuide!",
+          app_step_5: "5. ¡Bienvenido a la familia GetMyGuide!",
           booking_proc_title: "Proceso de Reserva Sencillo",
           booking_proc_desc:
             "Reserva tu experiencia de tour perfecta en solo unos pocos clics. Nuestro proceso optimizado asegura que obtengas el mejor guía para tus necesidades.",
@@ -703,8 +703,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
             "Recibe los últimos tours y ofertas exclusivas",
           footer_email_placeholder: "Ingresa tu correo electrónico",
           footer_subscribe: "Suscribir",
-          footer_copyright:
-            "© 2024 BookMyTourGuide. Todos los derechos reservados.",
+          footer_copyright: "© 2024 GetMyGuide. Todos los derechos reservados.",
           footer_legal_links:
             "Política de Privacidad | Términos de Servicio | Política de Cookies",
 
@@ -854,10 +853,10 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           find_guides_book_button: "Ver y Reservar",
           // ================================= BECOME A GUIDE PAGE =================================
           guide_page_badge: "Únete a Nuestra Red",
-          guide_page_title: "Conviértete en Socio de BookMyTourGuide",
+          guide_page_title: "Conviértete en Socio de GetMyGuide",
           guide_page_desc:
             "Empodera a los viajeros con tu conocimiento local y gana mientras compartes las historias únicas de tu ciudad.",
-          guide_page_why_join: "¿Por Qué Unirte a BookMyTourGuide?",
+          guide_page_why_join: "¿Por Qué Unirte a GetMyGuide?",
           guide_page_benefit_1_title: "Gana ₹500-2000/hora",
           guide_page_benefit_1_desc:
             "Establece tus propias tarifas y obtén ingresos competitivos.",
@@ -897,7 +896,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           how_badge: "Cómo Funciona",
           how_title: "Pasos Sencillos para Planificar tu Viaje Perfecto",
           how_desc:
-            "Desde elegir un guía hasta reservar tu próxima aventura — descubre lo fácil que es viajar con BookMyTourGuide.",
+            "Desde elegir un guía hasta reservar tu próxima aventura — descubre lo fácil que es viajar con GetMyGuide.",
           how_section_1_title: "Reserva tu Tour Perfecto en 4 Sencillos Pasos",
           how_step_1_title: "Busca y Explora",
           how_step_1_desc:
@@ -1053,7 +1052,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           contact_faq_q12: "Preocupaciones de seguridad",
           contact_faq_view_all: "Ver Todas las Preguntas",
           contact_map_section_title: "Visita Nuestra Oficina",
-          contact_map_office_name: "Oficina Principal de BookMyTourGuide",
+          contact_map_office_name: "Oficina Principal de GetMyGuide",
           contact_map_get_directions: "Obtener Direcciones",
         },
         // ================================= FRENCH =================================
@@ -1175,7 +1174,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           footer_newsletter_prompt: "Recevez les dernières offres.",
           footer_email_placeholder: "Entrez votre e-mail",
           footer_subscribe: "S'abonner",
-          footer_copyright: "© 2024 BookMyTourGuide. Tous droits réservés.",
+          footer_copyright: "© 2024 GetMyGuide. Tous droits réservés.",
           footer_legal_links:
             "Politique de Confidentialité | Conditions d'Utilisation",
 
@@ -1321,10 +1320,10 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
             "Essayez d'ajuster votre recherche ou vos filtres.",
           // ================================= BECOME A GUIDE PAGE =================================
           guide_page_badge: "Rejoignez Notre Réseau",
-          guide_page_title: "Devenez Partenaire BookMyTourGuide",
+          guide_page_title: "Devenez Partenaire GetMyGuide",
           guide_page_desc:
             "Donnez aux voyageurs le pouvoir de votre connaissance locale et gagnez de l'argent en partageant les histoires uniques de votre ville.",
-          guide_page_why_join: "Pourquoi Rejoindre BookMyTourGuide ?",
+          guide_page_why_join: "Pourquoi Rejoindre GetMyGuide ?",
           guide_page_benefit_1_title: "Gagnez 500-2000 ₹/heure",
           guide_page_benefit_1_desc:
             "Fixez vos propres tarifs et obtenez un revenu compétitif.",
@@ -1366,7 +1365,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           how_badge: "Comment Ça Marche",
           how_title: "Étapes Simples pour Planifier Votre Voyage Parfait",
           how_desc:
-            "Du choix d'un guide à la réservation de votre prochaine aventure — découvrez à quel point il est facile de voyager avec BookMyTourGuide.",
+            "Du choix d'un guide à la réservation de votre prochaine aventure — découvrez à quel point il est facile de voyager avec GetMyGuide.",
           how_section_1_title:
             "Réservez Votre Circuit Parfait en 4 Étapes Faciles",
           how_step_1_title: "Rechercher et Parcourir",
@@ -1519,7 +1518,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           contact_faq_q12: "Préoccupations de sécurité",
           contact_faq_view_all: "Voir Toutes les FAQs",
           contact_map_section_title: "Visitez Notre Bureau",
-          contact_map_office_name: "Siège Social de BookMyTourGuide",
+          contact_map_office_name: "Siège Social de GetMyGuide",
           contact_map_get_directions: "Obtenir l'Itinéraire",
         },
         // ================================= RUSSIAN =================================
@@ -1640,7 +1639,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           footer_newsletter_prompt: "Получайте последние предложения.",
           footer_email_placeholder: "Введите ваш e-mail",
           footer_subscribe: "Подписаться",
-          footer_copyright: "© 2024 BookMyTourGuide. Все права защищены.",
+          footer_copyright: "© 2024 GetMyGuide. Все права защищены.",
           footer_legal_links:
             "Политика конфиденциальности | Условия обслуживания",
 
@@ -1780,10 +1779,10 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           find_guides_book_button: "Посмотреть и забронировать",
           // ================================= BECOME A GUIDE PAGE =================================
           guide_page_badge: "Присоединяйтесь к Нашей Сети",
-          guide_page_title: "Станьте Партнером BookMyTourGuide",
+          guide_page_title: "Станьте Партнером GetMyGuide",
           guide_page_desc:
             "Помогите путешественникам своими местными знаниями и зарабатывайте, делясь уникальными историями вашего города.",
-          guide_page_why_join: "Почему стоит присоединиться к BookMyTourGuide?",
+          guide_page_why_join: "Почему стоит присоединиться к GetMyGuide?",
           guide_page_benefit_1_title: "Зарабатывайте 500-2000 ₹/час",
           guide_page_benefit_1_desc:
             "Устанавливайте свои тарифы и получайте конкурентоспособный доход.",
@@ -1823,7 +1822,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           how_title:
             "Простые Шаги для Планирования Вашего Идеального Путешествия",
           how_desc:
-            "От выбора гида до бронирования вашего следующего приключения — узнайте, как легко путешествовать с BookMyTourGuide.",
+            "От выбора гида до бронирования вашего следующего приключения — узнайте, как легко путешествовать с GetMyGuide.",
           how_section_1_title:
             "Забронируйте Свой Идеальный Тур за 4 Простых Шага",
           how_step_1_title: "Поиск и Просмотр",
@@ -1974,7 +1973,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           contact_faq_q12: "Вопросы безопасности",
           contact_faq_view_all: "Посмотреть все FAQ",
           contact_map_section_title: "Посетите наш офис",
-          contact_map_office_name: "Головной офис BookMyTourGuide",
+          contact_map_office_name: "Головной офис GetMyGuide",
           contact_map_get_directions: "Проложить маршрут",
         },
         // ================================= GERMAN =================================
@@ -2052,7 +2051,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           app_step_2: "2. Dokumentenprüfung (2-3 Tage)",
           app_step_3: "3. Video-Interview",
           app_step_4: "4. Hintergrundüberprüfung",
-          app_step_5: "5. Willkommen bei BookMyTourGuide!",
+          app_step_5: "5. Willkommen bei GetMyGuide!",
           booking_proc_title: "Einfacher Buchungsprozess",
           booking_proc_desc: "Buchen Sie Ihre perfekte Tour in wenigen Klicks.",
           step_1_title: "Erlebnis wählen",
@@ -2093,7 +2092,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           footer_newsletter_prompt: "Erhalten Sie die neuesten Angebote.",
           footer_email_placeholder: "Geben Sie Ihre E-Mail-Adresse ein",
           footer_subscribe: "Abonnieren",
-          footer_copyright: "© 2024 BookMyTourGuide. Alle Rechte vorbehalten.",
+          footer_copyright: "© 2024 GetMyGuide. Alle Rechte vorbehalten.",
           footer_legal_links: "Datenschutz | Nutzungsbedingungen",
 
           help_center: "Hilfezentrum",
@@ -2233,10 +2232,10 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           find_guides_book_button: "Ansehen & Buchen",
           // ================================= BECOME A GUIDE PAGE =================================
           guide_page_badge: "Treten Sie unserem Netzwerk bei",
-          guide_page_title: "Werden Sie BookMyTourGuide-Partner",
+          guide_page_title: "Werden Sie GetMyGuide-Partner",
           guide_page_desc:
             "Stärken Sie Reisende mit Ihrem lokalen Wissen und verdienen Sie, während Sie die einzigartigen Geschichten Ihrer Stadt teilen.",
-          guide_page_why_join: "Warum BookMyTourGuide beitreten?",
+          guide_page_why_join: "Warum GetMyGuide beitreten?",
           guide_page_benefit_1_title: "Verdienen Sie 500-2000 ₹/Stunde",
           guide_page_benefit_1_desc:
             "Legen Sie Ihre eigenen Preise fest und erzielen Sie ein wettbewerbsfähiges Einkommen.",
@@ -2276,7 +2275,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           how_badge: "So Funktioniert's",
           how_title: "Einfache Schritte zur Planung Ihrer Perfekten Reise",
           how_desc:
-            "Von der Auswahl eines Guides bis zur Buchung Ihres nächsten Abenteuers – entdecken Sie, wie einfach es ist, mit BookMyTourGuide zu reisen.",
+            "Von der Auswahl eines Guides bis zur Buchung Ihres nächsten Abenteuers – entdecken Sie, wie einfach es ist, mit GetMyGuide zu reisen.",
           how_section_1_title:
             "Buchen Sie Ihre Perfekte Tour in 4 Einfachen Schritten",
           how_step_1_title: "Suchen & Stöbern",
