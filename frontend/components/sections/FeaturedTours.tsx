@@ -6,7 +6,14 @@ import { ArrowRight, Heart, Star, MapPin, Clock, Users } from "lucide-react";
 import Link from "next/link";
 import { FadeUp } from "@/components/animations/motion-wrappers";
 
-const CATEGORIES = ["All", "Adventure", "Cultural", "Heritage", "Nature", "Food"];
+const CATEGORIES = [
+  "All",
+  "Adventure",
+  "Cultural",
+  "Heritage",
+  "Nature",
+  "Food",
+];
 
 const TOURS = [
   {
@@ -14,7 +21,8 @@ const TOURS = [
     title: "Jaisalmer Desert Safari & Camel Trek",
     location: "Jaisalmer",
     country: "Rajasthan",
-    image: "https://images.unsplash.com/photo-1587474260584-136574528ed5?w=600&q=80",
+    image:
+      "https://images.unsplash.com/photo-1587474260584-136574528ed5?w=600&q=80",
     price: 3500,
     rating: 4.9,
     reviews: 312,
@@ -29,7 +37,8 @@ const TOURS = [
     title: "Kerala Backwaters Houseboat Experience",
     location: "Alleppey",
     country: "Kerala",
-    image: "https://images.unsplash.com/photo-1609920658906-8223bd289001?w=600&q=80",
+    image:
+      "https://images.unsplash.com/photo-1609920658906-8223bd289001?w=600&q=80",
     price: 5200,
     rating: 4.8,
     reviews: 218,
@@ -44,7 +53,8 @@ const TOURS = [
     title: "Himachal Valley Trek & Camping",
     location: "Manali",
     country: "Himachal Pradesh",
-    image: "https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=600&q=80",
+    image:
+      "https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=600&q=80",
     price: 4800,
     rating: 4.7,
     reviews: 486,
@@ -59,7 +69,8 @@ const TOURS = [
     title: "Goa Heritage Walk & Spice Tour",
     location: "Panaji",
     country: "Goa",
-    image: "https://images.unsplash.com/photo-1580137189272-c9379f8864fd?w=600&q=80",
+    image:
+      "https://images.unsplash.com/photo-1580137189272-c9379f8864fd?w=600&q=80",
     price: 1800,
     rating: 4.6,
     reviews: 175,
@@ -74,7 +85,8 @@ const TOURS = [
     title: "Varanasi Ghats & Aarti Ceremony",
     location: "Varanasi",
     country: "Uttar Pradesh",
-    image: "https://images.unsplash.com/photo-1561361058-c24e021b47d7?w=600&q=80",
+    image:
+      "https://media.istockphoto.com/id/865075520/photo/holy-town-varanasi-and-the-river-ganges.webp?a=1&b=1&s=612x612&w=0&k=20&c=eDsBRbgdackQGpQZZba0I-mblayfLqMoTiaiMB_eCOY=",
     price: 2200,
     rating: 4.9,
     reviews: 523,
@@ -89,7 +101,8 @@ const TOURS = [
     title: "Old Delhi Street Food & Bazaar Walk",
     location: "Old Delhi",
     country: "Delhi",
-    image: "https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=600&q=80",
+    image:
+      "https://images.unsplash.com/photo-1705861145316-73a2edc9e1ba?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8M3x8T2xkJTIwRGVsaGklMjBTdHJlZXQlMjBGb29kJTIwJTI2JTIwQmF6YWFyJTIwV2Fsa3xlbnwwfHwwfHx8MA%3D%3D",
     price: 1500,
     rating: 4.8,
     reviews: 398,
@@ -112,7 +125,7 @@ export default function FeaturedTours() {
 
   const toggleWishlist = (id: number) =>
     setWishlisted((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
 
   return (
@@ -170,7 +183,10 @@ export default function FeaturedTours() {
         </FadeUp>
 
         {/* Cards grid */}
-        <motion.div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" layout>
+        <motion.div
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
+          layout
+        >
           {filtered.map((tour, i) => (
             <motion.div
               key={tour.id}
@@ -178,7 +194,11 @@ export default function FeaturedTours() {
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.6, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
+              transition={{
+                duration: 0.6,
+                delay: i * 0.08,
+                ease: [0.22, 1, 0.36, 1],
+              }}
               whileHover={{ y: -6 }}
             >
               {/* Image */}

@@ -26,11 +26,11 @@ export default function HomePage() {
       {/* 2. NEW — Why choose us + stats */}
       <WhyChooseUs />
 
-      {/* 3. Existing tour categories */}
-      <TourCategories />
-
       {/* 4. NEW — Featured tours with filter */}
       <FeaturedTours />
+
+      {/* 3. Existing tour categories */}
+      <TourCategories />
 
       {/* 5. NEW — Top destinations */}
       <Destinations />

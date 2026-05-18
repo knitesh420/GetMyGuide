@@ -39,7 +39,7 @@ const posts = [
   },
   {
     image:
-      "https://images.unsplash.com/photo-1561361058-c24e021b47d7?w=500&q=80",
+      "https://images.unsplash.com/photo-1627894483216-2138af692e32?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8VmFyYW5hc2klMjBtb3JuaW5nJTIwYWFydGl8ZW58MHx8MHx8fDA%3D",
     likes: "2.4K",
     comments: "89",
     caption: "Varanasi morning aarti 🪔",
