@@ -8,12 +8,19 @@ import TourForm from "./_components/TourForm";
 import type { TourData } from "./types/tour";
 import { getServicesAction } from "./actions";
 import { useSelector } from "react-redux";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function ServicesPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-slate-600">Loading...</p></div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <p className="text-slate-600">Loading...</p>
+        </div>
+      }
+    >
       <ServicesContent />
     </Suspense>
   );
@@ -29,6 +36,7 @@ function ServicesContent() {
   const admin = user?.role === "admin";
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { language } = useLanguage();
 
   // Read search query from URL on mount
   useEffect(() => {
@@ -38,17 +46,40 @@ function ServicesContent() {
     }
   }, [searchParams]);
 
-  // Filter packages by search query (city or title)
+  const getLocalizedString = (
+    pkg: TourData,
+    field: keyof TourData,
+    fallback: string,
+  ) => {
+    const translation =
+      pkg.translations?.[language as keyof typeof pkg.translations];
+    if (!translation) return fallback;
+    const value = translation[field as keyof typeof translation];
+    return typeof value === "string" ? value : fallback;
+  };
+
+  const getLocalizedPlaces = (pkg: TourData) => {
+    return (
+      pkg.translations?.[language as keyof typeof pkg.translations]?.places ||
+      pkg.places ||
+      []
+    );
+  };
+
   const filteredPackages = useMemo(() => {
     if (!searchQuery.trim()) return packages;
     const q = searchQuery.toLowerCase().trim();
-    return packages.filter(
-      (pkg) =>
-        pkg.title.toLowerCase().includes(q) ||
-        pkg.city.toLowerCase().includes(q) ||
-        pkg.places?.some((place) => place.toLowerCase().includes(q))
-    );
-  }, [packages, searchQuery]);
+    return packages.filter((pkg) => {
+      const title = getLocalizedString(pkg, "title", pkg.title);
+      const city = getLocalizedString(pkg, "city", pkg.city);
+      const places = getLocalizedPlaces(pkg);
+      return (
+        title.toLowerCase().includes(q) ||
+        city.toLowerCase().includes(q) ||
+        places.some((place) => place.toLowerCase().includes(q))
+      );
+    });
+  }, [packages, searchQuery, language]);
 
   const clearSearch = () => {
     setSearchQuery("");
@@ -91,10 +122,28 @@ function ServicesContent() {
       formData.append("title", packageData.title);
       formData.append("city", packageData.city);
       formData.append("places", JSON.stringify(packageData.places));
-      if (packageData.price !== undefined) formData.append("price", String(packageData.price));
-      if (packageData.shortDescription) formData.append("shortDescription", packageData.shortDescription);
-      if (packageData.numberOfPeople !== undefined) formData.append("numberOfPeople", String(packageData.numberOfPeople));
-      if (packageData.numberOfDays !== undefined) formData.append("numberOfDays", String(packageData.numberOfDays));
+      if (packageData.price !== undefined)
+        formData.append("price", String(packageData.price));
+      if (packageData.baseCurrency)
+        formData.append("baseCurrency", packageData.baseCurrency);
+      if (packageData.shortDescription)
+        formData.append("shortDescription", packageData.shortDescription);
+      if (packageData.description)
+        formData.append("description", packageData.description);
+      if (packageData.numberOfPeople !== undefined)
+        formData.append("numberOfPeople", String(packageData.numberOfPeople));
+      if (packageData.numberOfDays !== undefined)
+        formData.append("numberOfDays", String(packageData.numberOfDays));
+      if (packageData.inclusions?.length)
+        formData.append("inclusions", JSON.stringify(packageData.inclusions));
+      if (packageData.exclusions?.length)
+        formData.append("exclusions", JSON.stringify(packageData.exclusions));
+      if (packageData.translations) {
+        formData.append(
+          "translations",
+          JSON.stringify(packageData.translations),
+        );
+      }
 
       // Append image files
       packageData.images.forEach((img) => {
@@ -130,9 +179,14 @@ function ServicesContent() {
             (img: string) => `${API_BASE_URL}/media/packages/${img}`,
           ),
           price: data.price,
+          baseCurrency: data.baseCurrency,
           shortDescription: data.shortDescription,
+          description: data.description,
           numberOfPeople: data.numberOfPeople,
           numberOfDays: data.numberOfDays,
+          inclusions: data.inclusions,
+          exclusions: data.exclusions,
+          translations: data.translations,
           featured: data.featured,
           status: data.status,
           createdAt: data.createdAt,
@@ -189,7 +243,7 @@ function ServicesContent() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 mt-20">
+    <div className="min-h-screen bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 mt-20">
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-4">
         {/* Tour Form */}
@@ -204,7 +258,8 @@ function ServicesContent() {
               Available Packages
             </h2>
             <span className="px-4 py-2 bg-white rounded-full text-slate-600 font-semibold shadow-sm">
-              {filteredPackages.length} {filteredPackages.length === 1 ? "Package" : "Packages"}
+              {filteredPackages.length}{" "}
+              {filteredPackages.length === 1 ? "Package" : "Packages"}
             </span>
           </div>
 
@@ -265,28 +320,19 @@ function ServicesContent() {
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
               {filteredPackages.map((pkg, index) => (
-                  <div key={pkg.id || index} className="relative h-full">
-                    <TourCard
-                      title={pkg.title}
-                      city={pkg.city}
-                      images={pkg.images}
-                      places={pkg.places}
-                      price={pkg.price}
-                      shortDescription={pkg.shortDescription}
-                      numberOfPeople={pkg.numberOfPeople}
-                      numberOfDays={pkg.numberOfDays}
-                    />
+                <div key={pkg.id || index} className="relative h-full">
+                  <TourCard tour={pkg} />
 
-                    {admin && (
-                      <button
-                        onClick={() => handleDelete(pkg.id)}
-                        className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-2 rounded-full shadow-lg transition-all z-10"
-                        title="Delete package"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
+                  {admin && (
+                    <button
+                      onClick={() => handleDelete(pkg.id)}
+                      className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-2 rounded-full shadow-lg transition-all z-10"
+                      title="Delete package"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           )}

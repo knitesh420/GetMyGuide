@@ -1,33 +1,19 @@
 import mongoose from 'mongoose';
 import IPackage from '../types/package';
 
-const PackageSchema = new mongoose.Schema<IPackage>(
+const TranslationSchema = new mongoose.Schema(
 	{
 		title: {
 			type: String,
-			required: true,
 			trim: true,
 		},
 		city: {
 			type: String,
-			required: true,
 			trim: true,
 		},
 		places: {
 			type: [String],
-			required: true,
-			validate: {
-				validator: (v: string[]) => Array.isArray(v) && v.length > 0,
-				message: 'At least one place is required',
-			},
-		},
-		images: {
-			type: [String],
-			required: true,
-			validate: {
-				validator: (v: string[]) => Array.isArray(v) && v.length > 0,
-				message: 'At least one image is required',
-			},
+			default: [],
 		},
 		shortDescription: {
 			type: String,
@@ -37,9 +23,28 @@ const PackageSchema = new mongoose.Schema<IPackage>(
 			type: String,
 			trim: true,
 		},
+		inclusions: {
+			type: [String],
+			default: [],
+		},
+		exclusions: {
+			type: [String],
+			default: [],
+		},
+	},
+	{ _id: false }
+);
+
+const PackageSchema = new mongoose.Schema<IPackage>(
+	{
 		price: {
 			type: Number,
 			min: 0,
+		},
+		baseCurrency: {
+			type: String,
+			trim: true,
+			default: 'USD',
 		},
 		numberOfPeople: {
 			type: Number,
@@ -49,12 +54,6 @@ const PackageSchema = new mongoose.Schema<IPackage>(
 			type: Number,
 			min: 1,
 		},
-		inclusions: {
-			type: [String],
-		},
-		exclusions: {
-			type: [String],
-		},
 		featured: {
 			type: Boolean,
 			default: false,
@@ -63,6 +62,59 @@ const PackageSchema = new mongoose.Schema<IPackage>(
 			type: String,
 			enum: ['inactive', 'active'],
 			default: 'active',
+		},
+		images: {
+			type: [String],
+			required: true,
+			validate: {
+				validator: (v: string[]) => Array.isArray(v) && v.length > 0,
+				message: 'At least one image is required',
+			},
+		},
+		translations: {
+			type: {
+				en: { type: TranslationSchema, default: {} },
+				es: { type: TranslationSchema, default: {} },
+				fr: { type: TranslationSchema, default: {} },
+				ru: { type: TranslationSchema, default: {} },
+				de: { type: TranslationSchema, default: {} },
+			},
+			default: {
+				en: {},
+				es: {},
+				fr: {},
+				ru: {},
+				de: {},
+			},
+		},
+		// Backward-compatible legacy fields
+		title: {
+			type: String,
+			trim: true,
+		},
+		city: {
+			type: String,
+			trim: true,
+		},
+		places: {
+			type: [String],
+			default: [],
+		},
+		shortDescription: {
+			type: String,
+			trim: true,
+		},
+		description: {
+			type: String,
+			trim: true,
+		},
+		inclusions: {
+			type: [String],
+			default: [],
+		},
+		exclusions: {
+			type: [String],
+			default: [],
 		},
 	},
 	{

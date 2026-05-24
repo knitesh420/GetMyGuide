@@ -3,22 +3,75 @@
 import { useState } from "react";
 import { TourData } from "../types/tour";
 import { X, Upload, MapPin, IndianRupee, Users, Calendar } from "lucide-react";
+import { RichTextEditor } from "@/components/editor/RichTextEditor";
 
 interface Props {
   onSubmit: (data: TourData) => Promise<boolean>;
 }
 
+type LanguageCode = "en" | "es" | "fr" | "ru" | "de";
+
+const supportedLanguages: LanguageCode[] = ["en", "es", "fr", "ru", "de"];
+
+interface TranslationFormState {
+  title: string;
+  city: string;
+  places: string;
+  shortDescription: string;
+  description: string;
+  inclusions: string;
+  exclusions: string;
+}
+
+interface FormState {
+  title: string;
+  city: string;
+  places: string;
+  price: string;
+  baseCurrency: string;
+  shortDescription: string;
+  description: string;
+  numberOfPeople: string;
+  numberOfDays: string;
+  inclusions: string;
+  exclusions: string;
+}
+
 const MAX_IMAGES = 8;
 
+const createTranslationState = (): TranslationFormState => ({
+  title: "",
+  city: "",
+  places: "",
+  shortDescription: "",
+  description: "",
+  inclusions: "",
+  exclusions: "",
+});
+
 export default function TourForm({ onSubmit }: Props) {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<FormState>({
     title: "",
     city: "",
     places: "",
     price: "",
+    baseCurrency: "INR",
     shortDescription: "",
+    description: "",
     numberOfPeople: "",
     numberOfDays: "",
+    inclusions: "",
+    exclusions: "",
+  });
+  const [currentLang, setCurrentLang] = useState<LanguageCode>("en");
+  const [translations, setTranslations] = useState<
+    Record<LanguageCode, TranslationFormState>
+  >({
+    en: createTranslationState(),
+    es: createTranslationState(),
+    fr: createTranslationState(),
+    ru: createTranslationState(),
+    de: createTranslationState(),
   });
   const [images, setImages] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -81,12 +134,68 @@ export default function TourForm({ onSubmit }: Props) {
     return Object.keys(newErrors).length === 0;
   };
 
+  const normalizeTranslationPlaces = (rawValue: string) =>
+    rawValue
+      .split(",")
+      .map((item) => item.trim())
+      .filter((item) => item);
+
+  const updateTranslationValue = (
+    field: keyof TranslationFormState,
+    value: string,
+    lang: LanguageCode = "en",
+  ) => {
+    setTranslations((prev) => ({
+      ...prev,
+      [lang]: {
+        ...prev[lang],
+        [field]: value,
+      },
+    }));
+  };
+
+  const buildTranslations = () => {
+    return (Object.keys(translations) as LanguageCode[]).reduce(
+      (acc, lang) => {
+        const values = translations[lang];
+        const hasContent =
+          values.title.trim() ||
+          values.city.trim() ||
+          values.places.trim() ||
+          values.shortDescription.trim() ||
+          values.description.trim() ||
+          values.inclusions.trim() ||
+          values.exclusions.trim();
+
+        if (!hasContent) return acc;
+
+        acc[lang] = {
+          title: values.title.trim(),
+          city: values.city.trim(),
+          places: normalizeTranslationPlaces(values.places),
+          shortDescription: values.shortDescription.trim(),
+          description: values.description.trim(),
+          inclusions: values.inclusions
+            .split(",")
+            .map((item) => item.trim())
+            .filter((item) => item),
+          exclusions: values.exclusions
+            .split(",")
+            .map((item) => item.trim())
+            .filter((item) => item),
+        };
+
+        return acc;
+      },
+      {} as Record<LanguageCode, TranslationFormState | any>,
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validateForm()) return;
 
-    // Parse places from comma-separated string
     const placesArray = form.places
       .split(",")
       .map((p) => p.trim())
@@ -99,19 +208,35 @@ export default function TourForm({ onSubmit }: Props) {
       places: placesArray,
       images,
       ...(form.price && { price: Number(form.price) }),
+      ...(form.baseCurrency.trim() && {
+        baseCurrency: form.baseCurrency.trim(),
+      }),
       ...(form.shortDescription.trim() && {
         shortDescription: form.shortDescription.trim(),
       }),
+      ...(form.description.trim() && { description: form.description.trim() }),
       ...(form.numberOfPeople && {
         numberOfPeople: Number(form.numberOfPeople),
       }),
       ...(form.numberOfDays && { numberOfDays: Number(form.numberOfDays) }),
+      ...(form.inclusions.trim() && {
+        inclusions: form.inclusions
+          .split(",")
+          .map((item) => item.trim())
+          .filter((item) => item),
+      }),
+      ...(form.exclusions.trim() && {
+        exclusions: form.exclusions
+          .split(",")
+          .map((item) => item.trim())
+          .filter((item) => item),
+      }),
+      translations: buildTranslations(),
     };
 
     const ok = await onSubmit(tourData);
     if (!ok) return;
 
-    // Reset form
     previews.forEach((url) => URL.revokeObjectURL(url));
 
     setForm({
@@ -119,9 +244,20 @@ export default function TourForm({ onSubmit }: Props) {
       city: "",
       places: "",
       price: "",
+      baseCurrency: "INR",
       shortDescription: "",
+      description: "",
       numberOfPeople: "",
       numberOfDays: "",
+      inclusions: "",
+      exclusions: "",
+    });
+    setTranslations({
+      en: createTranslationState(),
+      es: createTranslationState(),
+      fr: createTranslationState(),
+      ru: createTranslationState(),
+      de: createTranslationState(),
     });
     setImages([]);
     setPreviews([]);
@@ -134,6 +270,139 @@ export default function TourForm({ onSubmit }: Props) {
       className="bg-white rounded-3xl shadow-xl p-8 border-2 border-slate-100"
     >
       <h2 className="text-3xl font-bold mb-8 text-slate-800">Create Package</h2>
+
+      <div className="mb-6">
+        <div className="flex flex-wrap gap-2 items-center mb-4">
+          <span className="text-sm font-semibold text-slate-600">
+            Edit translations:
+          </span>
+          {supportedLanguages.map((lang) => (
+            <button
+              key={lang}
+              type="button"
+              onClick={() => setCurrentLang(lang)}
+              className={`px-3 py-2 rounded-full border transition ${
+                currentLang === lang
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+              }`}
+            >
+              {lang.toUpperCase()}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 rounded-3xl bg-slate-50 p-4 border border-slate-200">
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Title ({currentLang.toUpperCase()})
+            </label>
+            <input
+              type="text"
+              value={translations[currentLang].title}
+              placeholder="Translated title"
+              className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-400 focus:bg-blue-50/30 transition-all outline-none"
+              onChange={(e) =>
+                updateTranslationValue("title", e.target.value, currentLang)
+              }
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              City ({currentLang.toUpperCase()})
+            </label>
+            <input
+              type="text"
+              value={translations[currentLang].city}
+              placeholder="Translated city"
+              className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-400 focus:bg-blue-50/30 transition-all outline-none"
+              onChange={(e) =>
+                updateTranslationValue("city", e.target.value, currentLang)
+              }
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Places ({currentLang.toUpperCase()})
+            </label>
+            <input
+              type="text"
+              value={translations[currentLang].places}
+              placeholder="Comma-separated translated places"
+              className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-400 focus:bg-blue-50/30 transition-all outline-none"
+              onChange={(e) =>
+                updateTranslationValue("places", e.target.value, currentLang)
+              }
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Short Description ({currentLang.toUpperCase()})
+            </label>
+            <textarea
+              value={translations[currentLang].shortDescription}
+              rows={3}
+              placeholder="Translated short description"
+              className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-400 focus:bg-blue-50/30 transition-all outline-none resize-none"
+              onChange={(e) =>
+                updateTranslationValue(
+                  "shortDescription",
+                  e.target.value,
+                  currentLang,
+                )
+              }
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Full Description ({currentLang.toUpperCase()})
+            </label>
+            <RichTextEditor
+              content={translations[currentLang].description}
+              onChange={(html) =>
+                updateTranslationValue("description", html, currentLang)
+              }
+              placeholder="Write rich text description for this locale"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Inclusions ({currentLang.toUpperCase()})
+            </label>
+            <input
+              type="text"
+              value={translations[currentLang].inclusions}
+              placeholder="Translated inclusions, comma-separated"
+              className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-400 focus:bg-blue-50/30 transition-all outline-none"
+              onChange={(e) =>
+                updateTranslationValue(
+                  "inclusions",
+                  e.target.value,
+                  currentLang,
+                )
+              }
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Exclusions ({currentLang.toUpperCase()})
+            </label>
+            <input
+              type="text"
+              value={translations[currentLang].exclusions}
+              placeholder="Translated exclusions, comma-separated"
+              className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-400 focus:bg-blue-50/30 transition-all outline-none"
+              onChange={(e) =>
+                updateTranslationValue(
+                  "exclusions",
+                  e.target.value,
+                  currentLang,
+                )
+              }
+            />
+          </div>
+        </div>
+      </div>
 
       <div className="grid md:grid-cols-2 gap-8">
         {/* Left Column - Form Fields */}
@@ -154,6 +423,7 @@ export default function TourForm({ onSubmit }: Props) {
               }`}
               onChange={(e) => {
                 setForm({ ...form, title: e.target.value });
+                updateTranslationValue("title", e.target.value);
                 setErrors({ ...errors, title: "" });
               }}
             />
@@ -179,6 +449,7 @@ export default function TourForm({ onSubmit }: Props) {
               }`}
               onChange={(e) => {
                 setForm({ ...form, city: e.target.value });
+                updateTranslationValue("city", e.target.value);
                 setErrors({ ...errors, city: "" });
               }}
             />
@@ -203,6 +474,7 @@ export default function TourForm({ onSubmit }: Props) {
               }`}
               onChange={(e) => {
                 setForm({ ...form, places: e.target.value });
+                updateTranslationValue("places", e.target.value);
                 setErrors({ ...errors, places: "" });
               }}
             />
@@ -212,28 +484,44 @@ export default function TourForm({ onSubmit }: Props) {
           </div>
 
           {/* Price */}
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">
-              <IndianRupee className="inline w-4 h-4 mr-1" /> Package Price
-            </label>
-            <input
-              type="number"
-              value={form.price}
-              placeholder="4999"
-              min="0"
-              className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
-                errors.price
-                  ? "border-red-300 bg-red-50"
-                  : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
-              }`}
-              onChange={(e) => {
-                setForm({ ...form, price: e.target.value });
-                setErrors({ ...errors, price: "" });
-              }}
-            />
-            {errors.price && (
-              <p className="text-red-500 text-xs mt-1">{errors.price}</p>
-            )}
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <IndianRupee className="inline w-4 h-4 mr-1" /> Package Price
+              </label>
+              <input
+                type="number"
+                value={form.price}
+                placeholder="4999"
+                min="0"
+                className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
+                  errors.price
+                    ? "border-red-300 bg-red-50"
+                    : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
+                }`}
+                onChange={(e) => {
+                  setForm({ ...form, price: e.target.value });
+                  setErrors({ ...errors, price: "" });
+                }}
+              />
+              {errors.price && (
+                <p className="text-red-500 text-xs mt-1">{errors.price}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Base Currency
+              </label>
+              <input
+                type="text"
+                value={form.baseCurrency}
+                placeholder="INR"
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-400 focus:bg-blue-50/30 transition-all outline-none"
+                onChange={(e) =>
+                  setForm({ ...form, baseCurrency: e.target.value })
+                }
+              />
+            </div>
           </div>
 
           {/* Short Description */}
@@ -252,6 +540,7 @@ export default function TourForm({ onSubmit }: Props) {
               }`}
               onChange={(e) => {
                 setForm({ ...form, shortDescription: e.target.value });
+                updateTranslationValue("shortDescription", e.target.value);
                 setErrors({ ...errors, shortDescription: "" });
               }}
             />
@@ -260,6 +549,57 @@ export default function TourForm({ onSubmit }: Props) {
                 {errors.shortDescription}
               </p>
             )}
+          </div>
+
+          {/* Full Description */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Full Description
+            </label>
+            <textarea
+              value={form.description}
+              placeholder="A detailed tour description..."
+              rows={4}
+              className="w-full px-4 py-3 rounded-xl border-2 transition-all outline-none resize-none border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
+              onChange={(e) => {
+                setForm({ ...form, description: e.target.value });
+                updateTranslationValue("description", e.target.value);
+              }}
+            />
+          </div>
+
+          {/* Inclusions */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Inclusions (comma-separated)
+            </label>
+            <input
+              type="text"
+              value={form.inclusions}
+              placeholder="Hotel, Breakfast, Transfers"
+              className="w-full px-4 py-3 rounded-xl border-2 transition-all outline-none border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
+              onChange={(e) => {
+                setForm({ ...form, inclusions: e.target.value });
+                updateTranslationValue("inclusions", e.target.value);
+              }}
+            />
+          </div>
+
+          {/* Exclusions */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Exclusions (comma-separated)
+            </label>
+            <input
+              type="text"
+              value={form.exclusions}
+              placeholder="Lunch, Flights, Personal expenses"
+              className="w-full px-4 py-3 rounded-xl border-2 transition-all outline-none border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
+              onChange={(e) => {
+                setForm({ ...form, exclusions: e.target.value });
+                updateTranslationValue("exclusions", e.target.value);
+              }}
+            />
           </div>
 
           {/* No. of People and No. of Days - side by side */}
@@ -378,7 +718,7 @@ export default function TourForm({ onSubmit }: Props) {
       <div className="mt-8">
         <button
           type="submit"
-          className="w-full bg-gradient-to-r from-orange-600 to-pink-600 text-white font-bold py-4 px-6 rounded-xl hover:from-orange-700 hover:to-pink-700 transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg"
+          className="w-full bg-linear-to-r from-orange-600 to-pink-600 text-white font-bold py-4 px-6 rounded-xl hover:from-orange-700 hover:to-pink-700 transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg"
         >
           Create Package
         </button>

@@ -1,20 +1,45 @@
 import { Document, Types } from 'mongoose';
 
-export default interface IPackage extends Document {
-	_id: Types.ObjectId;
-	title: string;
-	city: string;
-	places: string[];
-	images: string[];
+export type LanguageCode = 'en' | 'es' | 'fr' | 'ru' | 'de';
+
+export interface TranslationFields {
+	title?: string;
+	city?: string;
+	places?: string[];
 	shortDescription?: string;
 	description?: string;
-	price?: number;
-	numberOfPeople?: number;
-	numberOfDays?: number;
 	inclusions?: string[];
 	exclusions?: string[];
+}
+
+export interface IPackageTranslations {
+	en: TranslationFields;
+	es?: TranslationFields;
+	fr?: TranslationFields;
+	ru?: TranslationFields;
+	de?: TranslationFields;
+}
+
+export default interface IPackage extends Document {
+	_id: Types.ObjectId;
+	price?: number;
+	baseCurrency?: string;
+	numberOfPeople?: number;
+	numberOfDays?: number;
 	featured?: boolean;
 	status?: 'inactive' | 'active';
+	images: string[];
+	translations?: IPackageTranslations;
+
+	// Backward-compatible fields for legacy packages
+	title?: string;
+	city?: string;
+	places?: string[];
+	shortDescription?: string;
+	description?: string;
+	inclusions?: string[];
+	exclusions?: string[];
+
 	createdAt: Date;
 	updatedAt: Date;
 }

@@ -125,6 +125,18 @@ interface Booking {
   updatedAt?: string;
 }
 
+type LanguageCode = "en" | "es" | "fr" | "ru" | "de";
+
+interface TranslationFields {
+  title?: string;
+  city?: string;
+  places?: string[];
+  shortDescription?: string;
+  description?: string;
+  inclusions?: string[];
+  exclusions?: string[];
+}
+
 interface ServicePackage {
   id: string;
   title: string;
@@ -141,6 +153,7 @@ interface ServicePackage {
   inclusions?: string[];
   exclusions?: string[];
   featured?: boolean;
+  translations?: Partial<Record<LanguageCode, TranslationFields>>;
 }
 
 interface Lead {
@@ -338,7 +351,9 @@ function AdminDashboard() {
 
       const data = await res.json();
       setPackages((prev) => prev.filter((p) => p.id !== packageId));
-      alert(data?.data?.message || data?.message || "Service deleted successfully");
+      alert(
+        data?.data?.message || data?.message || "Service deleted successfully",
+      );
     } catch (err) {
       console.error("Error deleting service:", err);
       alert("Error deleting service");
@@ -386,6 +401,8 @@ function AdminDashboard() {
         formData.append("inclusions", JSON.stringify(updates.inclusions));
       if (updates.exclusions !== undefined)
         formData.append("exclusions", JSON.stringify(updates.exclusions));
+      if (updates.translations !== undefined)
+        formData.append("translations", JSON.stringify(updates.translations));
       if (updates.featured !== undefined)
         formData.append("featured", String(updates.featured));
       if (updates.status !== undefined)
@@ -704,8 +721,7 @@ function AdminDashboard() {
 
             if (pkgRes.ok) {
               const pkgData = await pkgRes.json();
-              const pkgArray =
-                pkgData.data?.packages || pkgData.packages || [];
+              const pkgArray = pkgData.data?.packages || pkgData.packages || [];
               setPackages(pkgArray);
             } else {
               const errorText = await pkgRes.text();
@@ -2562,17 +2578,51 @@ function EditServiceModal({
     places?: string[];
     shortDescription?: string;
     description?: string;
+    inclusions?: string[];
+    exclusions?: string[];
     price?: number;
     numberOfPeople?: number;
     numberOfDays?: number;
-    inclusions?: string[];
-    exclusions?: string[];
     featured?: boolean;
     status?: "active" | "inactive";
     images?: File[];
+    translations?: Partial<Record<LanguageCode, TranslationFields>>;
   }) => void;
 }) {
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const supportedLanguages: LanguageCode[] = ["en", "es", "fr", "ru", "de"];
+
+  interface TranslationFormState {
+    title: string;
+    city: string;
+    places: string;
+    shortDescription: string;
+    description: string;
+    inclusions: string;
+    exclusions: string;
+  }
+
+  const createTranslationState = (): TranslationFormState => ({
+    title: "",
+    city: "",
+    places: "",
+    shortDescription: "",
+    description: "",
+    inclusions: "",
+    exclusions: "",
+  });
+
+  const [currentLang, setCurrentLang] = useState<LanguageCode>("en");
+  const [translations, setTranslations] = useState<
+    Record<LanguageCode, TranslationFormState>
+  >({
+    en: createTranslationState(),
+    es: createTranslationState(),
+    fr: createTranslationState(),
+    ru: createTranslationState(),
+    de: createTranslationState(),
+  });
+
   const [title, setTitle] = useState(pkg.title);
   const [city, setCity] = useState(pkg.city);
   const [places, setPlaces] = useState(pkg.places.join(", "));
@@ -2601,6 +2651,66 @@ function EditServiceModal({
   );
   const [imageFiles, setImageFiles] = useState<File[]>([]);
 
+  useEffect(() => {
+    const mergeTranslation = (lang: LanguageCode): TranslationFormState => ({
+      title: pkg.translations?.[lang]?.title ?? "",
+      city: pkg.translations?.[lang]?.city ?? "",
+      places: (pkg.translations?.[lang]?.places ?? []).join(", "),
+      shortDescription:
+        pkg.translations?.[lang]?.shortDescription ??
+        (lang === "en" ? (pkg.shortDescription ?? "") : ""),
+      description:
+        pkg.translations?.[lang]?.description ??
+        (lang === "en" ? (pkg.description ?? "") : ""),
+      inclusions: (pkg.translations?.[lang]?.inclusions ?? []).join("\n"),
+      exclusions: (pkg.translations?.[lang]?.exclusions ?? []).join("\n"),
+    });
+
+    setTranslations({
+      en: mergeTranslation("en"),
+      es: mergeTranslation("es"),
+      fr: mergeTranslation("fr"),
+      ru: mergeTranslation("ru"),
+      de: mergeTranslation("de"),
+    });
+  }, [pkg]);
+
+  const normalizeTranslationPlaces = (rawValue: string) =>
+    rawValue
+      .split(",")
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+
+  const buildTranslations = () =>
+    supportedLanguages.reduce(
+      (acc, lang) => {
+        const values = translations[lang];
+        const hasContent =
+          values.title.trim() ||
+          values.city.trim() ||
+          values.places.trim() ||
+          values.shortDescription.trim() ||
+          values.description.trim() ||
+          values.inclusions.trim() ||
+          values.exclusions.trim();
+
+        if (!hasContent) return acc;
+
+        acc[lang] = {
+          title: values.title.trim(),
+          city: values.city.trim(),
+          places: normalizeTranslationPlaces(values.places),
+          shortDescription: values.shortDescription.trim(),
+          description: values.description.trim(),
+          inclusions: normalizeTranslationPlaces(values.inclusions),
+          exclusions: normalizeTranslationPlaces(values.exclusions),
+        };
+
+        return acc;
+      },
+      {} as Partial<Record<LanguageCode, TranslationFields>>,
+    );
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const placesArr = places
@@ -2627,6 +2737,8 @@ function EditServiceModal({
       if (!ok) return;
     }
 
+    const translationPayload = buildTranslations();
+
     onSave({
       title: title.trim(),
       city: city.trim(),
@@ -2642,6 +2754,9 @@ function EditServiceModal({
       featured,
       status,
       images: imageFiles.length > 0 ? imageFiles : undefined,
+      ...(Object.keys(translationPayload).length > 0
+        ? { translations: translationPayload }
+        : {}),
     });
   };
 
@@ -2658,62 +2773,172 @@ function EditServiceModal({
           </button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Title
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
+          <div className="rounded-3xl bg-slate-50 border border-slate-200 p-4 space-y-4">
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="text-sm font-semibold text-slate-700">
+                Translation language:
+              </span>
+              {supportedLanguages.map((lang) => (
+                <button
+                  key={lang}
+                  type="button"
+                  onClick={() => setCurrentLang(lang)}
+                  className={`px-3 py-2 rounded-full border ${
+                    currentLang === lang
+                      ? "bg-slate-900 text-white border-slate-900"
+                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  {lang.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Title ({currentLang.toUpperCase()})
+                </label>
+                <input
+                  type="text"
+                  value={translations[currentLang].title}
+                  onChange={(e) =>
+                    setTranslations((prev) => ({
+                      ...prev,
+                      [currentLang]: {
+                        ...prev[currentLang],
+                        title: e.target.value,
+                      },
+                    }))
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 focus:border-blue-400 focus:bg-blue-50/30 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  City ({currentLang.toUpperCase()})
+                </label>
+                <input
+                  type="text"
+                  value={translations[currentLang].city}
+                  onChange={(e) =>
+                    setTranslations((prev) => ({
+                      ...prev,
+                      [currentLang]: {
+                        ...prev[currentLang],
+                        city: e.target.value,
+                      },
+                    }))
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 focus:border-blue-400 focus:bg-blue-50/30 outline-none"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Places ({currentLang.toUpperCase()})
+                </label>
+                <input
+                  type="text"
+                  value={translations[currentLang].places}
+                  onChange={(e) =>
+                    setTranslations((prev) => ({
+                      ...prev,
+                      [currentLang]: {
+                        ...prev[currentLang],
+                        places: e.target.value,
+                      },
+                    }))
+                  }
+                  placeholder="Comma-separated translated places"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 focus:border-blue-400 focus:bg-blue-50/30 outline-none"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Short Description ({currentLang.toUpperCase()})
+                </label>
+                <textarea
+                  value={translations[currentLang].shortDescription}
+                  onChange={(e) =>
+                    setTranslations((prev) => ({
+                      ...prev,
+                      [currentLang]: {
+                        ...prev[currentLang],
+                        shortDescription: e.target.value,
+                      },
+                    }))
+                  }
+                  rows={2}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 focus:border-blue-400 focus:bg-blue-50/30 outline-none resize-none"
+                />
+              </div>
+              <div className="md:col-span-2 space-y-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Description ({currentLang.toUpperCase()})
+                </label>
+                <RichTextEditor
+                  content={translations[currentLang].description}
+                  onChange={(html) =>
+                    setTranslations((prev) => ({
+                      ...prev,
+                      [currentLang]: {
+                        ...prev[currentLang],
+                        description: html,
+                      },
+                    }))
+                  }
+                  placeholder="Write styled description for this locale"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Inclusions ({currentLang.toUpperCase()})
+                </label>
+                <input
+                  type="text"
+                  value={translations[currentLang].inclusions}
+                  onChange={(e) =>
+                    setTranslations((prev) => ({
+                      ...prev,
+                      [currentLang]: {
+                        ...prev[currentLang],
+                        inclusions: e.target.value,
+                      },
+                    }))
+                  }
+                  placeholder="Comma-separated inclusions"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 focus:border-blue-400 focus:bg-blue-50/30 outline-none"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Exclusions ({currentLang.toUpperCase()})
+                </label>
+                <input
+                  type="text"
+                  value={translations[currentLang].exclusions}
+                  onChange={(e) =>
+                    setTranslations((prev) => ({
+                      ...prev,
+                      [currentLang]: {
+                        ...prev[currentLang],
+                        exclusions: e.target.value,
+                      },
+                    }))
+                  }
+                  placeholder="Comma-separated exclusions"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 focus:border-blue-400 focus:bg-blue-50/30 outline-none"
+                />
+              </div>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              City
+              Legacy Fallback Description
             </label>
-            <input
-              type="text"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Places (comma-separated)
-            </label>
-            <input
-              type="text"
-              value={places}
-              onChange={(e) => setPlaces(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Short Description
-            </label>
-            <textarea
-              value={shortDescription}
-              onChange={(e) => setShortDescription(e.target.value)}
-              rows={2}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Full Description
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={4}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            <RichTextEditor
+              content={description}
+              onChange={setDescription}
+              placeholder="Fallback plain text description for legacy packages"
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -3494,7 +3719,10 @@ function AdvertisementsSection({
                   preload="auto"
                   playsInline
                   onError={() => {
-                    if (!failedVideoIds.has(ad.id) && apiBase !== PRODUCTION_API) {
+                    if (
+                      !failedVideoIds.has(ad.id) &&
+                      apiBase !== PRODUCTION_API
+                    ) {
                       setFailedVideoIds((prev) => new Set(prev).add(ad.id));
                     }
                   }}
@@ -3514,9 +3742,7 @@ function AdvertisementsSection({
                     <Eye className="w-3.5 h-3.5" />
                     {ad.views} views
                   </span>
-                  <span>
-                    {new Date(ad.createdAt).toLocaleDateString()}
-                  </span>
+                  <span>{new Date(ad.createdAt).toLocaleDateString()}</span>
                   <span
                     className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                       ad.isActive

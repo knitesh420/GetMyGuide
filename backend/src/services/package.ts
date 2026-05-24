@@ -1,91 +1,129 @@
 import { PackageDB } from '@mongo';
-import IPackage from '@mongo/types/package';
+import IPackage, { IPackageTranslations } from '@mongo/types/package';
 import { Types } from 'mongoose';
 import { NotFoundError } from 'node-be-utilities';
 
 interface PackageData {
-	title: string;
-	city: string;
-	places: string[];
-	images: string[];
-	shortDescription?: string;
-	description?: string;
 	price?: number;
+	baseCurrency?: string;
 	numberOfPeople?: number;
 	numberOfDays?: number;
-	inclusions?: string[];
-	exclusions?: string[];
 	featured?: boolean;
 	status?: 'inactive' | 'active';
-}
-
-interface UpdatePackageData {
+	images: string[];
+	translations?: IPackageTranslations;
 	title?: string;
 	city?: string;
 	places?: string[];
-	images?: string[];
 	shortDescription?: string;
 	description?: string;
-	price?: number;
-	numberOfPeople?: number;
-	numberOfDays?: number;
 	inclusions?: string[];
 	exclusions?: string[];
+}
+
+interface UpdatePackageData {
+	price?: number;
+	baseCurrency?: string;
+	numberOfPeople?: number;
+	numberOfDays?: number;
 	featured?: boolean;
 	status?: 'inactive' | 'active';
+	images?: string[];
+	translations?: Partial<IPackageTranslations>;
+	title?: string;
+	city?: string;
+	places?: string[];
+	shortDescription?: string;
+	description?: string;
+	inclusions?: string[];
+	exclusions?: string[];
 }
 
 interface TransformedPackage {
 	id: string;
+	price?: number;
+	baseCurrency?: string;
+	numberOfPeople?: number;
+	numberOfDays?: number;
+	featured?: boolean;
+	status?: 'inactive' | 'active';
+	images: string[];
+	translations: IPackageTranslations;
 	title: string;
 	city: string;
 	places: string[];
-	images: string[];
 	shortDescription?: string;
 	description?: string;
-	price?: number;
-	numberOfPeople?: number;
-	numberOfDays?: number;
 	inclusions?: string[];
 	exclusions?: string[];
-	featured?: boolean;
-	status?: 'inactive' | 'active';
+	basePrice?: number;
 	createdAt: Date;
 	updatedAt: Date;
 }
 
-/**
- * Transform a package document to API format
- * Converts _id to id
- */
+interface PackageTranslationFallback {
+	title: string;
+	city: string;
+	places: string[];
+	shortDescription?: string;
+	description?: string;
+	inclusions?: string[];
+	exclusions?: string[];
+}
+
+function getTranslationFallback(pkg: IPackage): PackageTranslationFallback {
+	const translation = pkg.translations?.en ?? {};
+	return {
+		title: translation.title || pkg.title || '',
+		city: translation.city || pkg.city || '',
+		places: translation.places?.length ? translation.places : pkg.places || [],
+		shortDescription: translation.shortDescription || pkg.shortDescription,
+		description: translation.description || pkg.description,
+		inclusions: translation.inclusions?.length ? translation.inclusions : pkg.inclusions,
+		exclusions: translation.exclusions?.length ? translation.exclusions : pkg.exclusions,
+	};
+}
+
 function transformPackage(pkg: IPackage): TransformedPackage {
+	const fallback = getTranslationFallback(pkg);
 	const transformed: TransformedPackage = {
 		id: pkg._id.toString(),
-		title: pkg.title,
-		city: pkg.city,
-		places: pkg.places,
-		images: pkg.images,
-		shortDescription: pkg.shortDescription,
-		description: pkg.description,
 		price: pkg.price,
+		baseCurrency: pkg.baseCurrency || 'USD',
 		numberOfPeople: pkg.numberOfPeople,
 		numberOfDays: pkg.numberOfDays,
-		inclusions: pkg.inclusions,
-		exclusions: pkg.exclusions,
 		featured: pkg.featured,
 		status: pkg.status,
+		images: pkg.images,
+		translations: pkg.translations || {
+			en: {},
+			es: {},
+			fr: {},
+			ru: {},
+			de: {},
+		},
+		title: fallback.title,
+		city: fallback.city,
+		places: fallback.places,
+		shortDescription: fallback.shortDescription,
+		description: fallback.description,
+		inclusions: fallback.inclusions,
+		exclusions: fallback.exclusions,
+		basePrice: pkg.price,
 		createdAt: pkg.createdAt,
 		updatedAt: pkg.updatedAt,
 	};
 
-	// Remove undefined optional fields
 	if (transformed.price === undefined) delete (transformed as any).price;
+	if (transformed.baseCurrency === undefined) delete (transformed as any).baseCurrency;
 	if (transformed.numberOfPeople === undefined) delete (transformed as any).numberOfPeople;
 	if (transformed.numberOfDays === undefined) delete (transformed as any).numberOfDays;
 	if (transformed.shortDescription === undefined) delete (transformed as any).shortDescription;
 	if (transformed.description === undefined) delete (transformed as any).description;
-	if (transformed.inclusions === undefined) delete (transformed as any).inclusions;
-	if (transformed.exclusions === undefined) delete (transformed as any).exclusions;
+	if (!transformed.inclusions || transformed.inclusions.length === 0)
+		delete (transformed as any).inclusions;
+	if (!transformed.exclusions || transformed.exclusions.length === 0)
+		delete (transformed as any).exclusions;
 	if (transformed.featured === undefined) delete (transformed as any).featured;
 	if (transformed.status === undefined) delete (transformed as any).status;
 
@@ -98,27 +136,34 @@ interface GetPackagesFilters {
 	city?: string;
 }
 
+function buildCityQuery(city: string) {
+	return {
+		$or: [
+			{ city },
+			{ 'translations.en.city': city },
+			{ 'translations.es.city': city },
+			{ 'translations.fr.city': city },
+			{ 'translations.ru.city': city },
+			{ 'translations.de.city': city },
+		],
+	};
+}
+
 class PackageService {
-	/**
-	 * Create a new package
-	 */
 	async createPackage(data: PackageData): Promise<TransformedPackage> {
-		const pkg = await PackageDB.create(data);
+		const pkg = await PackageDB.create({
+			...data,
+			baseCurrency: data.baseCurrency || 'USD',
+		});
 		return transformPackage(pkg);
 	}
 
-	/**
-	 * Get packages with optional filters
-	 * @param filters - Optional filters for status, featured, and city
-	 * @param isAdmin - If true, returns all packages regardless of status filter
-	 */
 	async getPackages(
 		filters: GetPackagesFilters = {},
 		isAdmin: boolean = false
 	): Promise<TransformedPackage[]> {
 		const query: any = {};
 
-		// If not admin, only show active packages
 		if (!isAdmin) {
 			query.status = 'active';
 		} else if (filters.status) {
@@ -130,19 +175,13 @@ class PackageService {
 		}
 
 		if (filters.city) {
-			query.city = filters.city;
+			Object.assign(query, buildCityQuery(filters.city));
 		}
 
 		const packages = await PackageDB.find(query).sort({ createdAt: -1 }).lean();
-
 		return packages.map((pkg) => transformPackage(pkg as IPackage));
 	}
 
-	/**
-	 * Get a package by ID
-	 * @param packageId - Package ID
-	 * @param isAdmin - If true, returns package regardless of status
-	 */
 	async getPackageById(
 		packageId: Types.ObjectId,
 		isAdmin: boolean = false
@@ -153,7 +192,6 @@ class PackageService {
 			throw new NotFoundError('Package not found');
 		}
 
-		// If not admin, only return if active
 		if (!isAdmin && pkg.status !== 'active') {
 			throw new NotFoundError('Package not found');
 		}
@@ -161,9 +199,6 @@ class PackageService {
 		return transformPackage(pkg as IPackage);
 	}
 
-	/**
-	 * Update a package
-	 */
 	async updatePackage(
 		packageId: Types.ObjectId,
 		data: UpdatePackageData
@@ -180,9 +215,6 @@ class PackageService {
 		return transformPackage(pkg as IPackage);
 	}
 
-	/**
-	 * Delete a package
-	 */
 	async deletePackage(packageId: Types.ObjectId): Promise<void> {
 		const result = await PackageDB.findByIdAndDelete(packageId);
 
@@ -191,9 +223,6 @@ class PackageService {
 		}
 	}
 
-	/**
-	 * Update package status
-	 */
 	async updatePackageStatus(
 		packageId: Types.ObjectId,
 		status: 'inactive' | 'active'
@@ -211,13 +240,16 @@ class PackageService {
 		return transformPackage(pkg as IPackage);
 	}
 
-	/**
-	 * Get available cities from active packages
-	 */
 	async getAvailableCities(): Promise<string[]> {
-		const packages = await PackageDB.find({ status: 'active' }).select('city').lean();
-		const cities = [...new Set(packages.map((pkg) => pkg.city))];
-		return cities.sort();
+		const packages = await PackageDB.find({ status: 'active' }).select('city translations').lean();
+		const cities = new Set<string>();
+
+		for (const pkg of packages) {
+			const city = pkg.translations?.en?.city || pkg.city;
+			if (city) cities.add(city);
+		}
+
+		return Array.from(cities).sort();
 	}
 }
 

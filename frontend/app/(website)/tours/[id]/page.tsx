@@ -1,6 +1,7 @@
 // app/tours/[id]/page.tsx
 "use client";
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
+import DOMPurify from "dompurify";
 import { notFound, useRouter } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 // --- Redux Imports ---
 import { useDispatch, useSelector } from "react-redux";
@@ -159,7 +161,40 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
     }
   };
 
-  const showSavings = tour.basePrice && tour.basePrice > tour.price;
+  const { language } = useLanguage();
+  const translation =
+    tour.translations?.[language as keyof typeof tour.translations];
+  const title = translation?.title ?? tour.title;
+  const city = translation?.city ?? tour.city ?? "";
+  const places = translation?.places ?? tour.places ?? [];
+  const description = translation?.description ?? tour.description;
+  const safeDescription = useMemo(() => {
+    if (!description) return "";
+    return DOMPurify.sanitize(description, {
+      USE_PROFILES: { html: true },
+      FORBID_TAGS: ["script", "style"],
+      FORBID_ATTR: [
+        "onerror",
+        "onload",
+        "onclick",
+        "onmouseover",
+        "onfocus",
+        "onblur",
+      ],
+    });
+  }, [description]);
+
+  const currency = tour.baseCurrency ?? "INR";
+  const price = tour.price;
+  const basePrice = tour.basePrice;
+  const showSavings = basePrice && basePrice > price;
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat(language, {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 0,
+    }).format(value);
 
   return (
     <div className="min-h-screen bg-background pt-20">
@@ -167,12 +202,11 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
         {/* Title Section */}
         <div className="mb-8 animate-fade-in-up">
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-foreground mb-2">
-            {tour.title}
+            {title}
           </h1>
           <div className="flex items-center gap-6 text-muted-foreground">
             <div className="flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-primary" />{" "}
-              {tour.locations.join(", ")}
+              <MapPin className="w-5 h-5 text-primary" /> {places.join(", ")}
             </div>
             <div className="flex items-center gap-2">
               <Clock className="w-5 h-5 text-primary" /> {tour.duration}
@@ -193,14 +227,14 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
                 Tour Overview
               </h2>
               {/* Render content: handle both HTML (from Rich Text Editors) and Plain Text (with newlines) */}
-              {tour.description && /<[a-z][\s\S]*>/i.test(tour.description) ? (
+              {description && /<[a-z][\s\S]*>/i.test(description) ? (
                 <div
                   className="prose prose-lg max-w-none text-foreground/80 leading-relaxed prose-headings:text-foreground prose-strong:text-foreground prose-ul:list-disc prose-ol:list-decimal prose-li:my-1"
-                  dangerouslySetInnerHTML={{ __html: tour.description }}
+                  dangerouslySetInnerHTML={{ __html: safeDescription }}
                 />
               ) : (
                 <div className="text-lg text-foreground/80 leading-relaxed whitespace-pre-wrap">
-                  {tour.description}
+                  {description}
                 </div>
               )}
             </div>
@@ -233,25 +267,19 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
           <aside className="lg:col-span-1">
             <div className="sticky top-24 p-6 bg-card rounded-xl shadow-lg border animate-slide-in-right animate-delay-200">
               <div className="text-center mb-1">
-                {/* Use 'price' from AdminPackage */}
                 <span className="text-4xl font-extrabold text-primary">
-                  ₹{(tour.price * numberOfTourists).toLocaleString()}
+                  {formatCurrency(price * numberOfTourists)}
                 </span>
                 <span className="text-lg text-muted-foreground">/ total</span>
               </div>
               {showSavings && (
                 <p className="text-muted-foreground mb-4 text-center">
-                  {/* Use 'basePrice' from AdminPackage */}
                   <span className="line-through">
-                    ₹{(tour.basePrice * numberOfTourists).toLocaleString()}
+                    {formatCurrency(basePrice * numberOfTourists)}
                   </span>
                   <span className="font-bold text-destructive">
                     {" "}
-                    Save{" "}
-                    {Math.round(
-                      ((tour.basePrice - tour.price) / tour.basePrice) * 100,
-                    )}
-                    %
+                    Save {Math.round(((basePrice - price) / basePrice) * 100)}%
                   </span>
                 </p>
               )}

@@ -4,6 +4,16 @@ import { TourData } from "@/app/(website)/services/types/tour";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 // Define the package type returned from backend
+interface TranslationFields {
+  title?: string;
+  city?: string;
+  places?: string[];
+  shortDescription?: string;
+  description?: string;
+  inclusions?: string[];
+  exclusions?: string[];
+}
+
 interface PackageResponse {
   id: string;
   title: string;
@@ -13,10 +23,18 @@ interface PackageResponse {
   shortDescription?: string;
   description?: string;
   price?: number;
+  baseCurrency?: string;
   numberOfPeople?: number;
   numberOfDays?: number;
   inclusions?: string[];
   exclusions?: string[];
+  translations?: {
+    en: TranslationFields;
+    es?: TranslationFields;
+    fr?: TranslationFields;
+    ru?: TranslationFields;
+    de?: TranslationFields;
+  };
   featured: boolean;
   status: "inactive" | "active";
   createdAt: string;
@@ -36,11 +54,14 @@ function mapPackageToTourData(pkg: PackageResponse): TourData {
     places: pkg.places,
     images: pkg.images.map(buildMediaUrl),
     price: pkg.price,
+    baseCurrency: pkg.baseCurrency,
     shortDescription: pkg.shortDescription,
+    description: pkg.description,
     numberOfPeople: pkg.numberOfPeople,
     numberOfDays: pkg.numberOfDays,
     inclusions: pkg.inclusions,
     exclusions: pkg.exclusions,
+    translations: pkg.translations,
     featured: pkg.featured,
     status: pkg.status,
     createdAt: pkg.createdAt,
