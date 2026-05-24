@@ -73,7 +73,7 @@ function mapPackageToTourData(pkg: PackageResponse): TourData {
 export async function getServices(): Promise<TourData[]> {
   try {
     const response: any = await apiService.get("/package");
-    const packages = response?.packages || [];
+    const packages = response?.data?.packages || [];
     return packages.map(mapPackageToTourData);
   } catch (err: any) {
     console.error("Error fetching services:", err);

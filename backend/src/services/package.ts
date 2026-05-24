@@ -40,6 +40,7 @@ interface UpdatePackageData {
 }
 
 interface TransformedPackage {
+	_id: string;
 	id: string;
 	price?: number;
 	baseCurrency?: string;
@@ -87,6 +88,7 @@ function getTranslationFallback(pkg: IPackage): PackageTranslationFallback {
 function transformPackage(pkg: IPackage): TransformedPackage {
 	const fallback = getTranslationFallback(pkg);
 	const transformed: TransformedPackage = {
+		_id: pkg._id.toString(),
 		id: pkg._id.toString(),
 		price: pkg.price,
 		baseCurrency: pkg.baseCurrency || 'USD',
@@ -134,6 +136,7 @@ interface GetPackagesFilters {
 	status?: 'inactive' | 'active';
 	featured?: boolean;
 	city?: string;
+	limit?: number;
 }
 
 function buildCityQuery(city: string) {
@@ -178,7 +181,12 @@ class PackageService {
 			Object.assign(query, buildCityQuery(filters.city));
 		}
 
-		const packages = await PackageDB.find(query).sort({ createdAt: -1 }).lean();
+		const queryBuilder = PackageDB.find(query).sort({ createdAt: -1 });
+		if (filters.limit !== undefined && Number.isInteger(filters.limit) && filters.limit > 0) {
+			queryBuilder.limit(filters.limit);
+		}
+
+		const packages = await queryBuilder.lean();
 		return packages.map((pkg) => transformPackage(pkg as IPackage));
 	}
 

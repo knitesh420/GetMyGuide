@@ -78,6 +78,13 @@ async function getPackages(req: Request, res: Response, next: NextFunction) {
 			filters.city = req.query.city;
 		}
 
+		if (req.query.limit && typeof req.query.limit === 'string') {
+			const limitValue = Number(req.query.limit);
+			if (Number.isInteger(limitValue) && limitValue > 0) {
+				filters.limit = limitValue;
+			}
+		}
+
 		// If admin, allow filtering by status
 		if (isAdmin && req.query.status) {
 			if (req.query.status === 'active' || req.query.status === 'inactive') {
