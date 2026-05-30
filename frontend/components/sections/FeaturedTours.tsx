@@ -22,7 +22,7 @@ const TOURS = [
     location: "Jaisalmer",
     country: "Rajasthan",
     image:
-      "https://images.unsplash.com/photo-1587474260584-136574528ed5?w=600&q=80",
+      "https://images.unsplash.com/photo-1605944087400-8a5992d7b066?q=80&w=1074&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
     price: 3500,
     rating: 4.9,
     reviews: 312,
@@ -30,6 +30,14 @@ const TOURS = [
     groupSize: "Max 12",
     badge: "Best Seller",
     category: "Adventure",
+    description:
+      "Ride across the golden sand dunes of the Thar Desert on camelback, sleep under a canopy of stars at a desert camp, and witness breathtaking sunsets over Jaisalmer's iconic Sam Sand Dunes.",
+    highlights: [
+      "Camel trek at sunset",
+      "Overnight desert camp",
+      "Folk music & dance",
+      "Dune bashing by jeep",
+    ],
     slug: "jaisalmer-desert-safari",
   },
   {
@@ -38,7 +46,7 @@ const TOURS = [
     location: "Alleppey",
     country: "Kerala",
     image:
-      "https://images.unsplash.com/photo-1609920658906-8223bd289001?w=600&q=80",
+      "https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?w=600&q=80", // Kerala backwaters houseboat
     price: 5200,
     rating: 4.8,
     reviews: 218,
@@ -46,6 +54,14 @@ const TOURS = [
     groupSize: "Max 8",
     badge: "Top Rated",
     category: "Nature",
+    description:
+      "Drift through the serene backwater canals of Alleppey aboard a traditional Kerala kettuvallam (houseboat), passing lush paddy fields, coconut groves, and quaint fishing villages.",
+    highlights: [
+      "Private houseboat stay",
+      "Freshly cooked Kerala meals",
+      "Village walks",
+      "Sunrise over the backwaters",
+    ],
     slug: "kerala-backwaters",
   },
   {
@@ -54,7 +70,7 @@ const TOURS = [
     location: "Manali",
     country: "Himachal Pradesh",
     image:
-      "https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=600&q=80",
+      "https://images.unsplash.com/photo-1741790971887-fbf2c1023b6c?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
     price: 4800,
     rating: 4.7,
     reviews: 486,
@@ -62,15 +78,23 @@ const TOURS = [
     groupSize: "Max 10",
     badge: "Adventure",
     category: "Adventure",
+    description:
+      "Trek through the dramatic mountain valleys of Himachal Pradesh — crossing alpine meadows, snow bridges, and dense pine forests — with camping under the Milky Way at high-altitude campsites near Manali.",
+    highlights: [
+      "High-altitude camping",
+      "Beas Kund glacier trek",
+      "River crossing",
+      "Solang Valley views",
+    ],
     slug: "himachal-trek-camping",
   },
   {
     id: 4,
-    title: "Goa Heritage Walk & Spice Tour",
+    title: "Goa Heritage Walk & Spice Plantation Tour",
     location: "Panaji",
     country: "Goa",
     image:
-      "https://images.unsplash.com/photo-1580137189272-c9379f8864fd?w=600&q=80",
+      "https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?w=600&q=80", // Old Goa Portuguese church / heritage
     price: 1800,
     rating: 4.6,
     reviews: 175,
@@ -78,22 +102,38 @@ const TOURS = [
     groupSize: "Max 15",
     badge: "Popular",
     category: "Heritage",
+    description:
+      "Explore the UNESCO-listed churches and colonial mansions of Old Goa's Latin Quarter, then visit a working spice plantation to taste, smell, and learn about Goa's famous cardamom, vanilla, and pepper.",
+    highlights: [
+      "Basilica of Bom Jesus",
+      "Latin Quarter walking tour",
+      "Spice plantation visit",
+      "Goan lunch included",
+    ],
     slug: "goa-heritage-walk",
   },
   {
     id: 5,
-    title: "Varanasi Ghats & Aarti Ceremony",
+    title: "Varanasi Ghats & Ganga Aarti Ceremony",
     location: "Varanasi",
     country: "Uttar Pradesh",
     image:
-      "https://media.istockphoto.com/id/865075520/photo/holy-town-varanasi-and-the-river-ganges.webp?a=1&b=1&s=612x612&w=0&k=20&c=eDsBRbgdackQGpQZZba0I-mblayfLqMoTiaiMB_eCOY=",
+      "https://images.unsplash.com/photo-1627894483216-2138af692e32?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
     price: 2200,
     rating: 4.9,
     reviews: 523,
-    badge: "Cultural",
     duration: "1 day",
     groupSize: "Max 12",
+    badge: "Cultural",
     category: "Cultural",
+    description:
+      "Witness the ancient soul of India along the sacred banks of the Ganges — take a dawn boat ride past 84 ghats, observe cremation rituals at Manikarnika, and experience the mesmerising Ganga Aarti ceremony at Dashashwamedh Ghat.",
+    highlights: [
+      "Sunrise boat ride on the Ganges",
+      "Dashashwamedh Ganga Aarti",
+      "Kashi Vishwanath temple",
+      "Old city alley walk",
+    ],
     slug: "varanasi-ghats-aarti",
   },
   {
@@ -102,7 +142,7 @@ const TOURS = [
     location: "Old Delhi",
     country: "Delhi",
     image:
-      "https://images.unsplash.com/photo-1705861145316-73a2edc9e1ba?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8M3x8T2xkJTIwRGVsaGklMjBTdHJlZXQlMjBGb29kJTIwJTI2JTIwQmF6YWFyJTIwV2Fsa3xlbnwwfHwwfHx8MA%3D%3D",
+      "https://images.unsplash.com/photo-1555126634-323283e090fa?w=600&q=80", // Chandni Chowk street food / Old Delhi market
     price: 1500,
     rating: 4.8,
     reviews: 398,
@@ -110,7 +150,159 @@ const TOURS = [
     groupSize: "Max 10",
     badge: "Food",
     category: "Food",
+    description:
+      "Dive headfirst into the sensory chaos of Chandni Chowk — tasting legendary jalebi, chole bhature, parathas, and dahi bhalle at iconic street stalls, while weaving through the spice bazaar, silver market, and centuries-old havelis.",
+    highlights: [
+      "Paranthe Wali Gali",
+      "Khari Baoli spice market",
+      "Jama Masjid visit",
+      "10+ food tastings included",
+    ],
     slug: "old-delhi-street-food",
+  },
+  {
+    id: 7,
+    title: "Ranthambore Tiger Safari & Wildlife Camp",
+    location: "Ranthambore",
+    country: "Rajasthan",
+    image:
+      "https://plus.unsplash.com/premium_photo-1686310335921-38acc0679321?q=80&w=1175&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    price: 6500,
+    rating: 4.8,
+    reviews: 284,
+    duration: "3 days",
+    groupSize: "Max 6",
+    badge: "Wildlife",
+    category: "Wildlife",
+    description:
+      "Venture deep into Ranthambore National Park on early-morning jeep safaris in search of Bengal tigers, leopards, sloth bears, and crocodiles — staying at a luxury jungle camp on the park's edge.",
+    highlights: [
+      "3 jeep safari game drives",
+      "Bengal tiger spotting",
+      "Ranthambore Fort visit",
+      "Naturalist-guided walks",
+    ],
+    slug: "ranthambore-tiger-safari",
+  },
+  {
+    id: 8,
+    title: "Rishikesh White Water Rafting & Yoga Retreat",
+    location: "Rishikesh",
+    country: "Uttarakhand",
+    image:
+      "https://images.unsplash.com/photo-1653006458813-8e102abf3b46?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Nnx8UmlzaGlrZXNoJTIwV2hpdGUlMjBXYXRlciUyMFJhZnRpbmclMjAlMjYlMjBZb2dhJTIwUmV0cmVhdHxlbnwwfHwwfHx8MA%3D%3D",
+    price: 3900,
+    rating: 4.7,
+    reviews: 341,
+    duration: "3 days",
+    groupSize: "Max 14",
+    badge: "Wellness",
+    category: "Wellness",
+    description:
+      "Combine adrenaline and inner peace in the yoga capital of the world — shoot the rapids of the Ganges through grades II–IV white water, then unwind with sunrise yoga and meditation sessions on the riverbank at dusk.",
+    highlights: [
+      "16 km Ganges rafting stretch",
+      "Daily sunrise yoga & meditation",
+      "Cliff jumping & body surfing",
+      "Evening Ganga Aarti at Triveni Ghat",
+    ],
+    slug: "rishikesh-rafting-yoga",
+  },
+  {
+    id: 9,
+    title: "Coorg Coffee Estate Walk & Plantation Stay",
+    location: "Coorg",
+    country: "Karnataka",
+    image:
+      "https://images.unsplash.com/photo-1611735341450-74d61e660ad2?q=80&w=1169&auto=format&fit=crop",
+    price: 4200,
+    rating: 4.6,
+    reviews: 193,
+    duration: "2 days",
+    groupSize: "Max 10",
+    badge: "Nature",
+    category: "Nature",
+    description:
+      "Immerse yourself in the misty hills of Coorg — walk through working coffee and cardamom estates, learn the bean-to-cup process, and stay overnight in a heritage planter's bungalow surrounded by dense evergreen forest.",
+    highlights: [
+      "Guided coffee plantation walk",
+      "Bean-to-cup brewing workshop",
+      "Abbey Falls & Raja's Seat",
+      "Home-cooked Kodava feast",
+    ],
+    slug: "coorg-coffee-plantation",
+  },
+  {
+    id: 10,
+    title: "Amritsar Golden Temple & Wagah Border Ceremony",
+    location: "Amritsar",
+    country: "Punjab",
+    image:
+      "https://images.unsplash.com/photo-1623059508779-2542c6e83753?q=80&w=627&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    price: 1900,
+    rating: 4.9,
+    reviews: 607,
+    duration: "1 day",
+    groupSize: "Max 15",
+    badge: "Spiritual",
+    category: "Spiritual",
+    description:
+      "Begin with a serene dawn visit to the breathtaking Harmandir Sahib (Golden Temple) and share a langar meal with thousands of pilgrims, then head to the Wagah Border for the electrifying flag-lowering retreat ceremony at sunset.",
+    highlights: [
+      "Golden Temple at sunrise",
+      "Free langar community meal",
+      "Wagah Border beating retreat",
+      "Jallianwala Bagh memorial",
+    ],
+    slug: "amritsar-golden-temple-wagah",
+  },
+  {
+    id: 11,
+    title: "Andaman Snorkelling & Scuba Diving Adventure",
+    location: "Havelock Island",
+    country: "Andaman & Nicobar",
+    image:
+      "https://images.unsplash.com/photo-1544551763-46a013bb70d5?q=80&w=1170&auto=format&fit=crop",
+    price: 7800,
+    rating: 4.8,
+    reviews: 229,
+    duration: "4 days",
+    groupSize: "Max 8",
+    badge: "Water Sports",
+    category: "Water Sports",
+    description:
+      "Explore the pristine coral reefs of Havelock Island beneath crystal-clear Andaman waters — snorkel at Elephant Beach, complete a beginner scuba dive at Neil Island, and relax on the powder-white sands of Radhanagar Beach.",
+    highlights: [
+      "Scuba dive at Neil Island",
+      "Elephant Beach snorkelling",
+      "Glass-bottom boat ride",
+      "Radhanagar Beach sunset",
+    ],
+    slug: "andaman-scuba-snorkelling",
+  },
+  {
+    id: 12,
+    title: "Kolkata Art, Literature & Colonial Heritage Tour",
+    location: "Kolkata",
+    country: "West Bengal",
+    image:
+      "https://images.unsplash.com/photo-1558431382-27e303142255?q=80&w=1167&auto=format&fit=crop",
+    price: 2000,
+    rating: 4.7,
+    reviews: 158,
+    duration: "1 day",
+    groupSize: "Max 12",
+    badge: "Art & Culture",
+    category: "Art & Culture",
+    description:
+      "Trace the intellectual and artistic soul of the 'City of Joy' — from the marble halls of the Victoria Memorial and College Street's labyrinthine bookshops to the potters' quarter of Kumartuli and a traditional Bengali thali lunch in a century-old house.",
+    highlights: [
+      "Victoria Memorial & museum",
+      "College Street book market",
+      "Kumartuli potters' quarter",
+      "Traditional Bengali thali lunch",
+    ],
+    slug: "kolkata-art-heritage-tour",
   },
 ];
 
@@ -129,7 +321,7 @@ export default function FeaturedTours() {
     );
 
   return (
-    <section className="py-20 lg:py-32 bg-gray-50">
+    <section className="py-12 lg:py-20 bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 lg:px-8">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-end justify-between mb-10 gap-6">
@@ -318,9 +510,9 @@ export default function FeaturedTours() {
         <FadeUp delay={0.2} className="mt-14 text-center">
           <Link
             href="/services"
-            className="inline-flex items-center gap-2.5 px-8 py-4 bg-red-600 text-white font-semibold rounded-full shadow-xl shadow-red-600/25 hover:bg-red-700 hover:shadow-red-600/40 hover:scale-[1.02] transition-all duration-300"
+            className="inline-flex items-center gap-1.5 px-8 py-4 bg-red-600 text-white font-semibold rounded-full shadow-xl shadow-red-600/25 hover:bg-red-700 hover:shadow-red-600/40 hover:scale-[1.02] transition-all duration-300"
           >
-            Explore All Tours
+            Explore Our Package
             <ArrowRight size={18} />
           </Link>
         </FadeUp>

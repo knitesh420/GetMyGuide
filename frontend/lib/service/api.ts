@@ -22,6 +22,14 @@ const apiClient = axios.create({
   },
 });
 
+const publicApiClient = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: false,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
 // Request interceptor
 //
 // Auth is carried via HTTP-only cookies (`auth-cookie` / `refresh-cookie`)
@@ -129,4 +137,39 @@ export const apiService = {
     config?: AxiosRequestConfig,
   ): Promise<ApiResponse<T>> =>
     apiClient.patch(url, data, config).then((res) => res.data),
+};
+
+export const publicApiService = {
+  get: <T = any>(
+    url: string,
+    config?: AxiosRequestConfig,
+  ): Promise<ApiResponse<T>> =>
+    publicApiClient.get(url, config).then((res) => res.data),
+
+  post: <T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
+  ): Promise<ApiResponse<T>> =>
+    publicApiClient.post(url, data, config).then((res) => res.data),
+
+  put: <T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
+  ): Promise<ApiResponse<T>> =>
+    publicApiClient.put(url, data, config).then((res) => res.data),
+
+  delete: <T = any>(
+    url: string,
+    config?: AxiosRequestConfig,
+  ): Promise<ApiResponse<T>> =>
+    publicApiClient.delete(url, config).then((res) => res.data),
+
+  patch: <T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
+  ): Promise<ApiResponse<T>> =>
+    publicApiClient.patch(url, data, config).then((res) => res.data),
 };

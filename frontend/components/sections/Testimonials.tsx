@@ -49,7 +49,7 @@ export default function Testimonials() {
   const t = testimonials[current];
 
   return (
-    <section className="py-20 lg:py-32 bg-gray-50">
+    <section className="py-12 lg:py-20 bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 lg:px-8">
         <FadeUp className="text-center mb-14">
           <p className="text-red-600 text-sm font-semibold uppercase tracking-widest mb-3">

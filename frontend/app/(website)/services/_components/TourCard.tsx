@@ -26,15 +26,18 @@ export default function TourCard({
 }: Props) {
   const [showModal, setShowModal] = useState(false);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [hasImageError, setHasImageError] = useState(false);
 
   useEffect(() => {
     if (!images || images.length === 0) {
       setImageUrls([]);
+      setHasImageError(false);
       return;
     }
 
     if (typeof images[0] === "string") {
       setImageUrls(images as string[]);
+      setHasImageError(false);
       return;
     }
 
@@ -69,12 +72,13 @@ export default function TourCard({
       >
         {/* Image Section */}
         <div className="relative h-52 overflow-hidden shrink-0">
-          {imageUrls[0] ? (
-          <img
-            src={imageUrls[0]}
-            alt={title}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-          />
+          {imageUrls[0] && !hasImageError ? (
+            <img
+              src={imageUrls[0]}
+              alt={title}
+              onError={() => setHasImageError(true)}
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+            />
           ) : (
             <div className="w-full h-full bg-slate-200 flex items-center justify-center">
               <MapPin className="w-10 h-10 text-slate-400" />
@@ -167,7 +171,9 @@ export default function TourCard({
           <div className="pt-3 border-t border-slate-100 flex items-center justify-between mt-auto">
             {price !== undefined && price > 0 ? (
               <div>
-                <span className="text-xs text-slate-400 block">Starting from</span>
+                <span className="text-xs text-slate-400 block">
+                  Starting from
+                </span>
                 <span className="flex items-center text-lg font-bold text-slate-800">
                   <IndianRupee className="w-4 h-4" />
                   {price.toLocaleString("en-IN")}

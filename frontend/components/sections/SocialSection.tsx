@@ -57,7 +57,7 @@ const posts = [
 
 export default function SocialSection() {
   return (
-    <section className="py-20 lg:py-32 bg-gray-900 overflow-hidden">
+    <section className="py-12 lg:py-20 bg-gray-900 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 lg:px-8">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-end justify-between mb-12 gap-6">

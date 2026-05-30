@@ -1,4 +1,4 @@
-import { apiService } from "@/lib/service/api";
+import { apiService, publicApiService } from "@/lib/service/api";
 import { TourData } from "@/app/(website)/services/types/tour";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -41,7 +41,11 @@ interface PackageResponse {
   updatedAt: string;
 }
 
-function buildMediaUrl(img: string): string {
+function buildMediaUrl(img?: string): string {
+  if (!img || typeof img !== "string" || img.trim() === "") {
+    return "/placeholder.svg";
+  }
+
   if (img.startsWith("http://") || img.startsWith("https://")) return img;
   return `${API_BASE_URL}/media/packages/${img}`;
 }
@@ -52,7 +56,7 @@ function mapPackageToTourData(pkg: PackageResponse): TourData {
     title: pkg.title,
     city: pkg.city,
     places: pkg.places,
-    images: pkg.images.map(buildMediaUrl),
+    images: Array.isArray(pkg.images) ? pkg.images.map(buildMediaUrl) : [],
     price: pkg.price,
     baseCurrency: pkg.baseCurrency,
     shortDescription: pkg.shortDescription,
@@ -72,12 +76,27 @@ function mapPackageToTourData(pkg: PackageResponse): TourData {
 // Fetch packages from backend
 export async function getServices(): Promise<TourData[]> {
   try {
-    const response: any = await apiService.get("/package");
+    const response: any = await publicApiService.get("/package");
     const packages = response?.data?.packages || [];
     return packages.map(mapPackageToTourData);
   } catch (err: any) {
     console.error("Error fetching services:", err);
     return [];
+  }
+}
+
+export async function getServiceById(
+  packageId: string,
+): Promise<TourData | null> {
+  try {
+    const response: any = await publicApiService.get(`/package/${packageId}`);
+    if (!response?.success || !response?.data) {
+      return null;
+    }
+    return mapPackageToTourData(response.data);
+  } catch (err: any) {
+    console.error("Error fetching service details:", err);
+    return null;
   }
 }
 

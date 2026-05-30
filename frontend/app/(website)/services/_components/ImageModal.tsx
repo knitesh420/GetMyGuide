@@ -67,8 +67,14 @@ export default function ImageModal({
         {/* Main Image */}
         <div className="relative bg-slate-900 rounded-t-2xl overflow-hidden shadow-2xl">
           <img
-            src={images[currentIndex]}
+            src={images[currentIndex] || "/placeholder.svg"}
             alt={`${name} - ${currentIndex + 1}`}
+            onError={(event) => {
+              const target = event.target as HTMLImageElement;
+              if (target.src !== "/placeholder.svg") {
+                target.src = "/placeholder.svg";
+              }
+            }}
             className="w-full max-h-[55vh] object-contain object-center bg-black"
           />
 
@@ -195,8 +201,14 @@ export default function ImageModal({
                 }`}
               >
                 <img
-                  src={img}
+                  src={img || "/placeholder.svg"}
                   alt={`Thumbnail ${i + 1}`}
+                  onError={(event) => {
+                    const target = event.target as HTMLImageElement;
+                    if (target.src !== "/placeholder.svg") {
+                      target.src = "/placeholder.svg";
+                    }
+                  }}
                   className="w-full h-full object-cover"
                 />
               </button>

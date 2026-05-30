@@ -9,6 +9,8 @@ import {
   CheckCircle,
   Star,
 } from "lucide-react";
+import { motion } from "framer-motion";
+import { FadeUp } from "@/components/animations/motion-wrappers";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 export function BookingProcess() {
@@ -60,46 +62,68 @@ export function BookingProcess() {
   ];
 
   return (
-    <section className="py-20 bg-card">
-      <div className="container max-w-7xl mx-auto px-4">
-        <div className="text-center mb-16 animate-fade-in-up">
-          <h2 className="text-4xl md:text-5xl font-bold text-primary mb-4">
+    <section className="py-12 lg:py-20 bg-gray-50/50 relative overflow-hidden">
+      {/* Attractive background elements */}
+      <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-40">
+        <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-red-100/50 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-100/50 rounded-full blur-[120px]" />
+      </div>
+
+      <div className="container max-w-7xl mx-auto px-4 relative z-10">
+        <FadeUp className="text-center mb-20">
+          <h2
+            className="text-4xl md:text-6xl font-extrabold text-gray-900 mb-6 tracking-tight"
+            style={{ fontFamily: "'Outfit', sans-serif" }}
+          >
             {t("booking_proc_title")}
           </h2>
-          <p className="text-xl text-secondary max-w-3xl mx-auto text-balance">
+          <p className="text-lg md:text-xl text-gray-500 max-w-2xl mx-auto leading-relaxed">
             {t("booking_proc_desc")}
           </p>
-        </div>
+        </FadeUp>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
+        <div className="relative grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-24">
+          {/* Visual connecting line for desktop */}
+          <div className="hidden lg:block absolute top-1/2 left-0 w-full h-0.5 border-t-2 border-dashed border-gray-200 -translate-y-1/2 z-0" />
+
           {steps.map((step, index) => {
             const Icon = step.icon;
             return (
-              <Card
+              <motion.div
                 key={step.titleKey}
-                className="relative group hover:shadow-lg transition-all duration-300 border-0 bg-white animate-scale-in"
-                style={{ animationDelay: `${index * 0.1}s` }}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: index * 0.1 }}
+                className="relative z-10"
               >
-                <CardContent className="p-6 text-center">
-                  <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 w-8 h-8 bg-secondary text-secondary-foreground rounded-full flex items-center justify-center text-sm font-bold">
-                    {index + 1}
-                  </div>
+                <Card className="h-full group hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 border border-gray-100 bg-white rounded-[2.5rem] overflow-visible">
+                  <CardContent className="p-8 text-center flex flex-col items-center">
+                    <div className="absolute -top-5 left-1/2 -translate-x-1/2 w-12 h-12 bg-red-600 text-white rounded-2xl flex items-center justify-center text-lg font-black shadow-lg shadow-red-600/30 rotate-3 group-hover:rotate-0 transition-transform duration-300">
+                      {index + 1}
+                    </div>
 
-                  <div className="w-16 h-16 bg-secondary/10 rounded-full flex items-center justify-center mx-auto mb-4 mt-4">
-                    <Icon className="w-8 h-8 text-secondary" />
-                  </div>
+                    <div className="w-20 h-20 bg-gray-50 rounded-3xl flex items-center justify-center mb-6 mt-4 group-hover:scale-110 group-hover:bg-red-50 transition-all duration-300">
+                      <Icon className="w-10 h-10 text-red-600" />
+                    </div>
 
-                  <h3 className="text-lg font-bold text-primary mb-2">
-                    {t(step.titleKey)}
-                  </h3>
-                  <p className="text-secondary text-sm mb-3 text-balance">
-                    {t(step.descriptionKey)}
-                  </p>
-                  <p className="text-xs text-secondary font-medium">
-                    {t(step.detailsKey)}
-                  </p>
-                </CardContent>
-              </Card>
+                    <h3
+                      className="text-xl font-bold text-gray-900 mb-3"
+                      style={{ fontFamily: "'Outfit', sans-serif" }}
+                    >
+                      {t(step.titleKey)}
+                    </h3>
+                    <p className="text-gray-500 text-sm mb-4 leading-relaxed">
+                      {t(step.descriptionKey)}
+                    </p>
+                    <div className="mt-auto px-4 py-2 bg-gray-50 rounded-full inline-block border border-gray-100">
+                      <p className="text-[10px] uppercase tracking-widest text-gray-400 font-extrabold">
+                        {t(step.detailsKey)}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
             );
           })}
         </div>
@@ -110,18 +134,22 @@ export function BookingProcess() {
             return (
               <div
                 key={feature.titleKey}
-                className="text-center animate-fade-in-up"
-                style={{ animationDelay: `${index * 0.2}s` }}
+                className="flex items-center gap-5 p-6 rounded-3xl bg-white border border-gray-100 shadow-sm hover:shadow-md transition-shadow"
               >
-                <div className="w-20 h-20 bg-secondary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Icon className="w-10 h-10 text-secondary" />
+                <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center shrink-0">
+                  <Icon className="w-7 h-7 text-red-600" />
                 </div>
-                <h3 className="text-xl font-bold text-primary mb-2">
-                  {t(feature.titleKey)}
-                </h3>
-                <p className="text-secondary text-balance">
-                  {t(feature.descriptionKey)}
-                </p>
+                <div>
+                  <h3
+                    className="text-lg font-bold text-gray-900 mb-1"
+                    style={{ fontFamily: "'Outfit', sans-serif" }}
+                  >
+                    {t(feature.titleKey)}
+                  </h3>
+                  <p className="text-sm text-gray-500 leading-snug">
+                    {t(feature.descriptionKey)}
+                  </p>
+                </div>
               </div>
             );
           })}

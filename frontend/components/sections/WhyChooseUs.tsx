@@ -49,7 +49,7 @@ const stats = [
 
 export default function WhyChooseUs() {
   return (
-    <section className="py-20 lg:py-32 bg-white overflow-hidden">
+    <section className="py-12 lg:py-20 bg-white overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 lg:px-8">
         {/* Top row: text + stats */}
         <div className="grid lg:grid-cols-2 gap-16 mb-20 items-center">
