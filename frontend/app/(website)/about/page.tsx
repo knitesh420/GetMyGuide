@@ -18,7 +18,7 @@ export default function AboutPage() {
     <main className="min-h-screen bg-background">
       <HeroSection
         backgroundImage="/2.jpg"
-        badgeText="About GetMyGuide"
+        // badgeText="About GetMyGuide"
         title={
           <>
             Discover Authentic <br /> Local Experiences

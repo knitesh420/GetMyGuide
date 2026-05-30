@@ -41,7 +41,7 @@ export default function AboutPlatformSection() {
             >
               {t("about_platform_title")}{" "}
               <span className="bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
-                  GetMyGuide.in
+                GetMyGuide.in
               </span>
             </motion.h2>
             <div className="space-y-6 flex-grow">
@@ -112,9 +112,9 @@ export default function AboutPlatformSection() {
                 className="flex-grow rounded-2xl overflow-hidden bg-gradient-to-br from-primary/10 to-blue-500/10 shadow-2xl relative"
               >
                 <Image
-                  src="/images/logo.png"
-                  alt="Tour guide with international travelers exploring India"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                  src={t("about_platform_logo")}
+                  alt="GetMyGuide.in Logo"
+                  className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-700 ease-out"
                   fill
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />

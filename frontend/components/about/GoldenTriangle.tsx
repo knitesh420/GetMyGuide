@@ -148,7 +148,7 @@ export default function GoldenTriangleSection() {
                 className="flex-grow rounded-2xl overflow-hidden bg-gradient-to-br from-orange-500/20 to-pink-500/10 shadow-2xl relative group"
               >
                 <Image
-                  src="/3.jpg"
+                  src={t("gt_image")}
                   alt="Golden Triangle destinations - Delhi, Agra, Jaipur"
                   fill
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"

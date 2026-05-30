@@ -194,6 +194,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
 
           // About Page Sections
           about_platform_title: "About",
+          about_platform_logo: "/images/new_logo.jpeg",
           about_platform_p1:
             "GetMyGuide.in is a unified digital platform that connects certified linguistic tour guides from across India with international travellers and inbound tour groups.",
           about_platform_p2:
@@ -230,6 +231,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           gt_overlay_title: "The Golden Triangle",
           gt_overlay_feat1: "Heritage Sites",
           gt_overlay_feat2: "Photo Spots",
+          gt_image: "/Golden_Triangle.png",
           mission_vision_header: "Our Purpose",
           mission_vision_title: "Mission & Vision Statement",
           mission_title: "Mission",
@@ -713,6 +715,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           customer_support: "Atención al Cliente",
 
           about_platform_title: "Sobre",
+          about_platform_logo: "/images/new_logo.jpeg",
           about_platform_p1:
             "IndiaTourManager.com es una plataforma digital unificada que conecta guías turísticos lingüísticos certificados de toda la India con viajeros internacionales.",
           about_platform_p2:
@@ -749,6 +752,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           gt_overlay_title: "El Triángulo Dorado",
           gt_overlay_feat1: "Sitios Patrimoniales",
           gt_overlay_feat2: "Puntos Fotográficos",
+          gt_image: "/Golden_Triangle.png",
           mission_vision_header: "Nuestro Propósito",
           mission_vision_title: "Declaración de Misión y Visión",
           mission_title: "Misión",
@@ -1184,6 +1188,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           customer_support: "Support Client",
 
           about_platform_title: "À Propos de",
+          about_platform_logo: "/images/new_logo.jpeg",
           about_platform_p1:
             "IndiaTourManager.com est une plateforme numérique qui met en relation des guides touristiques linguistiques certifiés de toute l'Inde avec des voyageurs internationaux.",
           about_platform_p2:
@@ -1220,6 +1225,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           gt_overlay_title: "Le Triangle d'Or",
           gt_overlay_feat1: "Sites du Patrimoine",
           gt_overlay_feat2: "Lieux Photos",
+          gt_image: "/Golden_Triangle.png",
           mission_vision_header: "Notre Objectif",
           mission_vision_title: "Déclaration de Mission et Vision",
           mission_title: "Mission",
@@ -1649,6 +1655,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           customer_support: "Поддержка клиентов",
 
           about_platform_title: "О",
+          about_platform_logo: "/images/new_logo.jpeg",
           about_platform_p1:
             "IndiaTourManager.com - это единая цифровая платформа, которая связывает сертифицированных лингвистических гидов со всей Индии с международными путешественниками.",
           about_platform_p2:
@@ -1685,6 +1692,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           gt_overlay_title: "Золотой треугольник",
           gt_overlay_feat1: "Объекты наследия",
           gt_overlay_feat2: "Места для фото",
+          gt_image: "/Golden_Triangle.png",
           mission_vision_header: "Наша Цель",
           mission_vision_title: "Заявление о Миссии и Видении",
           mission_title: "Миссия",
@@ -2101,6 +2109,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           customer_support: "Kundensupport",
 
           about_platform_title: "Über",
+          about_platform_logo: "/images/new_logo.jpeg",
           about_platform_p1:
             "IndiaTourManager.com ist eine digitale Plattform, die zertifizierte sprachkundige Reiseführer aus ganz Indien mit internationalen Reisenden verbindet.",
           about_platform_p2:
@@ -2137,6 +2146,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           gt_overlay_title: "Das Goldene Dreieck",
           gt_overlay_feat1: "Kulturerbestätten",
           gt_overlay_feat2: "Fotomotive",
+          gt_image: "/Golden_Triangle.png",
           mission_vision_header: "Unser Zweck",
           mission_vision_title: "Leitbild & Vision",
           mission_title: "Mission",
