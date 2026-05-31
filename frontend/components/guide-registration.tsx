@@ -94,19 +94,17 @@ export function GuideRegistration() {
                     <p className="text-xs text-gray-400 font-medium uppercase tracking-wider mb-1">
                       Ready to join?
                     </p>
-                    <Link href="/register-guide">
-                      <Button
-                        size="lg"
-                        className={cn(
-                          "gap-2 bg-red-600 hover:bg-red-700 text-white w-full",
-                          "font-bold rounded-2xl py-6 transition-all duration-300",
-                          "hover:scale-[1.02] hover:shadow-lg hover:shadow-red-600/20",
-                        )}
-                      >
-                        <Rocket className="w-4 h-4" />
-                        {t("start_application")}
-                        <ArrowRight className="w-4 h-4" />
-                      </Button>
+                    <Link
+                      href="/register-guide"
+                      className={cn(
+                        "inline-flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white w-full",
+                        "font-bold rounded-2xl h-14 transition-all duration-300",
+                        "hover:scale-[1.02] hover:shadow-lg hover:shadow-red-600/20",
+                      )}
+                    >
+                      <Rocket className="w-4 h-4" />
+                      {t("start_application")}
+                      <ArrowRight className="w-4 h-4" />
                     </Link>
                   </div>
                 </div>

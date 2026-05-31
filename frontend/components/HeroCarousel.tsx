@@ -78,7 +78,7 @@ export default function HeroCarousel() {
   const prevSlide = () => {
     setDirection(-1);
     setCurrentSlide(
-      (prev) => (prev - 1 + slidesData.length) % slidesData.length
+      (prev) => (prev - 1 + slidesData.length) % slidesData.length,
     );
   };
 
@@ -226,25 +226,27 @@ export default function HeroCarousel() {
             variants={itemVariants}
             className="flex flex-col sm:flex-row gap-4 justify-center mb-6"
           >
-            <Link href="/services">
-              <Button
-                size="lg"
-                className="bg-orange-500 hover:bg-orange-600 text-white px-10 py-6 text-lg font-semibold rounded-full shadow-2xl transform hover:scale-105 transition-all"
-              >
+            <Button
+              asChild
+              size="lg"
+              className="bg-orange-500 hover:bg-orange-600 text-white px-10 py-6 text-lg font-semibold rounded-full shadow-2xl transform hover:scale-105 transition-all"
+            >
+              <Link href="/services">
                 <Calendar className="w-5 h-5 mr-2" />
                 {t("book_your_tour_now")}
-              </Button>
-            </Link>
-            <Link href="/register-guide">
-              <Button
-                size="lg"
-                variant="outline"
-                className="border-2 border-white text-white hover:bg-white hover:text-black px-10 py-6 text-lg font-semibold bg-white/5 backdrop-blur-sm rounded-full shadow-2xl transform hover:scale-105 transition-all"
-              >
+              </Link>
+            </Button>
+            <Button
+              asChild
+              size="lg"
+              variant="outline"
+              className="border-2 border-white text-white hover:bg-white hover:text-black px-10 py-6 text-lg font-semibold bg-white/5 backdrop-blur-sm rounded-full shadow-2xl transform hover:scale-105 transition-all"
+            >
+              <Link href="/register-guide">
                 <Users className="w-5 h-5 mr-2" />
                 {t("become_a_guide")}
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </motion.div>
           <motion.div
             variants={itemVariants}
