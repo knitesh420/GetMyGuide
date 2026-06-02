@@ -1,18 +1,8 @@
-import crypto from 'crypto';
 import { NextFunction, Request, Response } from 'express';
 import multer from 'multer';
 import { BadRequestError } from 'node-be-utilities';
-import path from 'path';
 
-const storage = multer.diskStorage({
-	destination: (req, file, cb) => {
-		const tempDir = path.join(global.__basedir, 'static', 'misc');
-		cb(null, tempDir);
-	},
-	filename: (req, file, cb) => {
-		cb(null, crypto.randomUUID() + path.extname(file.originalname));
-	},
-});
+const storage = multer.memoryStorage();
 
 // File filter for image files
 const imageFileFilter = (

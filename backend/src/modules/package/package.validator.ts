@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
+import { IPackageImage } from '@mongo/types/package';
 import { BadRequestError } from 'node-be-utilities';
 import { z } from 'zod';
 
@@ -37,7 +38,7 @@ export type CreatePackageValidationResult = {
 	numberOfDays?: number;
 	featured?: boolean;
 	status?: 'inactive' | 'active';
-	images?: string[];
+	images?: IPackageImage[];
 	translations: Record<LanguageCode, TranslationFields>;
 };
 
@@ -48,7 +49,7 @@ export type UpdatePackageValidationResult = {
 	numberOfDays?: number;
 	featured?: boolean;
 	status?: 'inactive' | 'active';
-	images?: string[];
+	images?: IPackageImage[];
 	translations?: Partial<Record<LanguageCode, TranslationFields>>;
 };
 

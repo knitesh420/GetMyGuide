@@ -4,6 +4,12 @@ import { Types } from 'mongoose';
 import { NotFoundError } from 'node-be-utilities';
 import { clearDatabase, connectTestDB, disconnectTestDB } from '../../setup/db.setup';
 
+const packageImages = (...imageNames: string[]) =>
+	imageNames.map((imageName) => ({
+		url: `https://res.cloudinary.com/test/image/upload/${imageName}`,
+		publicId: `packages/${imageName}`,
+	}));
+
 describe('PackageService', () => {
 	beforeAll(async () => {
 		await connectTestDB();
@@ -23,7 +29,7 @@ describe('PackageService', () => {
 				title: 'Test Package',
 				city: 'Mumbai',
 				places: ['Taj Mahal', 'Red Fort'],
-				images: ['image1.jpg', 'image2.jpg'],
+				images: packageImages('image1.jpg', 'image2.jpg'),
 				price: 5000,
 				featured: false,
 				status: 'inactive' as const,
@@ -48,7 +54,7 @@ describe('PackageService', () => {
 				title: 'Premium Package',
 				city: 'Delhi',
 				places: ['India Gate', 'Lotus Temple'],
-				images: ['premium1.jpg'],
+				images: packageImages('premium1.jpg'),
 				shortDescription: 'A premium tour package',
 				description: 'Detailed description of the premium package',
 				price: 10000,
@@ -74,7 +80,7 @@ describe('PackageService', () => {
 				title: 'Test Package',
 				city: 'Mumbai',
 				places: ['Place 1'],
-				images: ['image1.jpg'],
+				images: packageImages('image1.jpg'),
 				price: 5000,
 			};
 
@@ -91,7 +97,7 @@ describe('PackageService', () => {
 				title: 'Active Package 1',
 				city: 'Mumbai',
 				places: ['Place 1'],
-				images: ['img1.jpg'],
+				images: packageImages('img1.jpg'),
 				price: 5000,
 				status: 'active',
 				featured: true,
@@ -101,7 +107,7 @@ describe('PackageService', () => {
 				title: 'Active Package 2',
 				city: 'Delhi',
 				places: ['Place 2'],
-				images: ['img2.jpg'],
+				images: packageImages('img2.jpg'),
 				price: 6000,
 				status: 'active',
 				featured: false,
@@ -111,7 +117,7 @@ describe('PackageService', () => {
 				title: 'Inactive Package',
 				city: 'Mumbai',
 				places: ['Place 3'],
-				images: ['img3.jpg'],
+				images: packageImages('img3.jpg'),
 				price: 7000,
 				status: 'inactive',
 				featured: false,
@@ -195,7 +201,7 @@ describe('PackageService', () => {
 				title: 'Test Package',
 				city: 'Mumbai',
 				places: ['Place 1'],
-				images: ['img1.jpg'],
+				images: packageImages('img1.jpg'),
 				price: 5000,
 				status: 'active',
 			});
@@ -219,7 +225,7 @@ describe('PackageService', () => {
 				title: 'Inactive Package',
 				city: 'Mumbai',
 				places: ['Place 1'],
-				images: ['img1.jpg'],
+				images: packageImages('img1.jpg'),
 				price: 5000,
 				status: 'inactive',
 			});
@@ -232,7 +238,7 @@ describe('PackageService', () => {
 				title: 'Inactive Package',
 				city: 'Mumbai',
 				places: ['Place 1'],
-				images: ['img1.jpg'],
+				images: packageImages('img1.jpg'),
 				price: 5000,
 				status: 'inactive',
 			});
@@ -250,7 +256,7 @@ describe('PackageService', () => {
 				title: 'Original Title',
 				city: 'Mumbai',
 				places: ['Place 1'],
-				images: ['img1.jpg'],
+				images: packageImages('img1.jpg'),
 				price: 5000,
 			});
 
@@ -273,7 +279,7 @@ describe('PackageService', () => {
 				title: 'Test Package',
 				city: 'Mumbai',
 				places: ['Place 1'],
-				images: ['img1.jpg'],
+				images: packageImages('img1.jpg'),
 				price: 5000,
 			});
 
@@ -301,7 +307,7 @@ describe('PackageService', () => {
 				title: 'Test Package',
 				city: 'Mumbai',
 				places: ['Place 1'],
-				images: ['img1.jpg'],
+				images: packageImages('img1.jpg'),
 				price: 5000,
 			});
 
@@ -324,7 +330,7 @@ describe('PackageService', () => {
 				title: 'Test Package',
 				city: 'Mumbai',
 				places: ['Place 1'],
-				images: ['img1.jpg'],
+				images: packageImages('img1.jpg'),
 				price: 5000,
 				status: 'inactive',
 			});
@@ -339,7 +345,7 @@ describe('PackageService', () => {
 				title: 'Test Package',
 				city: 'Mumbai',
 				places: ['Place 1'],
-				images: ['img1.jpg'],
+				images: packageImages('img1.jpg'),
 				price: 5000,
 				status: 'active',
 			});
@@ -365,7 +371,7 @@ describe('PackageService', () => {
 				title: 'Package 1',
 				city: 'Mumbai',
 				places: ['Place 1'],
-				images: ['img1.jpg'],
+				images: packageImages('img1.jpg'),
 				price: 5000,
 				status: 'active',
 			});
@@ -374,7 +380,7 @@ describe('PackageService', () => {
 				title: 'Package 2',
 				city: 'Delhi',
 				places: ['Place 2'],
-				images: ['img2.jpg'],
+				images: packageImages('img2.jpg'),
 				price: 6000,
 				status: 'active',
 			});
@@ -383,7 +389,7 @@ describe('PackageService', () => {
 				title: 'Package 3',
 				city: 'Mumbai',
 				places: ['Place 3'],
-				images: ['img3.jpg'],
+				images: packageImages('img3.jpg'),
 				price: 7000,
 				status: 'active',
 			});
@@ -392,7 +398,7 @@ describe('PackageService', () => {
 				title: 'Package 4',
 				city: 'Bangalore',
 				places: ['Place 4'],
-				images: ['img4.jpg'],
+				images: packageImages('img4.jpg'),
 				price: 8000,
 				status: 'inactive', // Should not be included
 			});

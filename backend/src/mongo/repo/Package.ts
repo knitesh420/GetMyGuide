@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import IPackage from '../types/package';
+import IPackage, { IPackageImage } from '../types/package';
 
 const TranslationSchema = new mongoose.Schema(
 	{
@@ -35,6 +35,22 @@ const TranslationSchema = new mongoose.Schema(
 	{ _id: false }
 );
 
+const PackageImageSchema = new mongoose.Schema(
+	{
+		url: {
+			type: String,
+			required: true,
+			trim: true,
+		},
+		publicId: {
+			type: String,
+			required: true,
+			trim: true,
+		},
+	},
+	{ _id: false }
+);
+
 const PackageSchema = new mongoose.Schema<IPackage>(
 	{
 		price: {
@@ -64,10 +80,10 @@ const PackageSchema = new mongoose.Schema<IPackage>(
 			default: 'active',
 		},
 		images: {
-			type: [String],
+			type: [PackageImageSchema],
 			required: true,
 			validate: {
-				validator: (v: string[]) => Array.isArray(v) && v.length > 0,
+				validator: (v: IPackageImage[]) => Array.isArray(v) && v.length > 0,
 				message: 'At least one image is required',
 			},
 		},

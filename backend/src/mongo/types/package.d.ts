@@ -20,6 +20,11 @@ export interface IPackageTranslations {
 	de?: TranslationFields;
 }
 
+export interface IPackageImage {
+	url: string;
+	publicId: string;
+}
+
 export default interface IPackage extends Document {
 	_id: Types.ObjectId;
 	price?: number;
@@ -28,7 +33,7 @@ export default interface IPackage extends Document {
 	numberOfDays?: number;
 	featured?: boolean;
 	status?: 'inactive' | 'active';
-	images: string[];
+	images: IPackageImage[];
 	translations?: IPackageTranslations;
 
 	// Backward-compatible fields for legacy packages

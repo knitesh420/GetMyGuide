@@ -1,56 +1,81 @@
-import { Path } from '@config/const';
+import cloudinary from '@config/cloudinary';
 import { JWTPayload } from '@services/jwt';
 import PackageService from '@services/package';
+import uploadToCloudinary from '@utils/cloudinaryUpload';
 import { NextFunction, Request, Response } from 'express';
-import fs from 'fs/promises';
 import { BadRequestError, Respond } from 'node-be-utilities';
-import path from 'path';
 import {
 	CreatePackageValidationResult,
 	UpdatePackageValidationResult,
 	UpdateStatusValidationResult,
 } from './package.validator';
 
+const PACKAGE_IMAGE_FOLDER = 'packages';
+const ALLOWED_PACKAGE_IMAGE_TYPES = ['image/png', 'image/webp', 'image/jpg', 'image/jpeg'];
+
+type PackageImagePayload = {
+	url: string;
+	publicId: string;
+};
+
+function validatePackageImageFiles(files: Express.Multer.File[]) {
+	for (const file of files) {
+		if (!ALLOWED_PACKAGE_IMAGE_TYPES.includes(file.mimetype)) {
+			throw new BadRequestError('Only JPG, PNG, WEBP images are allowed');
+		}
+	}
+}
+
+async function deleteCloudinaryImages(images: PackageImagePayload[], ignoreErrors = false) {
+	for (const image of images) {
+		try {
+			await cloudinary.uploader.destroy(image.publicId);
+		} catch (error) {
+			if (!ignoreErrors) {
+				throw error;
+			}
+		}
+	}
+}
+
+async function uploadPackageImages(files: Express.Multer.File[]): Promise<PackageImagePayload[]> {
+	const uploadedImages: PackageImagePayload[] = [];
+
+	try {
+		for (const file of files) {
+			const result = await uploadToCloudinary(file.buffer, PACKAGE_IMAGE_FOLDER);
+			uploadedImages.push({
+				url: result.secure_url,
+				publicId: result.public_id,
+			});
+		}
+
+		return uploadedImages;
+	} catch (error) {
+		await deleteCloudinaryImages(uploadedImages, true);
+		throw error;
+	}
+}
+
 async function createPackage(req: Request, res: Response, next: NextFunction) {
+	let uploadedImages: PackageImagePayload[] = [];
+
 	try {
 		const data = req.locals.data as CreatePackageValidationResult;
 
-		// Get uploaded files from multer (already processed by parsePackageFormData middleware)
 		const files = req.files as Express.Multer.File[] | undefined;
 
 		if (!files || files.length === 0) {
 			return next(new BadRequestError('At least one image file is required'));
 		}
 
-		// Validate image file types
-		const allowedImageTypes = ['image/png', 'image/webp', 'image/jpg', 'image/jpeg'];
-		for (const file of files) {
-			if (!allowedImageTypes.includes(file.mimetype)) {
-				return next(new BadRequestError('Only JPG, PNG, WEBP images are allowed'));
-			}
-		}
+		validatePackageImageFiles(files);
+		uploadedImages = await uploadPackageImages(files);
 
-		const imageFilenames = files.map((file) => file.filename);
-
-		// Create package using service
 		const pkg = await PackageService.createPackage({
 			...data,
-			images: imageFilenames,
+			images: uploadedImages,
 		});
-
-		// Move files from static/misc to static/packages after successful creation
-		const packagesDir = path.join(global.__basedir, Path.Packages);
-		const miscDir = path.join(global.__basedir, Path.Misc);
-
-		// Ensure packages directory exists
-		await fs.mkdir(packagesDir, { recursive: true });
-
-		// Move all image files
-		for (const filename of imageFilenames) {
-			const sourcePath = path.join(miscDir, filename);
-			const destPath = path.join(packagesDir, filename);
-			await fs.rename(sourcePath, destPath);
-		}
 
 		return Respond({
 			res,
@@ -58,6 +83,9 @@ async function createPackage(req: Request, res: Response, next: NextFunction) {
 			data: pkg,
 		});
 	} catch (error) {
+		if (uploadedImages.length > 0) {
+			await deleteCloudinaryImages(uploadedImages, true);
+		}
 		return next(error);
 	}
 }
@@ -129,47 +157,32 @@ async function updatePackage(req: Request, res: Response, next: NextFunction) {
 		const packageId = req.locals.id!;
 		const data = req.locals.data as UpdatePackageValidationResult;
 
-		// Get uploaded files from multer if any
 		const files = req.files as Express.Multer.File[] | undefined;
 
 		const updateData: any = { ...data };
 
-		// If images are being updated
 		if (files && files.length > 0) {
-			// Validate image file types
-			const allowedImageTypes = ['image/png', 'image/webp', 'image/jpg', 'image/jpeg'];
-			for (const file of files) {
-				if (!allowedImageTypes.includes(file.mimetype)) {
-					return next(new BadRequestError('Only JPG, PNG, WEBP images are allowed'));
-				}
-			}
+			validatePackageImageFiles(files);
 
-			const imageFilenames = files.map((file) => file.filename);
-			updateData.images = imageFilenames;
-
-			// Get existing package to delete old images
 			const existingPackage = await PackageService.getPackageById(packageId, true);
-			const packagesDir = path.join(global.__basedir, Path.Packages);
-			const miscDir = path.join(global.__basedir, Path.Misc);
+			const uploadedImages = await uploadPackageImages(files);
+			updateData.images = uploadedImages;
 
-			// Delete old images
-			for (const oldImage of existingPackage.images) {
-				const oldImagePath = path.join(packagesDir, oldImage);
-				try {
-					await fs.unlink(oldImagePath);
-				} catch {
-					// Ignore errors if file doesn't exist
-				}
+			let updatedPackage;
+			try {
+				updatedPackage = await PackageService.updatePackage(packageId, updateData);
+			} catch (error) {
+				await deleteCloudinaryImages(uploadedImages, true);
+				throw error;
 			}
 
-			// Move new files from static/misc to static/packages
-			await fs.mkdir(packagesDir, { recursive: true });
+			await deleteCloudinaryImages(existingPackage.images);
 
-			for (const filename of imageFilenames) {
-				const sourcePath = path.join(miscDir, filename);
-				const destPath = path.join(packagesDir, filename);
-				await fs.rename(sourcePath, destPath);
-			}
+			return Respond({
+				res,
+				status: 200,
+				data: updatedPackage,
+			});
 		}
 
 		const updatedPackage = await PackageService.updatePackage(packageId, updateData);
@@ -188,19 +201,8 @@ async function deletePackage(req: Request, res: Response, next: NextFunction) {
 	try {
 		const packageId = req.locals.id!;
 
-		// Get package to delete associated images
 		const pkg = await PackageService.getPackageById(packageId, true);
-		const packagesDir = path.join(global.__basedir, Path.Packages);
-
-		// Delete all associated images
-		for (const image of pkg.images) {
-			const imagePath = path.join(packagesDir, image);
-			try {
-				await fs.unlink(imagePath);
-			} catch {
-				// Ignore errors if file doesn't exist
-			}
-		}
+		await deleteCloudinaryImages(pkg.images);
 
 		await PackageService.deletePackage(packageId);
 

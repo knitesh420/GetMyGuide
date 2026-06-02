@@ -1,5 +1,5 @@
 import { PackageDB } from '@mongo';
-import IPackage, { IPackageTranslations } from '@mongo/types/package';
+import IPackage, { IPackageImage, IPackageTranslations } from '@mongo/types/package';
 import { Types } from 'mongoose';
 import { NotFoundError } from 'node-be-utilities';
 
@@ -10,7 +10,7 @@ interface PackageData {
 	numberOfDays?: number;
 	featured?: boolean;
 	status?: 'inactive' | 'active';
-	images: string[];
+	images: IPackageImage[];
 	translations?: IPackageTranslations;
 	title?: string;
 	city?: string;
@@ -28,7 +28,7 @@ interface UpdatePackageData {
 	numberOfDays?: number;
 	featured?: boolean;
 	status?: 'inactive' | 'active';
-	images?: string[];
+	images?: IPackageImage[];
 	translations?: Partial<IPackageTranslations>;
 	title?: string;
 	city?: string;
@@ -48,7 +48,7 @@ interface TransformedPackage {
 	numberOfDays?: number;
 	featured?: boolean;
 	status?: 'inactive' | 'active';
-	images: string[];
+	images: IPackageImage[];
 	translations: IPackageTranslations;
 	title: string;
 	city: string;
@@ -70,6 +70,13 @@ interface PackageTranslationFallback {
 	description?: string;
 	inclusions?: string[];
 	exclusions?: string[];
+}
+
+function normalizePackageImages(images: IPackageImage[] = []): IPackageImage[] {
+	return images.map((image) => ({
+		url: image.url,
+		publicId: image.publicId,
+	}));
 }
 
 function getTranslationFallback(pkg: IPackage): PackageTranslationFallback {
@@ -96,7 +103,7 @@ function transformPackage(pkg: IPackage): TransformedPackage {
 		numberOfDays: pkg.numberOfDays,
 		featured: pkg.featured,
 		status: pkg.status,
-		images: pkg.images,
+		images: normalizePackageImages(pkg.images),
 		translations: pkg.translations || {
 			en: {},
 			es: {},
