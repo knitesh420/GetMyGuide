@@ -5,22 +5,31 @@ import { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, resolvePackageImageUrl } from "@/lib/utils";
 
 interface TourImageGalleryProps {
-  images: string[];
+  images: Array<string | { url?: string }>;
   title: string;
 }
 
-export function TourImageGallery({ images = [], title }: TourImageGalleryProps) {
+export function TourImageGallery({
+  images = [],
+  title,
+}: TourImageGalleryProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // --- FIX #1: Use useMemo for stable derivation of unique images ---
-  const uniqueImages = useMemo(() => (images?.length ? [...new Set(images)] : []), [images]);
+  const uniqueImages = useMemo(
+    () =>
+      images?.length ? [...new Set(images.map(resolvePackageImageUrl))] : [],
+    [images],
+  );
 
   // --- FIX #2: More robust state handling ---
   // State for user-clicked image. If null, we default to the first image.
-  const [userSelectedImage, setUserSelectedImage] = useState<string | null>(null);
+  const [userSelectedImage, setUserSelectedImage] = useState<string | null>(
+    null,
+  );
 
   // The image to display is either the one the user clicked or the first in the list.
   // This is derived on every render, so it's never stale and prevents flickering.
@@ -47,10 +56,17 @@ export function TourImageGallery({ images = [], title }: TourImageGalleryProps) 
       </div>
       <div className="flex-grow overflow-y-auto p-4">
         <div className="max-w-4xl mx-auto space-y-4">
-          <h2 className="text-2xl font-bold text-white text-center mb-4">{title}</h2>
+          <h2 className="text-2xl font-bold text-white text-center mb-4">
+            {title}
+          </h2>
           {uniqueImages.map((src, index) => (
             <div key={index} className="relative aspect-video w-full">
-              <Image src={src} alt={`${title} - ${index + 1}`} fill className="object-contain" />
+              <Image
+                src={src}
+                alt={`${title} - ${index + 1}`}
+                fill
+                className="object-contain"
+              />
             </div>
           ))}
         </div>
@@ -97,7 +113,7 @@ export function TourImageGallery({ images = [], title }: TourImageGalleryProps) 
                 "relative aspect-square w-20 h-20 md:w-full md:h-auto flex-shrink-0 cursor-pointer rounded-lg overflow-hidden transition-all duration-200",
                 selectedImage === src
                   ? "ring-2 ring-primary ring-offset-2"
-                  : "opacity-60 hover:opacity-100"
+                  : "opacity-60 hover:opacity-100",
               )}
               onClick={() => setUserSelectedImage(src)}
             >

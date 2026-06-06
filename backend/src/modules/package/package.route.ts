@@ -1,52 +1,45 @@
 import express from 'express';
-import { VerifyMinLevel, VerifySession, VerifySessionOptional } from '../../middleware';
-import IDValidator from '../../middleware/idValidator';
-import Controller from './package.controller';
-import { parsePackageFormData } from './package.middleware';
-import {
-	CreatePackageValidator,
-	UpdatePackageValidator,
-	UpdateStatusValidator,
-} from './package.validator';
+import multer from 'multer';
+
+import { PackageController } from './package.controller';
+import { CreatePackageValidator, UpdatePackageValidator } from './package.validator';
+
+import VerifySession from '../../middleware/VerifySession';
+import { VerifyMinLevel } from '../../middleware/VerifySession';
 
 const router = express.Router();
 
-// Public routes (with optional auth for admin access)
-router.route('/').get(VerifySessionOptional, Controller.getPackages);
-router.route('/available-cities').get(Controller.getAvailableCities);
-router.route('/:id').get(VerifySessionOptional, IDValidator, Controller.getPackageById);
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
 
-// Admin-only routes
-router
-	.route('/')
-	.post(
-		VerifySession,
-		VerifyMinLevel('admin'),
-		parsePackageFormData,
-		CreatePackageValidator,
-		Controller.createPackage
-	);
+/*
+ PUBLIC
+*/
+router.get('/', PackageController.getPackages);
 
-router
-	.route('/:id')
-	.patch(
-		VerifySession,
-		VerifyMinLevel('admin'),
-		IDValidator,
-		parsePackageFormData,
-		UpdatePackageValidator,
-		Controller.updatePackage
-	)
-	.delete(VerifySession, VerifyMinLevel('admin'), IDValidator, Controller.deletePackage);
+router.get('/:id', PackageController.getPackageById);
 
-router
-	.route('/:id/update-status')
-	.post(
-		VerifySession,
-		VerifyMinLevel('admin'),
-		IDValidator,
-		UpdateStatusValidator,
-		Controller.updatePackageStatus
-	);
+/*
+ ADMIN ONLY
+*/
+router.post(
+	'/',
+	VerifySession,
+	VerifyMinLevel('admin'),
+	upload.array('images', 10),
+	CreatePackageValidator,
+	PackageController.createPackage
+);
+
+router.patch(
+	'/:id',
+	VerifySession,
+	VerifyMinLevel('admin'),
+	upload.array('images', 10),
+	UpdatePackageValidator,
+	PackageController.updatePackage
+);
+
+router.delete('/:id', VerifySession, VerifyMinLevel('admin'), PackageController.deletePackage);
 
 export default router;

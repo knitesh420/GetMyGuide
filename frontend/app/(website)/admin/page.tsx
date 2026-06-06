@@ -27,6 +27,10 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/hooks/useAuth";
 import dynamic from "next/dynamic";
+import { resolvePackageImageUrl } from "@/lib/utils";
+import { PackageFormModal } from "@/components/admin/PackageFormModal";
+import { AdminLocation } from "@/types/admin";
+import { RichTextEditor } from "@/components/editor/RichTextEditor";
 
 interface Guide {
   id: string;
@@ -127,6 +131,15 @@ interface Booking {
 
 type LanguageCode = "en" | "es" | "fr" | "ru" | "de";
 
+type PackageImage =
+  | string
+  | {
+      url?: string;
+      secure_url?: string;
+      path?: string;
+      publicId?: string;
+    };
+
 interface TranslationFields {
   title?: string;
   city?: string;
@@ -135,6 +148,7 @@ interface TranslationFields {
   description?: string;
   inclusions?: string[];
   exclusions?: string[];
+  highlights?: string[];
 }
 
 interface ServicePackage {
@@ -142,7 +156,7 @@ interface ServicePackage {
   title: string;
   city: string;
   places: string[];
-  images: string[];
+  images: PackageImage[];
   status: "active" | "inactive" | string;
   createdAt: string;
   shortDescription?: string;
@@ -152,6 +166,7 @@ interface ServicePackage {
   numberOfDays?: number;
   inclusions?: string[];
   exclusions?: string[];
+  highlights?: string[];
   featured?: boolean;
   translations?: Partial<Record<LanguageCode, TranslationFields>>;
 }
@@ -204,9 +219,54 @@ function AdminDashboard() {
   const [editingPackage, setEditingPackage] = useState<ServicePackage | null>(
     null,
   );
+  const [isCreatePackageOpen, setIsCreatePackageOpen] = useState(false);
+  const [isPackageSaving, setIsPackageSaving] = useState(false);
+  const [locations, setLocations] = useState<AdminLocation[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const mapPackageForAdmin = (pkg: any): ServicePackage => {
+    const en = pkg?.translations?.en ?? {};
+    const fallbackPlaces = Array.isArray(en.places) ? en.places : [];
+    const fallbackInclusions = Array.isArray(en.inclusions)
+      ? en.inclusions
+      : [];
+    const fallbackExclusions = Array.isArray(en.exclusions)
+      ? en.exclusions
+      : [];
+    const fallbackHighlights = Array.isArray(en.highlights)
+      ? en.highlights
+      : [];
+
+    return {
+      ...pkg,
+      id: pkg?._id || pkg?.id,
+      title: pkg?.title || en.title || "",
+      city: pkg?.city || en.city || "",
+      places:
+        Array.isArray(pkg?.places) && pkg.places.length
+          ? pkg.places
+          : fallbackPlaces,
+      images: Array.isArray(pkg?.images) ? pkg.images : [],
+      status: pkg?.status || "active",
+      createdAt: pkg?.createdAt || new Date().toISOString(),
+      shortDescription: pkg?.shortDescription || en.shortDescription || "",
+      description: pkg?.description || en.description || "",
+      inclusions:
+        Array.isArray(pkg?.inclusions) && pkg.inclusions.length
+          ? pkg.inclusions
+          : fallbackInclusions,
+      exclusions:
+        Array.isArray(pkg?.exclusions) && pkg.exclusions.length
+          ? pkg.exclusions
+          : fallbackExclusions,
+      highlights:
+        Array.isArray(pkg?.highlights) && pkg.highlights.length
+          ? pkg.highlights
+          : fallbackHighlights,
+      featured: pkg?.featured ?? false,
+    };
+  };
 
   const handleDeleteGuide = async (guideId: string) => {
     if (
@@ -375,6 +435,7 @@ function AdminDashboard() {
       numberOfDays?: number;
       inclusions?: string[];
       exclusions?: string[];
+      translations?: Partial<Record<LanguageCode, TranslationFields>>;
       featured?: boolean;
       status?: "active" | "inactive";
       images?: File[];
@@ -431,9 +492,10 @@ function AdminDashboard() {
 
       const data = await res.json();
       const updated = data?.data ?? data;
+      const mappedUpdated = mapPackageForAdmin(updated);
       setPackages((prev) =>
         prev.map((p) =>
-          p.id === packageId ? { ...p, ...updates, ...updated } : p,
+          p.id === packageId ? { ...p, ...updates, ...mappedUpdated } : p,
         ),
       );
       setEditingPackage(null);
@@ -443,6 +505,33 @@ function AdminDashboard() {
       alert("Error updating service");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreatePackage = async (formData: FormData) => {
+    setIsPackageSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/package`, {
+        method: "POST",
+        credentials: "include",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        alert(`Failed to create package: ${res.status} ${txt}`);
+        return;
+      }
+      const data = await res.json();
+      const newPackage = data.data || data;
+      const mapped = mapPackageForAdmin(newPackage);
+      setPackages((prev) => [mapped, ...prev]);
+      setIsCreatePackageOpen(false);
+      alert("Package created successfully!");
+    } catch (err) {
+      alert("Error creating package");
+    } finally {
+      setIsPackageSaving(false);
     }
   };
 
@@ -494,6 +583,30 @@ function AdminDashboard() {
       router.replace("/");
     }
   }, [isAuthenticated, user?.role, router]);
+
+  // Fetch locations on component mount
+  useEffect(() => {
+    const fetchLocations = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/location`, {
+          credentials: "include",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setLocations(data.data || data.locations || []);
+        }
+      } catch (err) {
+        console.error("Error fetching locations:", err);
+      }
+    };
+    if (token) {
+      fetchLocations();
+    }
+  }, [token, API_BASE]);
 
   // Don't render anything if not authenticated or not admin
   if (!isAuthenticated || user?.role !== "admin") {
@@ -721,8 +834,9 @@ function AdminDashboard() {
 
             if (pkgRes.ok) {
               const pkgData = await pkgRes.json();
-              const pkgArray = pkgData.data?.packages || pkgData.packages || [];
-              setPackages(pkgArray);
+              const pkgArray = pkgData.data || pkgData.packages || [];
+              const mapped = pkgArray.map(mapPackageForAdmin);
+              setPackages(mapped);
             } else {
               const errorText = await pkgRes.text();
               console.error(
@@ -1007,6 +1121,15 @@ function AdminDashboard() {
             )}
             {activeTab === "services" && (
               <>
+                <div className="flex justify-end mb-4">
+                  <button
+                    onClick={() => setIsCreatePackageOpen(true)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    New Package
+                  </button>
+                </div>
                 {packages.length === 0 && !loading && (
                   <div className="text-center py-8">
                     <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -1054,6 +1177,16 @@ function AdminDashboard() {
           onSave={(updates) => handleUpdatePackage(editingPackage.id, updates)}
         />
       )}
+
+      {/* Create Package Modal */}
+      <PackageFormModal
+        isOpen={isCreatePackageOpen}
+        onClose={() => setIsCreatePackageOpen(false)}
+        onSave={handleCreatePackage}
+        editingPackage={null}
+        isLoading={isPackageSaving}
+        allLocations={locations}
+      />
     </div>
   );
 }
@@ -2507,7 +2640,7 @@ function ServicesTable({
                 <td className="px-6 py-4">
                   {pkg.images.length > 0 && (
                     <img
-                      src={`${API_BASE}/media/packages/${pkg.images[0]}`}
+                      src={resolvePackageImageUrl(pkg.images[0])}
                       alt={pkg.title}
                       className="w-16 h-16 rounded object-cover"
                     />
@@ -2591,6 +2724,7 @@ function EditServiceModal({
 }) {
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const supportedLanguages: LanguageCode[] = ["en", "es", "fr", "ru", "de"];
+  const translationLanguages: LanguageCode[] = supportedLanguages;
 
   interface TranslationFormState {
     title: string;
@@ -2600,6 +2734,7 @@ function EditServiceModal({
     description: string;
     inclusions: string;
     exclusions: string;
+    highlights: string;
   }
 
   const createTranslationState = (): TranslationFormState => ({
@@ -2610,6 +2745,7 @@ function EditServiceModal({
     description: "",
     inclusions: "",
     exclusions: "",
+    highlights: "",
   });
 
   const [currentLang, setCurrentLang] = useState<LanguageCode>("en");
@@ -2623,13 +2759,6 @@ function EditServiceModal({
     de: createTranslationState(),
   });
 
-  const [title, setTitle] = useState(pkg.title);
-  const [city, setCity] = useState(pkg.city);
-  const [places, setPlaces] = useState(pkg.places.join(", "));
-  const [shortDescription, setShortDescription] = useState(
-    pkg.shortDescription ?? "",
-  );
-  const [description, setDescription] = useState(pkg.description ?? "");
   const [price, setPrice] = useState<string>(
     pkg.price !== undefined ? String(pkg.price) : "",
   );
@@ -2639,12 +2768,6 @@ function EditServiceModal({
   const [numberOfDays, setNumberOfDays] = useState<string>(
     pkg.numberOfDays !== undefined ? String(pkg.numberOfDays) : "",
   );
-  const [inclusions, setInclusions] = useState<string>(
-    (pkg.inclusions ?? []).join("\n"),
-  );
-  const [exclusions, setExclusions] = useState<string>(
-    (pkg.exclusions ?? []).join("\n"),
-  );
   const [featured, setFeatured] = useState<boolean>(pkg.featured ?? false);
   const [status, setStatus] = useState<"active" | "inactive">(
     pkg.status === "inactive" ? "inactive" : "active",
@@ -2653,17 +2776,27 @@ function EditServiceModal({
 
   useEffect(() => {
     const mergeTranslation = (lang: LanguageCode): TranslationFormState => ({
-      title: pkg.translations?.[lang]?.title ?? "",
-      city: pkg.translations?.[lang]?.city ?? "",
-      places: (pkg.translations?.[lang]?.places ?? []).join(", "),
+      title:
+        pkg.translations?.[lang]?.title ?? (lang === "en" ? pkg.title : ""),
+      city: pkg.translations?.[lang]?.city ?? (lang === "en" ? pkg.city : ""),
+      places: (
+        pkg.translations?.[lang]?.places ?? (lang === "en" ? pkg.places : [])
+      ).join(", "),
       shortDescription:
         pkg.translations?.[lang]?.shortDescription ??
         (lang === "en" ? (pkg.shortDescription ?? "") : ""),
       description:
         pkg.translations?.[lang]?.description ??
         (lang === "en" ? (pkg.description ?? "") : ""),
-      inclusions: (pkg.translations?.[lang]?.inclusions ?? []).join("\n"),
-      exclusions: (pkg.translations?.[lang]?.exclusions ?? []).join("\n"),
+      inclusions: (
+        pkg.translations?.[lang]?.inclusions ??
+        (lang === "en" ? (pkg.inclusions ?? []) : [])
+      ).join("\n"),
+      exclusions: (
+        pkg.translations?.[lang]?.exclusions ??
+        (lang === "en" ? (pkg.exclusions ?? []) : [])
+      ).join("\n"),
+      highlights: (pkg.translations?.[lang]?.highlights ?? []).join("\n"),
     });
 
     setTranslations({
@@ -2677,7 +2810,7 @@ function EditServiceModal({
 
   const normalizeTranslationPlaces = (rawValue: string) =>
     rawValue
-      .split(",")
+      .split(/[\n,]+/)
       .map((item) => item.trim())
       .filter((item) => item.length > 0);
 
@@ -2685,6 +2818,7 @@ function EditServiceModal({
     supportedLanguages.reduce(
       (acc, lang) => {
         const values = translations[lang];
+
         const hasContent =
           values.title.trim() ||
           values.city.trim() ||
@@ -2692,11 +2826,12 @@ function EditServiceModal({
           values.shortDescription.trim() ||
           values.description.trim() ||
           values.inclusions.trim() ||
-          values.exclusions.trim();
+          values.exclusions.trim() ||
+          values.highlights.trim();
 
         if (!hasContent) return acc;
 
-        acc[lang] = {
+        const normalized = {
           title: values.title.trim(),
           city: values.city.trim(),
           places: normalizeTranslationPlaces(values.places),
@@ -2704,7 +2839,22 @@ function EditServiceModal({
           description: values.description.trim(),
           inclusions: normalizeTranslationPlaces(values.inclusions),
           exclusions: normalizeTranslationPlaces(values.exclusions),
+          highlights: normalizeTranslationPlaces(values.highlights),
         };
+
+        const isComplete =
+          normalized.title &&
+          normalized.city &&
+          normalized.shortDescription &&
+          normalized.description &&
+          normalized.places.length &&
+          normalized.inclusions.length &&
+          normalized.exclusions.length &&
+          normalized.highlights.length;
+
+        if (lang !== "en" && !isComplete) return acc;
+
+        acc[lang] = normalized;
 
         return acc;
       },
@@ -2713,22 +2863,23 @@ function EditServiceModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const placesArr = places
-      .split(",")
-      .map((p) => p.trim())
-      .filter((p) => p.length > 0);
-    if (!title.trim() || !city.trim() || placesArr.length === 0) {
-      alert("Title, city, and at least one place are required.");
+    const translationPayload = buildTranslations();
+    const english = translationPayload.en;
+    if (
+      !english?.title ||
+      !english?.city ||
+      !english?.shortDescription ||
+      !english?.description ||
+      !english?.places?.length ||
+      !english?.inclusions?.length ||
+      !english?.exclusions?.length ||
+      !english?.highlights?.length
+    ) {
+      alert(
+        "English translation requires title, city, places, highlights, short description, description, inclusions, and exclusions.",
+      );
       return;
     }
-    const inclusionsArr = inclusions
-      .split("\n")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    const exclusionsArr = exclusions
-      .split("\n")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
 
     if (imageFiles.length > 0) {
       const ok = confirm(
@@ -2737,26 +2888,15 @@ function EditServiceModal({
       if (!ok) return;
     }
 
-    const translationPayload = buildTranslations();
-
     onSave({
-      title: title.trim(),
-      city: city.trim(),
-      places: placesArr,
-      shortDescription: shortDescription.trim(),
-      description: description.trim(),
       price: price !== "" ? Number(price) : undefined,
       numberOfPeople:
         numberOfPeople !== "" ? Number(numberOfPeople) : undefined,
       numberOfDays: numberOfDays !== "" ? Number(numberOfDays) : undefined,
-      inclusions: inclusionsArr,
-      exclusions: exclusionsArr,
       featured,
       status,
       images: imageFiles.length > 0 ? imageFiles : undefined,
-      ...(Object.keys(translationPayload).length > 0
-        ? { translations: translationPayload }
-        : {}),
+      translations: translationPayload,
     });
   };
 
@@ -2778,7 +2918,7 @@ function EditServiceModal({
               <span className="text-sm font-semibold text-slate-700">
                 Translation language:
               </span>
-              {supportedLanguages.map((lang) => (
+              {translationLanguages.map((lang) => (
                 <button
                   key={lang}
                   type="button"
@@ -2849,6 +2989,26 @@ function EditServiceModal({
                     }))
                   }
                   placeholder="Comma-separated translated places"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 focus:border-blue-400 focus:bg-blue-50/30 outline-none"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Highlights ({currentLang.toUpperCase()})
+                </label>
+                <input
+                  type="text"
+                  value={translations[currentLang].highlights}
+                  onChange={(e) =>
+                    setTranslations((prev) => ({
+                      ...prev,
+                      [currentLang]: {
+                        ...prev[currentLang],
+                        highlights: e.target.value,
+                      },
+                    }))
+                  }
+                  placeholder="Comma-separated highlights"
                   className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 focus:border-blue-400 focus:bg-blue-50/30 outline-none"
                 />
               </div>
@@ -2931,16 +3091,6 @@ function EditServiceModal({
               </div>
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Legacy Fallback Description
-            </label>
-            <RichTextEditor
-              content={description}
-              onChange={setDescription}
-              placeholder="Fallback plain text description for legacy packages"
-            />
-          </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -2982,32 +3132,6 @@ function EditServiceModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Inclusions (one per line)
-              </label>
-              <textarea
-                value={inclusions}
-                onChange={(e) => setInclusions(e.target.value)}
-                rows={4}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Hotel stay&#10;Breakfast&#10;Sightseeing"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Exclusions (one per line)
-              </label>
-              <textarea
-                value={exclusions}
-                onChange={(e) => setExclusions(e.target.value)}
-                rows={4}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Air fare&#10;Personal expenses"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Status
               </label>
               <select
@@ -3039,10 +3163,10 @@ function EditServiceModal({
             </label>
             {pkg.images.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-2">
-                {pkg.images.map((img) => (
+                {pkg.images.map((img, idx) => (
                   <img
-                    key={img}
-                    src={`${API_BASE}/media/packages/${img}`}
+                    key={String(idx)}
+                    src={resolvePackageImageUrl(img)}
                     alt=""
                     className="w-20 h-20 rounded object-cover border"
                   />

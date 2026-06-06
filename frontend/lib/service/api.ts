@@ -17,17 +17,14 @@ interface ApiResponse<T = any> {
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
-  headers: {
-    "Content-Type": "application/json", // Default JSON
-  },
+  // do not set a default Content-Type header here so FormData uploads
+  // can be sent with the correct multipart boundary by the browser/axios
 });
 
 const publicApiClient = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: false,
-  headers: {
-    "Content-Type": "application/json",
-  },
+  // same: avoid forcing Content-Type so file uploads work correctly
 });
 
 // Request interceptor

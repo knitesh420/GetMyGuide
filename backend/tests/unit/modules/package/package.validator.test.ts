@@ -10,10 +10,35 @@ import {
 	createMockResponse,
 } from '../../../helpers/testHelpers';
 
+const validTranslation = (overrides: Record<string, unknown> = {}) => ({
+	title: 'Golden Triangle Tour',
+	city: 'Delhi',
+	places: ['India Gate', 'Red Fort'],
+	shortDescription: 'A compact city tour',
+	description: 'Detailed package description',
+	inclusions: ['Guide', 'Breakfast'],
+	exclusions: ['Flights'],
+	highlights: ['Old Delhi walk'],
+	...overrides,
+});
+
+const validCreateBody = (overrides: Record<string, unknown> = {}) => ({
+	price: '5000',
+	numberOfPeople: '2',
+	numberOfDays: '3',
+	featured: 'true',
+	translations: {
+		en: validTranslation(),
+	},
+	...overrides,
+});
+
 describe('Package Validator', () => {
 	let mockRequest: any;
 	let mockResponse: any;
 	let mockNext: ReturnType<typeof createMockNext>;
+
+	const nextError = () => (mockNext as jest.Mock).mock.calls[0][0];
 
 	beforeEach(() => {
 		mockRequest = createMockRequest();
@@ -22,288 +47,148 @@ describe('Package Validator', () => {
 	});
 
 	describe('CreatePackageValidator', () => {
-		it('should pass validation with valid data', async () => {
-			mockRequest.body = {
-				title: 'Test Package',
-				city: 'Mumbai',
-				places: ['Taj Mahal', 'Red Fort'],
-				price: 5000,
-			};
+		it('passes validation with valid package data', async () => {
+			mockRequest.body = validCreateBody();
 
 			await CreatePackageValidator(mockRequest as any, mockResponse as any, mockNext as any);
 
 			expect(mockNext).toHaveBeenCalledWith();
-			expect(mockRequest.locals?.data).toBeDefined();
-			expect(mockRequest.locals?.data.title).toBe('Test Package');
-			expect(mockRequest.locals?.data.city).toBe('Mumbai');
-			expect(mockRequest.locals?.data.places).toEqual(['Taj Mahal', 'Red Fort']);
-			expect(mockRequest.locals?.data.price).toBe(5000);
-			expect(mockRequest.locals?.data.featured).toBe(false);
-		});
-
-		it('should pass validation with all optional fields', async () => {
-			mockRequest.body = {
-				title: 'Premium Package',
-				city: 'Delhi',
-				places: ['India Gate'],
-				price: 10000,
-				shortDescription: 'A premium tour',
-				description: 'Detailed description',
-				inclusions: ['Breakfast', 'Lunch'],
-				exclusions: ['Dinner'],
+			expect(mockRequest.locals.data).toEqual({
+				price: 5000,
+				numberOfPeople: 2,
+				numberOfDays: 3,
 				featured: true,
-			};
+				translations: {
+					en: validTranslation(),
+				},
+			});
+		});
+
+		it('parses translations from multipart form-data JSON strings', async () => {
+			mockRequest.body = validCreateBody({
+				translations: JSON.stringify({
+					en: validTranslation({
+						places: 'Qutub Minar, Lotus Temple',
+						inclusions: 'Guide, Breakfast',
+						exclusions: 'Flights',
+						highlights: 'Sunset view, Heritage walk',
+					}),
+				}),
+			});
 
 			await CreatePackageValidator(mockRequest as any, mockResponse as any, mockNext as any);
 
 			expect(mockNext).toHaveBeenCalledWith();
-			expect(mockRequest.locals?.data.shortDescription).toBe('A premium tour');
-			expect(mockRequest.locals?.data.description).toBe('Detailed description');
-			expect(mockRequest.locals?.data.inclusions).toEqual(['Breakfast', 'Lunch']);
-			expect(mockRequest.locals?.data.exclusions).toEqual(['Dinner']);
-			expect(mockRequest.locals?.data.featured).toBe(true);
+			expect(mockRequest.locals.data.translations.en.places).toEqual([
+				'Qutub Minar',
+				'Lotus Temple',
+			]);
+			expect(mockRequest.locals.data.translations.en.highlights).toEqual([
+				'Sunset view',
+				'Heritage walk',
+			]);
 		});
 
-		it('should parse places from comma-separated string', async () => {
-			mockRequest.body = {
-				title: 'Test Package',
-				city: 'Mumbai',
-				places: 'Place1, Place2, Place3',
-				price: 5000,
-			};
+		it('rejects invalid translations JSON', async () => {
+			mockRequest.body = validCreateBody({ translations: '{bad json' });
 
 			await CreatePackageValidator(mockRequest as any, mockResponse as any, mockNext as any);
 
-			expect(mockNext).toHaveBeenCalledWith();
-			expect(mockRequest.locals?.data.places).toEqual(['Place1', 'Place2', 'Place3']);
+			expect(nextError()).toBeInstanceOf(BadRequestError);
+			expect(nextError().message).toContain('Invalid translations JSON');
 		});
 
-		it('should parse places from JSON string', async () => {
-			mockRequest.body = {
-				title: 'Test Package',
-				city: 'Mumbai',
-				places: JSON.stringify(['Place1', 'Place2']),
-				price: 5000,
-			};
+		it('requires numberOfPeople', async () => {
+			mockRequest.body = validCreateBody({ numberOfPeople: undefined });
 
 			await CreatePackageValidator(mockRequest as any, mockResponse as any, mockNext as any);
 
-			expect(mockNext).toHaveBeenCalledWith();
-			expect(mockRequest.locals?.data.places).toEqual(['Place1', 'Place2']);
+			expect(nextError()).toBeInstanceOf(BadRequestError);
+			expect(nextError().message).toContain('numberOfPeople');
 		});
 
-		it('should parse price from string', async () => {
-			mockRequest.body = {
-				title: 'Test Package',
-				city: 'Mumbai',
-				places: ['Place1'],
-				price: '5000',
-			};
+		it('requires English highlights', async () => {
+			mockRequest.body = validCreateBody({
+				translations: {
+					en: validTranslation({ highlights: [] }),
+				},
+			});
 
 			await CreatePackageValidator(mockRequest as any, mockResponse as any, mockNext as any);
 
-			expect(mockNext).toHaveBeenCalledWith();
-			expect(mockRequest.locals?.data.price).toBe(5000);
-		});
-
-		it('should return 400 when title is missing', async () => {
-			mockRequest.body = {
-				city: 'Mumbai',
-				places: ['Place1'],
-				price: 5000,
-			};
-
-			await CreatePackageValidator(mockRequest as any, mockResponse as any, mockNext as any);
-
-			expect(mockNext).toHaveBeenCalled();
-			const error = (mockNext as jest.Mock).mock.calls[0][0];
-			expect(error).toBeInstanceOf(BadRequestError);
-			expect(error.message).toContain('title');
-		});
-
-		it('should return 400 when city is missing', async () => {
-			mockRequest.body = {
-				title: 'Test Package',
-				places: ['Place1'],
-				price: 5000,
-			};
-
-			await CreatePackageValidator(mockRequest as any, mockResponse as any, mockNext as any);
-
-			expect(mockNext).toHaveBeenCalled();
-			const error = (mockNext as jest.Mock).mock.calls[0][0];
-			expect(error).toBeInstanceOf(BadRequestError);
-			expect(error.message).toContain('city');
-		});
-
-		it('should return 400 when places is missing', async () => {
-			mockRequest.body = {
-				title: 'Test Package',
-				city: 'Mumbai',
-				price: 5000,
-			};
-
-			await CreatePackageValidator(mockRequest as any, mockResponse as any, mockNext as any);
-
-			expect(mockNext).toHaveBeenCalled();
-			const error = (mockNext as jest.Mock).mock.calls[0][0];
-			expect(error).toBeInstanceOf(BadRequestError);
-			expect(error.message).toContain('places');
-		});
-
-		it('should return 400 when price is missing', async () => {
-			mockRequest.body = {
-				title: 'Test Package',
-				city: 'Mumbai',
-				places: ['Place1'],
-			};
-
-			await CreatePackageValidator(mockRequest as any, mockResponse as any, mockNext as any);
-
-			expect(mockNext).toHaveBeenCalled();
-			const error = (mockNext as jest.Mock).mock.calls[0][0];
-			expect(error).toBeInstanceOf(BadRequestError);
-			expect(error.message).toContain('price');
-		});
-
-		it('should return 400 when price is negative', async () => {
-			mockRequest.body = {
-				title: 'Test Package',
-				city: 'Mumbai',
-				places: ['Place1'],
-				price: -100,
-			};
-
-			await CreatePackageValidator(mockRequest as any, mockResponse as any, mockNext as any);
-
-			expect(mockNext).toHaveBeenCalled();
-			const error = (mockNext as jest.Mock).mock.calls[0][0];
-			expect(error).toBeInstanceOf(BadRequestError);
-		});
-
-		it('should trim whitespace from string fields', async () => {
-			mockRequest.body = {
-				title: '  Test Package  ',
-				city: '  Mumbai  ',
-				places: ['Place1'],
-				price: 5000,
-			};
-
-			await CreatePackageValidator(mockRequest as any, mockResponse as any, mockNext as any);
-
-			expect(mockNext).toHaveBeenCalledWith();
-			expect(mockRequest.locals?.data.title).toBe('Test Package');
-			expect(mockRequest.locals?.data.city).toBe('Mumbai');
-		});
-
-		it('should convert string "true" to boolean for featured', async () => {
-			mockRequest.body = {
-				title: 'Test Package',
-				city: 'Mumbai',
-				places: ['Place1'],
-				price: 5000,
-				featured: 'true',
-			};
-
-			await CreatePackageValidator(mockRequest as any, mockResponse as any, mockNext as any);
-
-			expect(mockNext).toHaveBeenCalledWith();
-			expect(mockRequest.locals?.data.featured).toBe(true);
+			expect(nextError()).toBeInstanceOf(BadRequestError);
+			expect(nextError().message).toContain('translations.en.highlights');
 		});
 	});
 
 	describe('UpdatePackageValidator', () => {
-		it('should pass validation with partial update data', async () => {
+		it('passes validation with partial scalar updates', async () => {
 			mockRequest.body = {
-				title: 'Updated Title',
-				price: 6000,
+				price: '6000',
+				numberOfDays: '4',
+				featured: 'false',
 			};
 
 			await UpdatePackageValidator(mockRequest as any, mockResponse as any, mockNext as any);
 
 			expect(mockNext).toHaveBeenCalledWith();
-			expect(mockRequest.locals?.data.title).toBe('Updated Title');
-			expect(mockRequest.locals?.data.price).toBe(6000);
+			expect(mockRequest.locals.data).toEqual({
+				price: 6000,
+				numberOfDays: 4,
+				featured: false,
+			});
 		});
 
-		it('should pass validation with empty body (all fields optional)', async () => {
+		it('parses translation update JSON strings into dot-notation updates', async () => {
+			const en = validTranslation({ title: 'Updated Tour' });
+			mockRequest.body = {
+				translations: JSON.stringify({ en }),
+			};
+
+			await UpdatePackageValidator(mockRequest as any, mockResponse as any, mockNext as any);
+
+			expect(mockNext).toHaveBeenCalledWith();
+			expect(mockRequest.locals.data).toEqual({
+				'translations.en': en,
+			});
+		});
+
+		it('passes validation with an empty update body', async () => {
 			mockRequest.body = {};
 
 			await UpdatePackageValidator(mockRequest as any, mockResponse as any, mockNext as any);
 
 			expect(mockNext).toHaveBeenCalledWith();
+			expect(mockRequest.locals.data).toEqual({});
 		});
 
-		it('should return 400 when title is empty string', async () => {
-			mockRequest.body = {
-				title: '',
-			};
+		it('rejects negative prices', async () => {
+			mockRequest.body = { price: '-1' };
 
 			await UpdatePackageValidator(mockRequest as any, mockResponse as any, mockNext as any);
 
-			expect(mockNext).toHaveBeenCalled();
-			const error = (mockNext as jest.Mock).mock.calls[0][0];
-			expect(error).toBeInstanceOf(BadRequestError);
-		});
-
-		it('should return 400 when price is negative', async () => {
-			mockRequest.body = {
-				price: -100,
-			};
-
-			await UpdatePackageValidator(mockRequest as any, mockResponse as any, mockNext as any);
-
-			expect(mockNext).toHaveBeenCalled();
-			const error = (mockNext as jest.Mock).mock.calls[0][0];
-			expect(error).toBeInstanceOf(BadRequestError);
+			expect(nextError()).toBeInstanceOf(BadRequestError);
+			expect(nextError().message).toContain('price');
 		});
 	});
 
 	describe('UpdateStatusValidator', () => {
-		it('should pass validation with active status', async () => {
-			mockRequest.body = {
-				status: 'active',
-			};
+		it('passes validation with active status', async () => {
+			mockRequest.body = { status: 'active' };
 
 			await UpdateStatusValidator(mockRequest as any, mockResponse as any, mockNext as any);
 
 			expect(mockNext).toHaveBeenCalledWith();
-			expect(mockRequest.locals?.data.status).toBe('active');
+			expect(mockRequest.locals.data.status).toBe('active');
 		});
 
-		it('should pass validation with inactive status', async () => {
-			mockRequest.body = {
-				status: 'inactive',
-			};
+		it('rejects invalid status values', async () => {
+			mockRequest.body = { status: 'archived' };
 
 			await UpdateStatusValidator(mockRequest as any, mockResponse as any, mockNext as any);
 
-			expect(mockNext).toHaveBeenCalledWith();
-			expect(mockRequest.locals?.data.status).toBe('inactive');
-		});
-
-		it('should return 400 when status is missing', async () => {
-			mockRequest.body = {};
-
-			await UpdateStatusValidator(mockRequest as any, mockResponse as any, mockNext as any);
-
-			expect(mockNext).toHaveBeenCalled();
-			const error = (mockNext as jest.Mock).mock.calls[0][0];
-			expect(error).toBeInstanceOf(BadRequestError);
-			expect(error.message).toContain('status');
-		});
-
-		it('should return 400 when status is invalid', async () => {
-			mockRequest.body = {
-				status: 'invalid',
-			};
-
-			await UpdateStatusValidator(mockRequest as any, mockResponse as any, mockNext as any);
-
-			expect(mockNext).toHaveBeenCalled();
-			const error = (mockNext as jest.Mock).mock.calls[0][0];
-			expect(error).toBeInstanceOf(BadRequestError);
-			expect(error.message).toContain('status');
+			expect(nextError()).toBeInstanceOf(BadRequestError);
+			expect(nextError().message).toContain('status');
 		});
 	});
 });

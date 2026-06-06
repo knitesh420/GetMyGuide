@@ -1,4 +1,5 @@
 import { apiService, publicApiService } from "@/lib/service/api";
+import { resolvePackageImageUrl } from "@/lib/utils";
 import { TourData } from "@/app/(website)/services/types/tour";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -19,7 +20,8 @@ interface PackageResponse {
   title: string;
   city: string;
   places: string[];
-  images: string[];
+  // backend may return either image filenames/urls (string) or objects { url, publicId }
+  images: Array<string | { url?: string; publicId?: string }>;
   shortDescription?: string;
   description?: string;
   price?: number;
@@ -41,14 +43,7 @@ interface PackageResponse {
   updatedAt: string;
 }
 
-function buildMediaUrl(img?: string): string {
-  if (!img || typeof img !== "string" || img.trim() === "") {
-    return "/placeholder.svg";
-  }
-
-  if (img.startsWith("http://") || img.startsWith("https://")) return img;
-  return `${API_BASE_URL}/media/packages/${img}`;
-}
+const buildMediaUrl = resolvePackageImageUrl;
 
 function mapPackageToTourData(pkg: PackageResponse): TourData {
   return {
@@ -77,7 +72,7 @@ function mapPackageToTourData(pkg: PackageResponse): TourData {
 export async function getServices(): Promise<TourData[]> {
   try {
     const response: any = await publicApiService.get("/package");
-    const packages = response?.data?.packages || [];
+    const packages = response?.data || [];
     return packages.map(mapPackageToTourData);
   } catch (err: any) {
     console.error("Error fetching services:", err);

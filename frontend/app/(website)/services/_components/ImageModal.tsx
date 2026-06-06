@@ -11,9 +11,10 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import ServiceContactForm from "./ServiceContactForm";
+import { resolvePackageImageUrl } from "@/lib/utils";
 
 interface Props {
-  images: string[];
+  images: Array<string | { url?: string }>;
   name: string;
   location: string;
   places?: string[];
@@ -67,7 +68,7 @@ export default function ImageModal({
         {/* Main Image */}
         <div className="relative bg-slate-900 rounded-t-2xl overflow-hidden shadow-2xl">
           <img
-            src={images[currentIndex] || "/placeholder.svg"}
+            src={resolvePackageImageUrl(images[currentIndex])}
             alt={`${name} - ${currentIndex + 1}`}
             onError={(event) => {
               const target = event.target as HTMLImageElement;
@@ -201,7 +202,7 @@ export default function ImageModal({
                 }`}
               >
                 <img
-                  src={img || "/placeholder.svg"}
+                  src={resolvePackageImageUrl(img)}
                   alt={`Thumbnail ${i + 1}`}
                   onError={(event) => {
                     const target = event.target as HTMLImageElement;

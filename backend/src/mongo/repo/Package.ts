@@ -31,6 +31,10 @@ const TranslationSchema = new mongoose.Schema(
 			type: [String],
 			default: [],
 		},
+		highlights: {
+			type: [String],
+			default: [],
+		},
 	},
 	{ _id: false }
 );

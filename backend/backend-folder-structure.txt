@@ -1,0 +1,64 @@
+backend/
+├─ eslint.config.mjs
+├─ jest.config.js
+├─ nodemon.json
+├─ package.json
+├─ pnpm-lock.yaml
+├─ tsconfig.json
+├─ build/
+│  └─ src/
+│     ├─ server-config.js
+│     ├─ server.js
+│     ├─ config/
+│     ├─ middleware/
+│     ├─ modules/
+│     ├─ mongo/
+│     ├─ provider/
+│     ├─ services/
+│     └─ utils/
+├─ logs/
+│  ├─ error/
+│  │  ├─ 2026-01/
+│  │  ├─ 2026-02/
+│  │  ├─ 2026-03/
+│  │  ├─ 2026-04/
+│  │  ├─ 2026-05/
+│  │  └─ 2026-06/
+│  └─ info/
+│     ├─ 2026-01/
+│     ├─ 2026-02/
+│     ├─ 2026-03/
+│     ├─ 2026-04/
+│     ├─ 2026-05/
+│     └─ 2026-06/
+├─ s/
+│  └─ static/
+│     ├─ advertisements/
+│     ├─ blogs/
+│     ├─ misc/
+│     └─ packages/
+├─ sr/
+│  └─ static/
+│     ├─ advertisements/
+│     ├─ blogs/
+│     ├─ misc/
+│     └─ packages/
+├─ src/
+│  ├─ server-config.ts
+│  ├─ server.ts
+│  ├─ config/
+│  ├─ middleware/
+│  ├─ modules/
+│  ├─ mongo/
+│  ├─ provider/
+│  ├─ scripts/
+│  ├─ services/
+│  ├─ types/
+│  └─ utils/
+├─ static/
+│  └─ misc/
+└─ tests/
+   ├─ helpers/
+   ├─ integration/
+   ├─ setup/
+   └─ unit/

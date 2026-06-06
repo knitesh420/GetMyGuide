@@ -9,6 +9,7 @@ import type { TourData } from "./types/tour";
 import { getServicesAction } from "./actions";
 import { useSelector } from "react-redux";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { resolvePackageImageUrl } from "@/lib/utils";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -46,21 +47,33 @@ function ServicesContent() {
     }
   }, [searchParams]);
 
+  // Backend stores all text inside translations.{lang} — there are no top-level title/city fields.
+  // So we read the requested language first, then fall back to translations.en, then the raw top-level field.
   const getLocalizedString = (
     pkg: TourData,
     field: keyof TourData,
-    fallback: string,
+    _fallback: string,
   ) => {
-    const translation =
-      pkg.translations?.[language as keyof typeof pkg.translations];
-    if (!translation) return fallback;
-    const value = translation[field as keyof typeof translation];
-    return typeof value === "string" ? value : fallback;
+    const langKey = language as keyof typeof pkg.translations;
+    const enKey = "en" as keyof typeof pkg.translations;
+
+    const fromLang = pkg.translations?.[langKey]?.[field as keyof typeof pkg.translations.en];
+    if (typeof fromLang === "string" && fromLang) return fromLang;
+
+    const fromEn = pkg.translations?.[enKey]?.[field as keyof typeof pkg.translations.en];
+    if (typeof fromEn === "string" && fromEn) return fromEn;
+
+    // last resort: top-level field (only present on freshly-created optimistic items)
+    return _fallback;
   };
 
   const getLocalizedPlaces = (pkg: TourData) => {
+    const langKey = language as keyof typeof pkg.translations;
+    const enKey = "en" as keyof typeof pkg.translations;
+
     return (
-      pkg.translations?.[language as keyof typeof pkg.translations]?.places ||
+      pkg.translations?.[langKey]?.places ||
+      pkg.translations?.[enKey]?.places ||
       pkg.places ||
       []
     );
@@ -119,17 +132,10 @@ function ServicesContent() {
   const handleSubmit = async (packageData: TourData): Promise<boolean> => {
     try {
       const formData = new FormData();
-      formData.append("title", packageData.title);
-      formData.append("city", packageData.city);
-      formData.append("places", JSON.stringify(packageData.places));
       if (packageData.price !== undefined)
         formData.append("price", String(packageData.price));
       if (packageData.baseCurrency)
         formData.append("baseCurrency", packageData.baseCurrency);
-      if (packageData.shortDescription)
-        formData.append("shortDescription", packageData.shortDescription);
-      if (packageData.description)
-        formData.append("description", packageData.description);
       if (packageData.numberOfPeople !== undefined)
         formData.append("numberOfPeople", String(packageData.numberOfPeople));
       if (packageData.numberOfDays !== undefined)
@@ -168,29 +174,30 @@ function ServicesContent() {
         return false;
       }
 
-      // Respond utility spreads data at the top level: { ...pkg, success: true }
+      const pkg = data.data || data;
+
       setPackages((prev) => [
         {
-          id: data.id,
-          title: data.title,
-          city: data.city,
-          places: data.places,
-          images: data.images.map(
-            (img: string) => `${API_BASE_URL}/media/packages/${img}`,
-          ),
-          price: data.price,
-          baseCurrency: data.baseCurrency,
-          shortDescription: data.shortDescription,
-          description: data.description,
-          numberOfPeople: data.numberOfPeople,
-          numberOfDays: data.numberOfDays,
-          inclusions: data.inclusions,
-          exclusions: data.exclusions,
-          translations: data.translations,
-          featured: data.featured,
-          status: data.status,
-          createdAt: data.createdAt,
-          updatedAt: data.updatedAt,
+          id: pkg.id || pkg._id,
+          title: pkg.translations?.en?.title || pkg.title || "",
+          city: pkg.translations?.en?.city || pkg.city || "",
+          places: pkg.translations?.en?.places || pkg.places || [],
+          images: Array.isArray(pkg.images)
+            ? pkg.images.map((img: any) => resolvePackageImageUrl(img))
+            : [],
+          price: pkg.price,
+          baseCurrency: pkg.baseCurrency,
+          shortDescription: pkg.translations?.en?.shortDescription || pkg.shortDescription,
+          description: pkg.translations?.en?.description || pkg.description,
+          numberOfPeople: pkg.numberOfPeople,
+          numberOfDays: pkg.numberOfDays,
+          inclusions: pkg.translations?.en?.inclusions || pkg.inclusions,
+          exclusions: pkg.translations?.en?.exclusions || pkg.exclusions,
+          translations: pkg.translations,
+          featured: pkg.featured,
+          status: pkg.status,
+          createdAt: pkg.createdAt,
+          updatedAt: pkg.updatedAt,
         },
         ...prev,
       ]);
@@ -321,7 +328,16 @@ function ServicesContent() {
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
               {filteredPackages.map((pkg, index) => (
                 <div key={pkg.id || index} className="relative h-full">
-                  <TourCard tour={pkg} />
+                  <TourCard
+                    title={getLocalizedString(pkg, "title", pkg.title)}
+                    city={getLocalizedString(pkg, "city", pkg.city)}
+                    images={pkg.images as (File | string)[]}
+                    places={getLocalizedPlaces(pkg)}
+                    price={pkg.price}
+                    shortDescription={getLocalizedString(pkg, "shortDescription", pkg.shortDescription || "")}
+                    numberOfPeople={pkg.numberOfPeople}
+                    numberOfDays={pkg.numberOfDays}
+                  />
 
                   {admin && (
                     <button

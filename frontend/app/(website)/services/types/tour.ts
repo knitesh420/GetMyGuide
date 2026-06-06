@@ -14,7 +14,11 @@ export interface TourData {
   title: string; // Fallback title for current locale
   city: string; // Fallback city for current locale
   places: string[]; // Fallback places for current locale
-  images: (File | string)[]; // Files for uploads, URLs from backend
+  images: (
+    | File
+    | string
+    | { url?: string; secure_url?: string; path?: string; publicId?: string }
+  )[]; // Files for uploads, URLs or backend image objects
   price?: number; // Package price in base currency
   baseCurrency?: string;
   shortDescription?: string; // Fallback short description

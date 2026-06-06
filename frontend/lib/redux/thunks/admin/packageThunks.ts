@@ -7,10 +7,8 @@ export const fetchPackages = createAsyncThunk<AdminPackage[]>(
   "admin/fetchPackages",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiService.get<{ packages: AdminPackage[] }>(
-        "/package",
-      );
-      return response.data?.packages || [];
+      const response = await apiService.get<AdminPackage[]>("/package");
+      return response.data || [];
     } catch (error: any) {
       return rejectWithValue(error.message || "Failed to fetch packages");
     }
@@ -94,8 +92,8 @@ export const fetchRecommendedPackages = createAsyncThunk<
       ? `/package?featured=true&limit=${args.limit}`
       : "/package?featured=true";
 
-    const response = await apiService.get<{ packages: AdminPackage[] }>(url);
-    return response.data?.packages || [];
+    const response = await apiService.get<AdminPackage[]>(url);
+    return response.data || [];
   } catch (error: any) {
     return rejectWithValue(
       error.message || "Failed to fetch recommended packages",

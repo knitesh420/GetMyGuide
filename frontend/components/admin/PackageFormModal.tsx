@@ -17,8 +17,8 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { RichTextEditor } from "@/components/editor/RichTextEditor";
-import { Trash2, RefreshCw, X, ChevronDown, Check } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { RefreshCw, X, ChevronDown, Check } from "lucide-react";
+import { cn, resolvePackageImageUrl } from "@/lib/utils";
 
 type LanguageCode = "en" | "es" | "fr" | "ru" | "de";
 
@@ -30,18 +30,15 @@ interface TranslationFormState {
   description: string;
   inclusions: string;
   exclusions: string;
+  highlights: string;
 }
 
 interface PackageFormData {
-  title: string;
-  description: string;
   price: number;
-  basePrice: number;
-  baseCurrency: string;
-  duration: string;
+  numberOfPeople: number;
+  numberOfDays: number;
   locations: string[]; // This will now store placeName strings
   images: (File | string)[];
-  isActive: boolean;
   isFeatured: boolean;
 }
 
@@ -63,15 +60,11 @@ export function PackageFormModal({
   allLocations,
 }: PackageFormModalProps) {
   const [formData, setFormData] = useState<PackageFormData>({
-    title: "",
-    description: "",
     price: 0,
-    basePrice: 0,
-    baseCurrency: "INR",
-    duration: "",
+    numberOfPeople: 1,
+    numberOfDays: 1,
     locations: [],
     images: [],
-    isActive: true,
     isFeatured: false,
   });
 
@@ -87,6 +80,7 @@ export function PackageFormModal({
       description: "",
       inclusions: "",
       exclusions: "",
+      highlights: "",
     },
     es: {
       title: "",
@@ -96,6 +90,7 @@ export function PackageFormModal({
       description: "",
       inclusions: "",
       exclusions: "",
+      highlights: "",
     },
     fr: {
       title: "",
@@ -105,6 +100,7 @@ export function PackageFormModal({
       description: "",
       inclusions: "",
       exclusions: "",
+      highlights: "",
     },
     ru: {
       title: "",
@@ -114,6 +110,7 @@ export function PackageFormModal({
       description: "",
       inclusions: "",
       exclusions: "",
+      highlights: "",
     },
     de: {
       title: "",
@@ -123,6 +120,7 @@ export function PackageFormModal({
       description: "",
       inclusions: "",
       exclusions: "",
+      highlights: "",
     },
   });
 
@@ -131,7 +129,7 @@ export function PackageFormModal({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const defaultTranslationState = {
+    const createEmptyTranslation = (): TranslationFormState => ({
       title: "",
       city: "",
       places: "",
@@ -139,65 +137,74 @@ export function PackageFormModal({
       description: "",
       inclusions: "",
       exclusions: "",
-    };
+      highlights: "",
+    });
 
     if (editingPackage) {
       setFormData({
-        title: editingPackage.title,
-        description: editingPackage.description,
         price: editingPackage.price ?? 0,
-        basePrice: editingPackage.basePrice ?? 0,
-        baseCurrency: editingPackage.baseCurrency ?? "INR",
-        duration: editingPackage.duration,
-        isActive: editingPackage.isActive,
-        isFeatured: editingPackage.isFeatured || false,
+        numberOfPeople: editingPackage.numberOfPeople ?? 1,
+        numberOfDays: editingPackage.numberOfDays ?? 1,
+        isFeatured:
+          editingPackage.featured ?? editingPackage.isFeatured ?? false,
         locations: editingPackage.locations || [], // This is already an array of names, which is correct
         images: editingPackage.images || [],
       });
 
-      const mergeTranslation = (lang: LanguageCode) => ({
-        ...defaultTranslationState,
-        ...(editingPackage.translations?.[lang] ?? {}),
-        ...(lang === "en"
-          ? {
-              description:
-                editingPackage.translations?.en?.description ??
-                editingPackage.description ??
-                "",
-              shortDescription:
-                editingPackage.translations?.en?.shortDescription ??
-                editingPackage.shortDescription ??
-                "",
-            }
-          : {}),
-      });
+      // Load each language independently from database, don't copy English to other languages
+      const loadTranslation = (lang: LanguageCode): TranslationFormState => {
+        const dbTranslation = editingPackage.translations?.[lang];
+
+        if (dbTranslation) {
+          return {
+            title: dbTranslation.title ?? "",
+            city: dbTranslation.city ?? "",
+            places: Array.isArray(dbTranslation.places)
+              ? dbTranslation.places.join(", ")
+              : "",
+            shortDescription: dbTranslation.shortDescription ?? "",
+            description: dbTranslation.description ?? "",
+            inclusions: Array.isArray(dbTranslation.inclusions)
+              ? dbTranslation.inclusions.join(", ")
+              : "",
+            exclusions: Array.isArray(dbTranslation.exclusions)
+              ? dbTranslation.exclusions.join(", ")
+              : "",
+            highlights: Array.isArray(dbTranslation.highlights)
+              ? dbTranslation.highlights.join(", ")
+              : "",
+          };
+        }
+
+        // If no database translation, return empty (don't use English as fallback for UI)
+        return createEmptyTranslation();
+      };
 
       setTranslations({
-        en: mergeTranslation("en"),
-        es: mergeTranslation("es"),
-        fr: mergeTranslation("fr"),
-        ru: mergeTranslation("ru"),
-        de: mergeTranslation("de"),
+        en: loadTranslation("en"),
+        es: loadTranslation("es"),
+        fr: loadTranslation("fr"),
+        ru: loadTranslation("ru"),
+        de: loadTranslation("de"),
       });
     } else {
       setFormData({
-        title: "",
-        description: "",
         price: 0,
-        basePrice: 0,
-        baseCurrency: "INR",
-        duration: "",
+        numberOfPeople: 1,
+        numberOfDays: 1,
         locations: [],
         images: [],
-        isActive: true,
         isFeatured: false,
       });
+
+      // For new packages, create independent empty translation states for each language
+      const emptyTranslation = createEmptyTranslation();
       setTranslations({
-        en: defaultTranslationState,
-        es: defaultTranslationState,
-        fr: defaultTranslationState,
-        ru: defaultTranslationState,
-        de: defaultTranslationState,
+        en: { ...emptyTranslation },
+        es: { ...emptyTranslation },
+        fr: { ...emptyTranslation },
+        ru: { ...emptyTranslation },
+        de: { ...emptyTranslation },
       });
     }
   }, [editingPackage, isOpen]);
@@ -233,11 +240,12 @@ export function PackageFormModal({
           value.shortDescription.trim() ||
           value.description.trim() ||
           value.inclusions.trim() ||
-          value.exclusions.trim();
+          value.exclusions.trim() ||
+          value.highlights.trim();
 
         if (!hasContent) return acc;
 
-        acc[lang] = {
+        const normalized = {
           title: value.title.trim(),
           city: value.city.trim(),
           places: normalizeTranslationPlaces(value.places),
@@ -245,7 +253,22 @@ export function PackageFormModal({
           description: value.description.trim(),
           inclusions: normalizeTranslationPlaces(value.inclusions),
           exclusions: normalizeTranslationPlaces(value.exclusions),
+          highlights: normalizeTranslationPlaces(value.highlights),
         };
+
+        const isComplete =
+          normalized.title &&
+          normalized.city &&
+          normalized.shortDescription &&
+          normalized.description &&
+          normalized.places.length &&
+          normalized.inclusions.length &&
+          normalized.exclusions.length &&
+          normalized.highlights.length;
+
+        if (lang !== "en" && !isComplete) return acc;
+
+        acc[lang] = normalized;
 
         return acc;
       },
@@ -255,23 +278,38 @@ export function PackageFormModal({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    const translationsPayload = buildTranslations();
+    const english = translationsPayload.en;
+    if (
+      !english?.title ||
+      !english?.city ||
+      !english?.shortDescription ||
+      !english?.description ||
+      !english?.places?.length ||
+      !english?.inclusions?.length ||
+      !english?.exclusions?.length ||
+      !english?.highlights?.length
+    ) {
+      alert(
+        "English translation requires title, city, places, highlights, short description, description, inclusions, and exclusions.",
+      );
+      return;
+    }
+    if (!editingPackage && !formData.images.some((img) => img instanceof File)) {
+      alert("At least one package image is required.");
+      return;
+    }
+
     const formDataToSend = new FormData();
 
-    // Append all form data as before
-    formDataToSend.append("title", formData.title);
-    formDataToSend.append("description", formData.description);
     formDataToSend.append("price", formData.price.toString());
-    formDataToSend.append("basePrice", formData.basePrice.toString());
-    formDataToSend.append("baseCurrency", formData.baseCurrency);
-    formDataToSend.append("duration", formData.duration);
-    formDataToSend.append("isActive", formData.isActive.toString());
-    formDataToSend.append("isFeatured", formData.isFeatured.toString());
-    formDataToSend.append("translations", JSON.stringify(buildTranslations()));
-
-    // Now this correctly appends the location NAMES
-    formData.locations.forEach((locName) => {
-      formDataToSend.append("locations", locName);
-    });
+    formDataToSend.append(
+      "numberOfPeople",
+      formData.numberOfPeople.toString(),
+    );
+    formDataToSend.append("numberOfDays", formData.numberOfDays.toString());
+    formDataToSend.append("featured", formData.isFeatured.toString());
+    formDataToSend.append("translations", JSON.stringify(translationsPayload));
 
     const newImageFiles = formData.images.filter(
       (img) => img instanceof File,
@@ -351,27 +389,64 @@ export function PackageFormModal({
         </CardHeader>
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
           <CardContent className="p-6 space-y-6 overflow-y-auto flex-1 min-h-0">
+            {/* Instructions */}
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm text-amber-900">
+                <span className="font-semibold">Workflow:</span>
+              </p>
+              <ol className="text-sm text-amber-900 list-decimal list-inside mt-2 space-y-1">
+                <li>
+                  Fill <strong>Package Details</strong> (price, people, days,
+                  and images) once.
+                </li>
+                <li>
+                  Select <strong>EN</strong> and fill all required English
+                  translation fields.
+                </li>
+                <li>
+                  Fill optional ES, FR, RU, and DE translations when available.
+                </li>
+              </ol>
+            </div>
+
             <div className="space-y-4">
-              <div className="flex flex-wrap gap-2 items-center">
-                <span className="text-sm font-semibold text-slate-700">
-                  Translation language:
-                </span>
-                {["en", "es", "fr", "ru", "de"].map((lang) => (
-                  <button
-                    key={lang}
-                    type="button"
-                    onClick={() => setCurrentLang(lang as LanguageCode)}
-                    className={`px-3 py-2 rounded-full border ${
-                      currentLang === lang
-                        ? "bg-slate-900 text-white border-slate-900"
-                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
-                    }`}
-                  >
-                    {lang.toUpperCase()}
-                  </button>
-                ))}
+              {/* Language Selector */}
+              <div className="flex flex-wrap gap-2 items-center justify-between">
+                <div>
+                  <span className="text-sm font-semibold text-slate-700">
+                    Select Language to Fill:
+                  </span>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {["en", "es", "fr", "ru", "de"].map((lang) => (
+                    <button
+                      key={lang}
+                      type="button"
+                      onClick={() => setCurrentLang(lang as LanguageCode)}
+                      className={`px-3 py-2 rounded-full border transition-all ${
+                        currentLang === lang
+                          ? "bg-blue-600 text-white border-blue-600 font-semibold shadow-lg"
+                          : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      {lang.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="grid md:grid-cols-2 gap-6 p-4 rounded-3xl bg-slate-50 border border-slate-200">
+
+              {/* Active Language Indicator */}
+              <div className="flex items-center gap-2 p-3 bg-blue-50 border-l-4 border-blue-500 rounded">
+                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                <span className="text-sm font-medium text-blue-900">
+                  Currently editing:{" "}
+                  <span className="font-bold">{currentLang.toUpperCase()}</span>{" "}
+                  language only
+                </span>
+              </div>
+
+              {/* Translation Fields - Only for Current Language */}
+              <div className="grid md:grid-cols-2 gap-6 p-5 rounded-lg bg-blue-50 border-2 border-blue-200">
                 <div className="space-y-2">
                   <Label htmlFor="translationTitle">
                     Title ({currentLang.toUpperCase()})
@@ -422,6 +497,25 @@ export function PackageFormModal({
                         [currentLang]: {
                           ...prev[currentLang],
                           places: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </div>
+                <div className="md:col-span-2 space-y-2">
+                  <Label htmlFor="translationHighlights">
+                    Highlights ({currentLang.toUpperCase()})
+                  </Label>
+                  <Input
+                    id="translationHighlights"
+                    value={translations[currentLang].highlights}
+                    placeholder="Comma-separated package highlights"
+                    onChange={(e) =>
+                      setTranslations((prev) => ({
+                        ...prev,
+                        [currentLang]: {
+                          ...prev[currentLang],
+                          highlights: e.target.value,
                         },
                       }))
                     }
@@ -504,46 +598,22 @@ export function PackageFormModal({
                 </div>
               </div>
             </div>
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="title">Title *</Label>
-                <Input
-                  id="title"
-                  required
-                  value={formData.title}
-                  onChange={(e) =>
-                    setFormData({ ...formData, title: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="duration">Duration *</Label>
-                <Input
-                  id="duration"
-                  required
-                  placeholder="e.g., 7 Days"
-                  value={formData.duration}
-                  onChange={(e) =>
-                    setFormData({ ...formData, duration: e.target.value })
-                  }
-                />
-              </div>
+
+            {/* Package details apply to the whole package, not per locale. */}
+            <div className="border-t-2 border-slate-300 pt-6">
+              <h3 className="text-lg font-semibold text-slate-800 mb-2">
+                Package Details
+              </h3>
+              <p className="text-xs text-slate-600 mb-4">
+                Fill these once. Translated title, city, places, descriptions,
+                inclusions, exclusions, and highlights belong in the language
+                tabs above.
+              </p>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="description">Description *</Label>
-              <Textarea
-                id="description"
-                required
-                rows={4}
-                value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
-              />
-            </div>
+
             <div className="grid md:grid-cols-3 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="price">Price (₹) *</Label>
+                <Label htmlFor="price">Price (INR) *</Label>
                 <Input
                   id="price"
                   type="number"
@@ -559,28 +629,34 @@ export function PackageFormModal({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="basePrice">Base Price (₹) *</Label>
+                <Label htmlFor="numberOfPeople">Number of People *</Label>
                 <Input
-                  id="basePrice"
+                  id="numberOfPeople"
                   type="number"
                   required
-                  min="0"
-                  value={formData.basePrice}
+                  min="1"
+                  value={formData.numberOfPeople}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
-                      basePrice: parseFloat(e.target.value) || 0,
+                      numberOfPeople: parseInt(e.target.value, 10) || 1,
                     })
                   }
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="baseCurrency">Base Currency</Label>
+                <Label htmlFor="numberOfDays">Number of Days *</Label>
                 <Input
-                  id="baseCurrency"
-                  value={formData.baseCurrency}
+                  id="numberOfDays"
+                  type="number"
+                  required
+                  min="1"
+                  value={formData.numberOfDays}
                   onChange={(e) =>
-                    setFormData({ ...formData, baseCurrency: e.target.value })
+                    setFormData({
+                      ...formData,
+                      numberOfDays: parseInt(e.target.value, 10) || 1,
+                    })
                   }
                 />
               </div>
@@ -588,7 +664,7 @@ export function PackageFormModal({
 
             {/* Location Multi-Select Dropdown */}
             <div className="space-y-2">
-              <Label className="font-semibold">Locations *</Label>
+              <Label className="font-semibold">Locations</Label>
               <div className="relative" ref={dropdownRef}>
                 <button
                   type="button"
@@ -698,7 +774,9 @@ export function PackageFormModal({
                   <div key={index} className="relative group aspect-square">
                     <img
                       src={
-                        typeof img === "string" ? img : URL.createObjectURL(img)
+                        img instanceof File
+                          ? URL.createObjectURL(img)
+                          : resolvePackageImageUrl(img)
                       }
                       alt={`Package preview ${index + 1}`}
                       className="w-full h-full object-cover rounded-md"
@@ -723,20 +801,8 @@ export function PackageFormModal({
               />
             </div>
 
-            {/* Checkboxes (Unchanged) */}
+            {/* Checkboxes */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-              <div className="flex items-center gap-3 p-3 border rounded-md">
-                <Checkbox
-                  id="isActive"
-                  checked={formData.isActive}
-                  onCheckedChange={(checked) =>
-                    setFormData({ ...formData, isActive: !!checked })
-                  }
-                />
-                <Label htmlFor="isActive" className="cursor-pointer">
-                  Make package active
-                </Label>
-              </div>
               <div className="flex items-center gap-3 p-3 border rounded-md">
                 <Checkbox
                   id="isFeatured"

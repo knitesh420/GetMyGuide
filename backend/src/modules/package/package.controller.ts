@@ -1,264 +1,192 @@
-import cloudinary from '@config/cloudinary';
-import { JWTPayload } from '@services/jwt';
-import PackageService from '@services/package';
-import uploadToCloudinary from '@utils/cloudinaryUpload';
-import { NextFunction, Request, Response } from 'express';
-import { BadRequestError, Respond } from 'node-be-utilities';
-import {
-	CreatePackageValidationResult,
-	UpdatePackageValidationResult,
-	UpdateStatusValidationResult,
-} from './package.validator';
+import { Request, Response, NextFunction } from 'express';
+import Package from './package.schema';
+import uploadToCloudinary from '../../utils/cloudinaryUpload';
+import cloudinary from '../../config/cloudinary';
 
-const PACKAGE_IMAGE_FOLDER = 'packages';
-const ALLOWED_PACKAGE_IMAGE_TYPES = ['image/png', 'image/webp', 'image/jpg', 'image/jpeg'];
-
-type PackageImagePayload = {
-	url: string;
-	publicId: string;
-};
-
-function validatePackageImageFiles(files: Express.Multer.File[]) {
-	for (const file of files) {
-		if (!ALLOWED_PACKAGE_IMAGE_TYPES.includes(file.mimetype)) {
-			throw new BadRequestError('Only JPG, PNG, WEBP images are allowed');
-		}
-	}
-}
-
-async function deleteCloudinaryImages(images: PackageImagePayload[], ignoreErrors = false) {
-	for (const image of images) {
+export class PackageController {
+	/*
+   ==========================================
+   CREATE PACKAGE
+   ==========================================
+  */
+	static async createPackage(req: Request, res: Response, next: NextFunction) {
 		try {
-			await cloudinary.uploader.destroy(image.publicId);
-		} catch (error) {
-			if (!ignoreErrors) {
-				throw error;
+			const files = req.files as Express.Multer.File[];
+
+			if (!files?.length) {
+				return res.status(400).json({
+					success: false,
+					message: 'Package images are required',
+				});
 			}
-		}
-	}
-}
 
-async function uploadPackageImages(files: Express.Multer.File[]): Promise<PackageImagePayload[]> {
-	const uploadedImages: PackageImagePayload[] = [];
+			const uploadedImages: { url: string; publicId: string }[] = [];
 
-	try {
-		for (const file of files) {
-			const result = await uploadToCloudinary(file.buffer, PACKAGE_IMAGE_FOLDER);
-			uploadedImages.push({
-				url: result.secure_url,
-				publicId: result.public_id,
+			for (const file of files) {
+				const buffer = file.buffer as Buffer;
+
+				const result = await uploadToCloudinary(buffer, 'packages');
+
+				uploadedImages.push({
+					url: result.secure_url,
+					publicId: result.public_id,
+				});
+			}
+
+			const packageData = {
+				...((req as any).locals?.data || req.body),
+				images: uploadedImages,
+			};
+
+			const pkg = await Package.create(packageData);
+
+			return res.status(201).json({
+				success: true,
+				data: pkg,
 			});
+		} catch (error) {
+			next(error);
 		}
-
-		return uploadedImages;
-	} catch (error) {
-		await deleteCloudinaryImages(uploadedImages, true);
-		throw error;
 	}
-}
 
-async function createPackage(req: Request, res: Response, next: NextFunction) {
-	let uploadedImages: PackageImagePayload[] = [];
+	/*
+   ==========================================
+   GET ALL PACKAGES (PUBLIC)
+   ==========================================
+  */
+	static async getPackages(req: Request, res: Response, next: NextFunction) {
+		try {
+			const packages = await Package.find({ status: 'active' }).sort({
+				createdAt: -1,
+			});
 
-	try {
-		const data = req.locals.data as CreatePackageValidationResult;
-
-		const files = req.files as Express.Multer.File[] | undefined;
-
-		if (!files || files.length === 0) {
-			return next(new BadRequestError('At least one image file is required'));
+			return res.status(200).json({
+				success: true,
+				count: packages.length,
+				data: packages,
+			});
+		} catch (error) {
+			next(error);
 		}
-
-		validatePackageImageFiles(files);
-		uploadedImages = await uploadPackageImages(files);
-
-		const pkg = await PackageService.createPackage({
-			...data,
-			images: uploadedImages,
-		});
-
-		return Respond({
-			res,
-			status: 201,
-			data: pkg,
-		});
-	} catch (error) {
-		if (uploadedImages.length > 0) {
-			await deleteCloudinaryImages(uploadedImages, true);
-		}
-		return next(error);
 	}
-}
 
-async function getPackages(req: Request, res: Response, next: NextFunction) {
-	try {
-		const user = req.locals.user as JWTPayload | undefined;
-		const isAdmin = user?.role === 'admin';
+	/*
+   ==========================================
+   GET SINGLE PACKAGE (PUBLIC)
+   ==========================================
+  */
+	static async getPackageById(req: Request, res: Response, next: NextFunction) {
+		try {
+			const pkg = await Package.findById(req.params.id);
 
-		const filters: any = {};
-
-		// Parse query parameters
-		if (req.query.featured === 'true') {
-			filters.featured = true;
-		}
-
-		if (req.query.city && typeof req.query.city === 'string') {
-			filters.city = req.query.city;
-		}
-
-		if (req.query.limit && typeof req.query.limit === 'string') {
-			const limitValue = Number(req.query.limit);
-			if (Number.isInteger(limitValue) && limitValue > 0) {
-				filters.limit = limitValue;
-			}
-		}
-
-		// If admin, allow filtering by status
-		if (isAdmin && req.query.status) {
-			if (req.query.status === 'active' || req.query.status === 'inactive') {
-				filters.status = req.query.status;
-			}
-		}
-
-		const packages = await PackageService.getPackages(filters, isAdmin);
-
-		return Respond({
-			res,
-			status: 200,
-			data: {
-				packages,
-			},
-		});
-	} catch (error) {
-		return next(error);
-	}
-}
-
-async function getPackageById(req: Request, res: Response, next: NextFunction) {
-	try {
-		const packageId = req.locals.id!;
-		const user = req.locals.user as JWTPayload | undefined;
-		const isAdmin = user?.role === 'admin';
-
-		const pkg = await PackageService.getPackageById(packageId, isAdmin);
-
-		return Respond({
-			res,
-			status: 200,
-			data: pkg,
-		});
-	} catch (error) {
-		return next(error);
-	}
-}
-
-async function updatePackage(req: Request, res: Response, next: NextFunction) {
-	try {
-		const packageId = req.locals.id!;
-		const data = req.locals.data as UpdatePackageValidationResult;
-
-		const files = req.files as Express.Multer.File[] | undefined;
-
-		const updateData: any = { ...data };
-
-		if (files && files.length > 0) {
-			validatePackageImageFiles(files);
-
-			const existingPackage = await PackageService.getPackageById(packageId, true);
-			const uploadedImages = await uploadPackageImages(files);
-			updateData.images = uploadedImages;
-
-			let updatedPackage;
-			try {
-				updatedPackage = await PackageService.updatePackage(packageId, updateData);
-			} catch (error) {
-				await deleteCloudinaryImages(uploadedImages, true);
-				throw error;
+			if (!pkg) {
+				return res.status(404).json({
+					success: false,
+					message: 'Package not found',
+				});
 			}
 
-			await deleteCloudinaryImages(existingPackage.images);
+			return res.status(200).json({
+				success: true,
+				data: pkg,
+			});
+		} catch (error) {
+			next(error);
+		}
+	}
 
-			return Respond({
-				res,
-				status: 200,
+	/*
+   ==========================================
+   UPDATE PACKAGE
+   ==========================================
+  */
+	static async updatePackage(req: Request, res: Response, next: NextFunction) {
+		try {
+			const packageId = req.params.id;
+
+			const existingPackage = await Package.findById(packageId);
+
+			if (!existingPackage) {
+				return res.status(404).json({
+					success: false,
+					message: 'Package not found',
+				});
+			}
+
+			const files = req.files as Express.Multer.File[];
+
+			let images: any = existingPackage.images || [];
+
+			if (files?.length) {
+				const uploadedImages: { url: string; publicId: string }[] = [];
+
+				for (const file of files) {
+					const buffer = file.buffer as Buffer;
+
+					const result = await uploadToCloudinary(buffer, 'packages');
+
+					uploadedImages.push({
+						url: result.secure_url,
+						publicId: result.public_id,
+					});
+				}
+
+				// Append new images to existing images
+				images = [...images, ...uploadedImages];
+			}
+
+			const updatedData = {
+				...((req as any).locals?.data || req.body),
+				images,
+			};
+
+			const updatedPackage = await Package.findByIdAndUpdate(packageId, updatedData, {
+				new: true,
+				runValidators: true,
+			});
+
+			return res.status(200).json({
+				success: true,
 				data: updatedPackage,
 			});
+		} catch (error) {
+			next(error);
 		}
-
-		const updatedPackage = await PackageService.updatePackage(packageId, updateData);
-
-		return Respond({
-			res,
-			status: 200,
-			data: updatedPackage,
-		});
-	} catch (error) {
-		return next(error);
 	}
-}
 
-async function deletePackage(req: Request, res: Response, next: NextFunction) {
-	try {
-		const packageId = req.locals.id!;
+	/*
+   ==========================================
+   DELETE PACKAGE
+   ==========================================
+  */
+	static async deletePackage(req: Request, res: Response, next: NextFunction) {
+		try {
+			const packageId = req.params.id;
 
-		const pkg = await PackageService.getPackageById(packageId, true);
-		await deleteCloudinaryImages(pkg.images);
+			const pkg = await Package.findById(packageId);
 
-		await PackageService.deletePackage(packageId);
+			if (!pkg) {
+				return res.status(404).json({
+					success: false,
+					message: 'Package not found',
+				});
+			}
 
-		return Respond({
-			res,
-			status: 200,
-			data: {
+			/*
+       Delete Cloudinary Images
+      */
+			for (const image of pkg.images) {
+				await cloudinary.uploader.destroy(image.publicId);
+			}
+
+			await Package.findByIdAndDelete(packageId);
+
+			return res.status(200).json({
+				success: true,
 				message: 'Package deleted successfully',
-			},
-		});
-	} catch (error) {
-		return next(error);
+			});
+		} catch (error) {
+			next(error);
+		}
 	}
 }
-
-async function updatePackageStatus(req: Request, res: Response, next: NextFunction) {
-	try {
-		const packageId = req.locals.id!;
-		const data = req.locals.data as UpdateStatusValidationResult;
-
-		const pkg = await PackageService.updatePackageStatus(packageId, data.status);
-
-		return Respond({
-			res,
-			status: 200,
-			data: pkg,
-		});
-	} catch (error) {
-		return next(error);
-	}
-}
-
-async function getAvailableCities(req: Request, res: Response, next: NextFunction) {
-	try {
-		const cities = await PackageService.getAvailableCities();
-
-		return Respond({
-			res,
-			status: 200,
-			data: {
-				cities,
-			},
-		});
-	} catch (error) {
-		return next(error);
-	}
-}
-
-const Controller = {
-	createPackage,
-	getPackages,
-	getPackageById,
-	updatePackage,
-	deletePackage,
-	updatePackageStatus,
-	getAvailableCities,
-};
-
-export default Controller;

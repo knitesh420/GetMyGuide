@@ -18,12 +18,14 @@ import {
 import { MapPin, Clock } from "lucide-react";
 import type { TourData } from "@/app/(website)/services/types/tour";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { resolvePackageImageUrl } from "@/lib/utils";
 
 export function TourCard({ tour }: { tour: TourData }) {
   // --- 2. Create an array of unique image URLs ---
   // The 'Set' automatically removes duplicates. This handles cases where the images array is missing or empty.
   const { language } = useLanguage();
   const uniqueImages = tour.images?.length ? [...new Set(tour.images)] : [];
+  const uniqueImagesResolved = uniqueImages.map(resolvePackageImageUrl);
 
   const translation =
     tour.translations?.[language as keyof typeof tour.translations];
@@ -48,15 +50,15 @@ export function TourCard({ tour }: { tour: TourData }) {
       <Card className="overflow-hidden h-full flex flex-col transition-all duration-300 group-hover:shadow-xl group-hover:-translate-y-2 border-border/60">
         {/* --- 3. Replace the single Image div with the Carousel --- */}
         <div className="relative w-full">
-          {uniqueImages.length > 0 ? (
+          {uniqueImagesResolved.length > 0 ? (
             <Carousel
               opts={{
-                loop: uniqueImages.length > 1, // Enable looping only if there's more than one image
+                loop: uniqueImagesResolved.length > 1, // Enable looping only if there's more than one image
               }}
               className="w-full"
             >
               <CarouselContent>
-                {uniqueImages.map((imageSrc, index) => (
+                {uniqueImagesResolved.map((imageSrc, index) => (
                   <CarouselItem key={index}>
                     <div className="aspect-video relative overflow-hidden">
                       <Image

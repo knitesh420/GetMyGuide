@@ -10,6 +10,7 @@ export interface TranslationFields {
 	description?: string;
 	inclusions?: string[];
 	exclusions?: string[];
+	highlights?: string[];
 }
 
 export interface IPackageTranslations {

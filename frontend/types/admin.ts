@@ -117,6 +117,7 @@ export interface TranslationFields {
   description?: string;
   inclusions?: string[];
   exclusions?: string[];
+  highlights?: string[];
 }
 
 export interface PackageTranslations {
@@ -142,6 +143,7 @@ export interface AdminPackage {
   images: string[];
   isActive: boolean;
   isFeatured: boolean;
+  featured?: boolean;
   translations?: PackageTranslations;
   numberOfPeople?: number;
   numberOfDays?: number;
