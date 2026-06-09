@@ -7,6 +7,7 @@ export interface TranslationFields {
   description?: string;
   inclusions?: string[];
   exclusions?: string[];
+  highlights?: string[];
 }
 
 export interface TourData {
@@ -27,6 +28,9 @@ export interface TourData {
   numberOfDays?: number; // Number of days
   inclusions?: string[];
   exclusions?: string[];
+  highlights?: string[];
+  duration?: string;
+  basePrice?: number;
   translations?: {
     en: TranslationFields;
     es?: TranslationFields;

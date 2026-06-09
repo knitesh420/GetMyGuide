@@ -142,6 +142,6 @@ const PackageSchema = new mongoose.Schema<IPackage>(
 	}
 );
 
-const PackageDB = mongoose.model<IPackage>('Package', PackageSchema);
+const PackageDB = (mongoose.models['Package'] as mongoose.Model<IPackage>) ?? mongoose.model<IPackage>('Package', PackageSchema);
 
 export default PackageDB;

@@ -13,6 +13,7 @@ interface TranslationFields {
   description?: string;
   inclusions?: string[];
   exclusions?: string[];
+  highlights?: string[];
 }
 
 interface PackageResponse {
@@ -30,6 +31,7 @@ interface PackageResponse {
   numberOfDays?: number;
   inclusions?: string[];
   exclusions?: string[];
+  highlights?: string[];
   translations?: {
     en: TranslationFields;
     es?: TranslationFields;
@@ -46,20 +48,24 @@ interface PackageResponse {
 const buildMediaUrl = resolvePackageImageUrl;
 
 function mapPackageToTourData(pkg: PackageResponse): TourData {
+  // Top-level title/city/etc. may be undefined from backend (stored in translations).
+  // Always fall back to the English translation so these fields are never undefined.
+  const en = pkg.translations?.en;
   return {
     id: pkg.id,
-    title: pkg.title,
-    city: pkg.city,
-    places: pkg.places,
+    title: pkg.title || en?.title || "",
+    city: pkg.city || en?.city || "",
+    places: pkg.places?.length ? pkg.places : (en?.places ?? []),
     images: Array.isArray(pkg.images) ? pkg.images.map(buildMediaUrl) : [],
     price: pkg.price,
     baseCurrency: pkg.baseCurrency,
-    shortDescription: pkg.shortDescription,
-    description: pkg.description,
+    shortDescription: pkg.shortDescription || en?.shortDescription || "",
+    description: pkg.description || en?.description || "",
     numberOfPeople: pkg.numberOfPeople,
     numberOfDays: pkg.numberOfDays,
-    inclusions: pkg.inclusions,
-    exclusions: pkg.exclusions,
+    inclusions: pkg.inclusions?.length ? pkg.inclusions : (en?.inclusions ?? []),
+    exclusions: pkg.exclusions?.length ? pkg.exclusions : (en?.exclusions ?? []),
+    highlights: pkg.highlights?.length ? pkg.highlights : (en?.highlights ?? []),
     translations: pkg.translations,
     featured: pkg.featured,
     status: pkg.status,

@@ -1,11 +1,10 @@
 // app/tours/[id]/page.tsx
 "use client";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import DOMPurify from "dompurify";
 import { notFound, useRouter } from "next/navigation";
-import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { Star, MapPin, Clock, CheckCircle } from "lucide-react";
+import { MapPin, Clock, CheckCircle } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
 import { Input } from "@/components/ui/input";
@@ -15,23 +14,20 @@ import { useLanguage } from "@/contexts/LanguageContext";
 // --- Redux Imports ---
 import { useDispatch, useSelector } from "react-redux";
 import { RootState, AppDispatch } from "@/lib/store";
-import { fetchPackages } from "@/lib/redux/thunks/admin/packageThunks";
-import { AdminPackage } from "@/types/admin";
-
-// ✅ Import BOTH thunks now
 import {
+  fetchPackages,
   fetchPackageById,
   fetchRecommendedPackages,
 } from "@/lib/redux/thunks/admin/packageThunks";
 
-// ✅ Import the new slider component
 import { RecommendedPackagesSlider } from "@/components/RecommendedPackagesSlider";
 import { TourImageGallery } from "@/components/ui/TourImageGallery";
+
+type LocaleKey = "en" | "es" | "fr" | "ru" | "de";
 
 // Skeleton Component for Loading State
 const TourDetailSkeleton = () => (
   <div className="container max-w-7xl mx-auto px-4 py-12 animate-pulse">
-    {/* Title Skeleton */}
     <div className="mb-8">
       <div className="h-12 bg-gray-300 rounded w-3/4 mb-4"></div>
       <div className="flex items-center gap-6">
@@ -39,8 +35,6 @@ const TourDetailSkeleton = () => (
         <div className="h-6 bg-gray-300 rounded w-1/4"></div>
       </div>
     </div>
-
-    {/* Image Gallery Skeleton */}
     <div className="grid grid-cols-4 grid-rows-2 gap-4 mb-12 h-[60vh]">
       <div className="col-span-4 md:col-span-2 row-span-2 bg-gray-300 rounded-xl"></div>
       <div className="hidden md:block bg-gray-300 rounded-xl"></div>
@@ -48,8 +42,6 @@ const TourDetailSkeleton = () => (
       <div className="hidden md:block bg-gray-300 rounded-xl"></div>
       <div className="hidden md:block bg-gray-300 rounded-xl"></div>
     </div>
-
-    {/* Main Content Skeleton */}
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-x-12">
       <div className="lg:col-span-2">
         <div className="h-8 bg-gray-300 rounded w-1/3 mb-4"></div>
@@ -62,7 +54,6 @@ const TourDetailSkeleton = () => (
       <aside className="lg:col-span-1">
         <div className="p-6 bg-gray-200 rounded-xl">
           <div className="h-10 bg-gray-300 rounded w-1/2 mx-auto mb-4"></div>
-          <div className="h-6 bg-gray-300 rounded w-3/4 mx-auto mb-6"></div>
           <div className="h-12 bg-gray-300 rounded w-full mb-6"></div>
           <div className="h-64 bg-gray-300 rounded w-full mb-6"></div>
           <div className="h-14 bg-gray-400 rounded w-full"></div>
@@ -72,39 +63,118 @@ const TourDetailSkeleton = () => (
   </div>
 );
 
+// Safe HTML sanitization — DOMPurify only runs in the browser
+function sanitizeHtml(html: string): string {
+  if (!html) return "";
+  if (typeof window === "undefined") return html; // SSR: skip sanitization
+  return DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: ["script", "style"],
+    FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur"],
+  });
+}
+
 export default function TourDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
 
-  // --- Fetch data from Redux store ---
-  const {
-    items: packages,
-    recommended,
-    loading,
-    error,
-  } = useSelector((state: RootState) => state.packages);
-  const tour = packages.find((p) => p._id === params.id);
+  // ── All hooks at the top — before any conditional returns ──
+  const { items: packages, recommended, loading } = useSelector(
+    (state: RootState) => state.packages,
+  );
 
   const [range, setRange] = useState<DateRange | undefined>();
   const [numberOfTourists, setNumberOfTourists] = useState(1);
-  useEffect(() => {
-    // For efficiency, it's better to fetch only the specific package for this page.
-    // fetchPackageById handles adding it to the 'items' list.
-    dispatch(fetchPackageById(params.id));
 
-    // Fetch the list of recommended packages
-    dispatch(fetchRecommendedPackages({ limit: 8 })); // Fetch more items for a better slider look
+  useEffect(() => {
+    dispatch(fetchPackageById(params.id));
+    dispatch(fetchRecommendedPackages({ limit: 8 }));
   }, [dispatch, params.id]);
 
   useEffect(() => {
-    // Fetch packages if they are not already in the store
-    // This handles direct navigation to this page
     if (packages.length === 0) {
       dispatch(fetchPackages());
     }
   }, [dispatch, packages.length]);
 
-  // --- Loading State ---
+  const { language } = useLanguage();
+
+  const tour = packages.find((p) => p._id === params.id);
+
+  // Resolve translations: active language → English fallback → top-level fallback
+  const activeLang = language as LocaleKey;
+  const translations = tour?.translations;
+  const activeTranslation = translations?.[activeLang];
+  const enTranslation = translations?.en;
+
+  const title =
+    activeTranslation?.title ?? enTranslation?.title ?? tour?.title ?? "";
+  const city =
+    activeTranslation?.city ?? enTranslation?.city ?? (tour as any)?.city ?? "";
+  const places =
+    activeTranslation?.places ?? enTranslation?.places ?? (tour as any)?.places ?? [];
+
+  // Full description: current language → English → nowhere
+  const rawDescription =
+    activeTranslation?.description ?? enTranslation?.description ?? "";
+
+  const safeDescription = useMemo(
+    () => sanitizeHtml(rawDescription),
+    [rawDescription],
+  );
+
+  const currency = (tour as any)?.baseCurrency ?? "INR";
+  const price = tour?.price ?? 0;
+  const basePrice = (tour as any)?.basePrice;
+  const showSavings = basePrice && basePrice > price;
+
+  // Duration from numberOfDays (backend has no "duration" string)
+  const tourDurationDays = tour?.numberOfDays ?? 1;
+
+  const formatCurrency = useCallback(
+    (value: number) =>
+      new Intl.NumberFormat(language, {
+        style: "currency",
+        currency,
+        maximumFractionDigits: 0,
+      }).format(value),
+    [language, currency],
+  );
+
+  // Inclusions / Exclusions
+  const inclusions: string[] =
+    (activeTranslation?.inclusions as string[]) ??
+    (enTranslation?.inclusions as string[]) ??
+    (tour as any)?.inclusions ??
+    [];
+
+  const exclusions: string[] =
+    (activeTranslation?.exclusions as string[]) ??
+    (enTranslation?.exclusions as string[]) ??
+    (tour as any)?.exclusions ??
+    [];
+
+  const handleDateSelect = (selectedRange: DateRange | undefined) => {
+    if (selectedRange?.from) {
+      const start = selectedRange.from;
+      const end = new Date(start);
+      end.setDate(start.getDate() + tourDurationDays - 1);
+      setRange({ from: start, to: end });
+    } else {
+      setRange(undefined);
+    }
+  };
+
+  const handleFindGuides = () => {
+    if (!range?.from || !range.to) return;
+    const fmt = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    router.push(
+      `/tours/${params.id}/select-guide?startDate=${fmt(range.from)}&endDate=${fmt(range.to)}&tourists=${numberOfTourists}`,
+    );
+  };
+
+  // ── Conditional renders AFTER all hooks ──
   if (loading === "pending" || (loading === "idle" && packages.length === 0)) {
     return (
       <div className="min-h-screen bg-background pt-20">
@@ -113,157 +183,107 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
     );
   }
 
-  // --- Not Found State ---
-  // This check runs AFTER loading is finished
   if (loading === "succeeded" && !tour) {
     notFound();
   }
 
-  // This is a guard against accessing tour properties before it's found
-  if (!tour) {
-    return null; // Or another loading/error state
-  }
-
-  // --- Parse duration safely ---
-  const tourDurationDays = parseInt(tour.duration.split(" ")[0]) || 1;
-
-  const handleDateSelect = (selectedRange: DateRange | undefined) => {
-    if (selectedRange?.from) {
-      const startDate = selectedRange.from;
-      const endDate = new Date(startDate);
-      endDate.setDate(startDate.getDate() + tourDurationDays - 1);
-      setRange({ from: startDate, to: endDate });
-    } else {
-      setRange(undefined);
-    }
-  };
-
-  const handleFindGuides = () => {
-    if (range?.from && range.to) {
-      // Helper function to format a Date object to a YYYY-MM-DD string
-      // in the local timezone, avoiding the UTC conversion issue.
-      const formatDate = (date: Date) => {
-        const year = date.getFullYear();
-        // getMonth() is zero-based, so we add 1
-        const month = String(date.getMonth() + 1).padStart(2, "0");
-        const day = String(date.getDate()).padStart(2, "0");
-        return `${year}-${month}-${day}`;
-      };
-
-      const startDate = formatDate(range.from);
-      const endDate = formatDate(range.to);
-
-      const findGuidesHref = `/tours/${
-        tour._id
-      }/select-guide?startDate=${startDate}&endDate=${endDate}&tourists=${numberOfTourists}`;
-
-      router.push(findGuidesHref);
-    }
-  };
-
-  const { language } = useLanguage();
-  const translation =
-    tour.translations?.[language as keyof typeof tour.translations];
-  const title = translation?.title ?? tour.title;
-  const city = translation?.city ?? tour.city ?? "";
-  const places = translation?.places ?? tour.places ?? [];
-  const description = translation?.description ?? tour.description;
-  const safeDescription = useMemo(() => {
-    if (!description) return "";
-    return DOMPurify.sanitize(description, {
-      USE_PROFILES: { html: true },
-      FORBID_TAGS: ["script", "style"],
-      FORBID_ATTR: [
-        "onerror",
-        "onload",
-        "onclick",
-        "onmouseover",
-        "onfocus",
-        "onblur",
-      ],
-    });
-  }, [description]);
-
-  const currency = tour.baseCurrency ?? "INR";
-  const price = tour.price;
-  const basePrice = tour.basePrice;
-  const showSavings = basePrice && basePrice > price;
-
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat(language, {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    }).format(value);
+  if (!tour) return null;
 
   return (
     <div className="min-h-screen bg-background pt-20">
       <div className="container max-w-7xl mx-auto px-4 py-12">
-        {/* Title Section */}
+        {/* Title */}
         <div className="mb-8 animate-fade-in-up">
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-foreground mb-2">
             {title}
           </h1>
           <div className="flex items-center gap-6 text-muted-foreground">
             <div className="flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-primary" /> {places.join(", ")}
+              <MapPin className="w-5 h-5 text-primary" />
+              {(places as string[]).join(", ")}
             </div>
             <div className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-primary" /> {tour.duration}
+              <Clock className="w-5 h-5 text-primary" />
+              {tourDurationDays} {tourDurationDays === 1 ? "Day" : "Days"}
             </div>
           </div>
         </div>
 
         {/* Image Gallery */}
         <div className="my-8">
-          <TourImageGallery images={tour.images} title={tour.title} />
+          <TourImageGallery images={tour.images} title={title} />
         </div>
 
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-x-12">
           <div className="lg:col-span-2">
+            {/* Tour Overview / Description */}
             <div className="animate-slide-in-left">
-              <h2 className="text-3xl font-bold border-b pb-4 mb-4">
+              <h2 className="text-3xl font-bold border-b pb-4 mb-6">
                 Tour Overview
               </h2>
-              {/* Render content: handle both HTML (from Rich Text Editors) and Plain Text (with newlines) */}
-              {description && /<[a-z][\s\S]*>/i.test(description) ? (
+              {safeDescription ? (
                 <div
-                  className="prose prose-lg max-w-none text-foreground/80 leading-relaxed prose-headings:text-foreground prose-strong:text-foreground prose-ul:list-disc prose-ol:list-decimal prose-li:my-1"
+                  className="prose prose-lg max-w-none
+                    text-foreground/80 leading-relaxed
+                    prose-headings:text-foreground prose-headings:font-bold prose-headings:mt-6 prose-headings:mb-3
+                    prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl
+                    prose-p:my-3 prose-p:leading-relaxed
+                    prose-strong:text-foreground prose-strong:font-semibold
+                    prose-em:text-foreground/70
+                    prose-ul:list-disc prose-ul:pl-6 prose-ul:my-3
+                    prose-ol:list-decimal prose-ol:pl-6 prose-ol:my-3
+                    prose-li:my-1 prose-li:leading-relaxed
+                    prose-hr:border-border prose-hr:my-6
+                    prose-mark:bg-yellow-100 prose-mark:text-foreground prose-mark:px-1 prose-mark:rounded
+                    prose-blockquote:border-l-4 prose-blockquote:border-primary prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:text-muted-foreground"
                   dangerouslySetInnerHTML={{ __html: safeDescription }}
                 />
               ) : (
-                <div className="text-lg text-foreground/80 leading-relaxed whitespace-pre-wrap">
-                  {description}
-                </div>
+                <p className="text-muted-foreground italic">
+                  No description available.
+                </p>
               )}
             </div>
 
-            <div className="mt-12 animate-slide-in-left animate-delay-200">
-              <h2 className="text-3xl font-bold border-b pb-4 mb-4">
-                What's Included
-              </h2>
-              <ul className="space-y-3 text-lg">
-                <li className="flex items-center gap-3">
-                  <CheckCircle className="w-6 h-6 text-primary" /> Expert Local
-                  Guides
-                </li>
-                <li className="flex items-center gap-3">
-                  <CheckCircle className="w-6 h-6 text-primary" /> All
-                  Accommodations
-                </li>
-                <li className="flex items-center gap-3">
-                  <CheckCircle className="w-6 h-6 text-primary" /> Private
-                  Transportation
-                </li>
-                <li className="flex items-center gap-3">
-                  <CheckCircle className="w-6 h-6 text-primary" /> Entrance Fees
-                  to Monuments
-                </li>
-              </ul>
-            </div>
+            {/* Inclusions */}
+            {inclusions.length > 0 && (
+              <div className="mt-12 animate-slide-in-left animate-delay-200">
+                <h2 className="text-3xl font-bold border-b pb-4 mb-4">
+                  What&apos;s Included
+                </h2>
+                <ul className="space-y-3 text-lg">
+                  {inclusions.map((item, i) => (
+                    <li key={i} className="flex items-start gap-3">
+                      <CheckCircle className="w-6 h-6 text-primary shrink-0 mt-0.5" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Exclusions */}
+            {exclusions.length > 0 && (
+              <div className="mt-10 animate-slide-in-left animate-delay-200">
+                <h2 className="text-3xl font-bold border-b pb-4 mb-4">
+                  What&apos;s Not Included
+                </h2>
+                <ul className="space-y-3 text-lg text-muted-foreground">
+                  {exclusions.map((item, i) => (
+                    <li key={i} className="flex items-start gap-3">
+                      <span className="w-6 h-6 rounded-full border-2 border-muted-foreground/40 flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold">
+                        ✕
+                      </span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
+          {/* Booking Sidebar */}
           <aside className="lg:col-span-1">
             <div className="sticky top-24 p-6 bg-card rounded-xl shadow-lg border animate-slide-in-right animate-delay-200">
               <div className="text-center mb-1">
@@ -278,8 +298,7 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
                     {formatCurrency(basePrice * numberOfTourists)}
                   </span>
                   <span className="font-bold text-destructive">
-                    {" "}
-                    Save {Math.round(((basePrice - price) / basePrice) * 100)}%
+                    {" "}Save {Math.round(((basePrice - price) / basePrice) * 100)}%
                   </span>
                 </p>
               )}
@@ -296,9 +315,7 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
                   type="number"
                   value={numberOfTourists}
                   onChange={(e) =>
-                    setNumberOfTourists(
-                      Math.max(1, parseInt(e.target.value) || 1),
-                    )
+                    setNumberOfTourists(Math.max(1, parseInt(e.target.value) || 1))
                   }
                   className="text-center h-12 text-base"
                   min="1"
@@ -333,20 +350,14 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
               >
                 Find Available Guides
               </Button>
-
-              {/* {range?.from && range.to && (
-                <p className="text-center mt-3 text-sm text-green-600">
-                  Selected: {range.from.toLocaleDateString()} -{" "}
-                  {range.to.toLocaleDateString()}
-                </p>
-              )} */}
             </div>
           </aside>
         </div>
+
+        {/* Recommended */}
         <div className="mt-24 border-t pt-16">
           <RecommendedPackagesSlider
             title="You Might Also Like"
-            // Filter out the current package from the recommendations
             packages={recommended.filter((p) => p._id !== tour._id)}
             loading={loading === "pending" && recommended.length === 0}
           />

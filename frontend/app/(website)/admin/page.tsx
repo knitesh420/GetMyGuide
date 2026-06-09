@@ -28,7 +28,6 @@ import {
 import { useAuth } from "@/lib/hooks/useAuth";
 import dynamic from "next/dynamic";
 import { resolvePackageImageUrl } from "@/lib/utils";
-import { PackageFormModal } from "@/components/admin/PackageFormModal";
 import { AdminLocation } from "@/types/admin";
 import { RichTextEditor } from "@/components/editor/RichTextEditor";
 
@@ -219,8 +218,6 @@ function AdminDashboard() {
   const [editingPackage, setEditingPackage] = useState<ServicePackage | null>(
     null,
   );
-  const [isCreatePackageOpen, setIsCreatePackageOpen] = useState(false);
-  const [isPackageSaving, setIsPackageSaving] = useState(false);
   const [locations, setLocations] = useState<AdminLocation[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -505,33 +502,6 @@ function AdminDashboard() {
       alert("Error updating service");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleCreatePackage = async (formData: FormData) => {
-    setIsPackageSaving(true);
-    try {
-      const res = await fetch(`${API_BASE}/package`, {
-        method: "POST",
-        credentials: "include",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        alert(`Failed to create package: ${res.status} ${txt}`);
-        return;
-      }
-      const data = await res.json();
-      const newPackage = data.data || data;
-      const mapped = mapPackageForAdmin(newPackage);
-      setPackages((prev) => [mapped, ...prev]);
-      setIsCreatePackageOpen(false);
-      alert("Package created successfully!");
-    } catch (err) {
-      alert("Error creating package");
-    } finally {
-      setIsPackageSaving(false);
     }
   };
 
@@ -1121,15 +1091,6 @@ function AdminDashboard() {
             )}
             {activeTab === "services" && (
               <>
-                <div className="flex justify-end mb-4">
-                  <button
-                    onClick={() => setIsCreatePackageOpen(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    New Package
-                  </button>
-                </div>
                 {packages.length === 0 && !loading && (
                   <div className="text-center py-8">
                     <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -1178,15 +1139,6 @@ function AdminDashboard() {
         />
       )}
 
-      {/* Create Package Modal */}
-      <PackageFormModal
-        isOpen={isCreatePackageOpen}
-        onClose={() => setIsCreatePackageOpen(false)}
-        onSave={handleCreatePackage}
-        editingPackage={null}
-        isLoading={isPackageSaving}
-        allLocations={locations}
-      />
     </div>
   );
 }
@@ -3028,7 +2980,7 @@ function EditServiceModal({
                     }))
                   }
                   rows={2}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 focus:border-blue-400 focus:bg-blue-50/30 outline-none resize-none"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 focus:outline-none focus:border-blue-400 focus:bg-blue-50/30 resize-none"
                 />
               </div>
               <div className="md:col-span-2 space-y-2">

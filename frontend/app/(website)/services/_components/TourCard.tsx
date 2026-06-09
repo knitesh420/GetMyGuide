@@ -1,20 +1,27 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import ImageModal from "./ImageModal";
-import { MapPin, IndianRupee, Users, Calendar, Eye } from "lucide-react";
+import { MapPin, IndianRupee, Users, Calendar, Eye, ArrowRight } from "lucide-react";
 
 interface Props {
+  id?: string;
   title: string;
   city: string;
   images: (File | string)[];
   places?: string[];
   price?: number;
   shortDescription?: string;
+  description?: string;
+  inclusions?: string[];
+  exclusions?: string[];
+  highlights?: string[];
   numberOfPeople?: number;
   numberOfDays?: number;
 }
 
 export default function TourCard({
+  id,
   title,
   city,
   images,
@@ -24,6 +31,7 @@ export default function TourCard({
   numberOfPeople,
   numberOfDays,
 }: Props) {
+  const router = useRouter();
   const [showModal, setShowModal] = useState(false);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [hasImageError, setHasImageError] = useState(false);
@@ -84,7 +92,7 @@ export default function TourCard({
               <MapPin className="w-10 h-10 text-slate-400" />
             </div>
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+          <div className="absolute inset-0 bg-linear-to-t from-black/50 to-transparent" />
 
           {/* Price Badge */}
           {price !== undefined && price > 0 && (
@@ -182,10 +190,24 @@ export default function TourCard({
             ) : (
               <span className="text-sm text-slate-400">Contact for price</span>
             )}
-            <button className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white text-sm font-semibold rounded-full hover:from-orange-600 hover:to-pink-600 transition-all shadow-md hover:shadow-lg">
-              <Eye className="w-4 h-4" />
-              View
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowModal(true); }}
+                className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-full transition-all"
+              >
+                <Eye className="w-4 h-4" />
+                Photos
+              </button>
+              {id && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); router.push(`/tours/${id}`); }}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-linear-to-r from-orange-500 to-pink-500 text-white text-sm font-semibold rounded-full hover:from-orange-600 hover:to-pink-600 transition-all shadow-md hover:shadow-lg"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                  Details
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

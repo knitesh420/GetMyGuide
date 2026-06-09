@@ -1,7 +1,7 @@
 "use client";
 
 import { Compass, Trash2, Search, X } from "lucide-react";
-import { Suspense, useEffect, useState, useMemo } from "react";
+import { Suspense, useEffect, useState, useMemo, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import TourCard from "./_components/TourCard";
 import TourForm from "./_components/TourForm";
@@ -47,37 +47,31 @@ function ServicesContent() {
     }
   }, [searchParams]);
 
-  // Backend stores all text inside translations.{lang} — there are no top-level title/city fields.
-  // So we read the requested language first, then fall back to translations.en, then the raw top-level field.
-  const getLocalizedString = (
-    pkg: TourData,
-    field: keyof TourData,
-    _fallback: string,
-  ) => {
-    const langKey = language as keyof typeof pkg.translations;
-    const enKey = "en" as keyof typeof pkg.translations;
+  // Reads a string field from the correct locale, falls back to EN then the raw fallback.
+  const getLocalizedString = useCallback(
+    (pkg: TourData, field: string, _fallback: string): string => {
+      const langData = pkg.translations?.[language as keyof typeof pkg.translations] as Record<string, unknown> | undefined;
+      const enData   = pkg.translations?.en as Record<string, unknown> | undefined;
 
-    const fromLang = pkg.translations?.[langKey]?.[field as keyof typeof pkg.translations.en];
-    if (typeof fromLang === "string" && fromLang) return fromLang;
+      const fromLang = langData?.[field];
+      if (typeof fromLang === "string" && fromLang) return fromLang;
 
-    const fromEn = pkg.translations?.[enKey]?.[field as keyof typeof pkg.translations.en];
-    if (typeof fromEn === "string" && fromEn) return fromEn;
+      const fromEn = enData?.[field];
+      if (typeof fromEn === "string" && fromEn) return fromEn;
 
-    // last resort: top-level field (only present on freshly-created optimistic items)
-    return _fallback;
-  };
+      return _fallback || "";
+    },
+    [language],
+  );
 
-  const getLocalizedPlaces = (pkg: TourData) => {
-    const langKey = language as keyof typeof pkg.translations;
-    const enKey = "en" as keyof typeof pkg.translations;
-
-    return (
-      pkg.translations?.[langKey]?.places ||
-      pkg.translations?.[enKey]?.places ||
-      pkg.places ||
-      []
-    );
-  };
+  const getLocalizedPlaces = useCallback(
+    (pkg: TourData): string[] => {
+      const langData = pkg.translations?.[language as keyof typeof pkg.translations];
+      const enData   = pkg.translations?.en;
+      return langData?.places || enData?.places || pkg.places || [];
+    },
+    [language],
+  );
 
   const filteredPackages = useMemo(() => {
     if (!searchQuery.trim()) return packages;
@@ -92,7 +86,7 @@ function ServicesContent() {
         places.some((place) => place.toLowerCase().includes(q))
       );
     });
-  }, [packages, searchQuery, language]);
+  }, [packages, searchQuery, language, getLocalizedString, getLocalizedPlaces]);
 
   const clearSearch = () => {
     setSearchQuery("");
@@ -329,12 +323,32 @@ function ServicesContent() {
               {filteredPackages.map((pkg, index) => (
                 <div key={pkg.id || index} className="relative h-full">
                   <TourCard
+                    id={pkg.id || (pkg as any)._id}
                     title={getLocalizedString(pkg, "title", pkg.title)}
                     city={getLocalizedString(pkg, "city", pkg.city)}
                     images={pkg.images as (File | string)[]}
                     places={getLocalizedPlaces(pkg)}
                     price={pkg.price}
                     shortDescription={getLocalizedString(pkg, "shortDescription", pkg.shortDescription || "")}
+                    description={getLocalizedString(pkg, "description", pkg.description || "")}
+                    inclusions={
+                      (pkg.translations?.[language as keyof typeof pkg.translations]?.inclusions) ||
+                      pkg.translations?.en?.inclusions ||
+                      pkg.inclusions ||
+                      []
+                    }
+                    exclusions={
+                      (pkg.translations?.[language as keyof typeof pkg.translations]?.exclusions) ||
+                      pkg.translations?.en?.exclusions ||
+                      pkg.exclusions ||
+                      []
+                    }
+                    highlights={
+                      (pkg.translations?.[language as keyof typeof pkg.translations]?.highlights) ||
+                      pkg.translations?.en?.highlights ||
+                      pkg.highlights ||
+                      []
+                    }
                     numberOfPeople={pkg.numberOfPeople}
                     numberOfDays={pkg.numberOfDays}
                   />

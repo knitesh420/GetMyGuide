@@ -25,7 +25,9 @@ export function TourCard({ tour }: { tour: TourData }) {
   // The 'Set' automatically removes duplicates. This handles cases where the images array is missing or empty.
   const { language } = useLanguage();
   const uniqueImages = tour.images?.length ? [...new Set(tour.images)] : [];
-  const uniqueImagesResolved = uniqueImages.map(resolvePackageImageUrl);
+  const uniqueImagesResolved = uniqueImages.map((img) =>
+    resolvePackageImageUrl(img as string | { url?: string; secure_url?: string; path?: string; publicId?: string })
+  );
 
   const translation =
     tour.translations?.[language as keyof typeof tour.translations];

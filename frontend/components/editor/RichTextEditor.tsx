@@ -40,7 +40,7 @@ export function RichTextEditor({
     content,
     editorProps: {
       attributes: {
-        class: "min-h-[220px] outline-none",
+        class: "min-h-55 outline-none",
       },
     },
     onUpdate: ({ editor }) => {
@@ -62,7 +62,12 @@ export function RichTextEditor({
       <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
         <EditorContent
           editor={editor}
-          className="prose prose-slate m-0 min-h-[220px] rounded-3xl p-4 focus:outline-none"
+          className="prose prose-lg prose-slate max-w-none m-0 min-h-55 rounded-3xl p-4 focus:outline-none
+            prose-headings:font-bold prose-headings:text-slate-800
+            prose-strong:text-slate-800 prose-strong:font-semibold
+            prose-ul:list-disc prose-ul:pl-5
+            prose-ol:list-decimal prose-ol:pl-5
+            prose-li:my-1 prose-p:my-2 prose-hr:my-4"
         />
       </div>
     </div>

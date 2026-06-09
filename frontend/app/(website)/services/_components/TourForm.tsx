@@ -17,6 +17,8 @@ const translationLanguages: LanguageCode[] = supportedLanguages.filter(
   (lang) => lang !== defaultLanguage,
 );
 
+const MAX_IMAGES = 8;
+
 interface TranslationFormState {
   title: string;
   city: string;
@@ -42,8 +44,6 @@ interface FormState {
   exclusions: string;
   highlights: string;
 }
-
-const MAX_IMAGES = 8;
 
 const createTranslationState = (): TranslationFormState => ({
   title: "",
@@ -129,8 +129,12 @@ export default function TourForm({ onSubmit }: Props) {
     if (!form.title.trim()) newErrors.title = "Package title is required";
     if (!form.city.trim()) newErrors.city = "City is required";
     if (!form.places.trim()) newErrors.places = "At least one place is required";
-    if (!form.shortDescription.trim()) newErrors.shortDescription = "Short description is required";
-    if (!form.description.trim()) newErrors.description = "Full description is required";
+
+    if (!form.shortDescription.trim()) {
+      newErrors.shortDescription = "Short description is required";
+    }
+
+    if (!form.description.replace(/<[^>]*>/g, "").trim()) newErrors.description = "Full description is required";
     if (!form.inclusions.trim()) newErrors.inclusions = "At least one inclusion is required";
     if (!form.exclusions.trim()) newErrors.exclusions = "At least one exclusion is required";
     if (!form.highlights.trim()) newErrors.highlights = "At least one highlight is required";
@@ -160,11 +164,11 @@ export default function TourForm({ onSubmit }: Props) {
   ) => {
     setTranslations((prev) => ({
       ...prev,
-      [lang]: {
-        ...prev[lang],
-        [field]: value,
-      },
+      [lang]: { ...prev[lang], [field]: value },
     }));
+    if (field === "shortDescription") {
+      setErrors((prev) => ({ ...prev, [`shortDescription_${lang}`]: "" }));
+    }
   };
 
   const buildTranslationPayload = (values: TranslationFormState) => {
@@ -180,7 +184,7 @@ export default function TourForm({ onSubmit }: Props) {
       ...(values.shortDescription.trim() && {
         shortDescription: values.shortDescription.trim(),
       }),
-      ...(values.description.trim() && {
+      ...(values.description.replace(/<[^>]*>/g, "").trim() && {
         description: values.description.trim(),
       }),
       ...(inclusions.length && { inclusions }),
@@ -272,14 +276,375 @@ export default function TourForm({ onSubmit }: Props) {
       onSubmit={handleSubmit}
       className="bg-white rounded-3xl shadow-xl p-8 border-2 border-slate-100"
     >
-      <h2 className="text-3xl font-bold mb-8 text-slate-800">Create Package</h2>
+      <h2 className="text-3xl font-bold mb-6 text-slate-800">Create Package</h2>
 
-      {/* ── Translations Section ── */}
-      <div className="mb-6">
+      {/* ── Step 1: English Content & Package Details ── */}
+      <div className="flex items-center gap-3 mb-4">
+        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-slate-800 text-white text-sm font-bold shrink-0">
+          1
+        </span>
+        <span className="text-base font-semibold text-slate-700">
+          Package Details (English) — required
+        </span>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-8 mb-10">
+        {/* Left Column */}
+        <div className="space-y-6">
+          {/* Package Title */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Package Title *
+            </label>
+            <input
+              type="text"
+              value={form.title}
+              placeholder="Golden Triangle Tour"
+              className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
+                errors.title
+                  ? "border-red-300 bg-red-50"
+                  : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
+              }`}
+              onChange={(e) => {
+                setForm({ ...form, title: e.target.value });
+                setErrors({ ...errors, title: "" });
+              }}
+            />
+            {errors.title && (
+              <p className="text-red-500 text-xs mt-1">{errors.title}</p>
+            )}
+          </div>
+
+          {/* City */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              <MapPin className="inline w-4 h-4 mr-1" />
+              City *
+            </label>
+            <input
+              type="text"
+              value={form.city}
+              placeholder="Delhi"
+              className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
+                errors.city
+                  ? "border-red-300 bg-red-50"
+                  : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
+              }`}
+              onChange={(e) => {
+                setForm({ ...form, city: e.target.value });
+                setErrors({ ...errors, city: "" });
+              }}
+            />
+            {errors.city && (
+              <p className="text-red-500 text-xs mt-1">{errors.city}</p>
+            )}
+          </div>
+
+          {/* Places */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Places — comma-separated *
+            </label>
+            <input
+              type="text"
+              value={form.places}
+              placeholder="Taj Mahal, Red Fort, Qutub Minar"
+              className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
+                errors.places
+                  ? "border-red-300 bg-red-50"
+                  : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
+              }`}
+              onChange={(e) => {
+                setForm({ ...form, places: e.target.value });
+                setErrors({ ...errors, places: "" });
+              }}
+            />
+            {errors.places && (
+              <p className="text-red-500 text-xs mt-1">{errors.places}</p>
+            )}
+          </div>
+
+          {/* Price + Currency */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <IndianRupee className="inline w-4 h-4 mr-1" /> Price *
+              </label>
+              <input
+                type="number"
+                value={form.price}
+                placeholder="4999"
+                min="0"
+                className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
+                  errors.price
+                    ? "border-red-300 bg-red-50"
+                    : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
+                }`}
+                onChange={(e) => {
+                  setForm({ ...form, price: e.target.value });
+                  setErrors({ ...errors, price: "" });
+                }}
+              />
+              {errors.price && (
+                <p className="text-red-500 text-xs mt-1">{errors.price}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Currency
+              </label>
+              <input
+                type="text"
+                value={form.baseCurrency}
+                placeholder="INR"
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-400 focus:bg-blue-50/30 transition-all outline-none"
+                onChange={(e) =>
+                  setForm({ ...form, baseCurrency: e.target.value })
+                }
+              />
+            </div>
+          </div>
+
+          {/* Short Description */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Short Description *
+            </label>
+            <textarea
+              value={form.shortDescription}
+              placeholder="A brief overview of the tour package..."
+              rows={3}
+              className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none resize-none ${
+                errors.shortDescription
+                  ? "border-red-300 bg-red-50"
+                  : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
+              }`}
+              onChange={(e) => {
+                setForm({ ...form, shortDescription: e.target.value });
+                setErrors({ ...errors, shortDescription: "" });
+              }}
+            />
+            {errors.shortDescription && (
+              <p className="text-red-500 text-xs mt-1">{errors.shortDescription}</p>
+            )}
+          </div>
+
+          {/* Full Description */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Full Description *
+            </label>
+            <div className={errors.description ? "ring-2 ring-red-300 rounded-3xl" : ""}>
+              <RichTextEditor
+                content={form.description}
+                onChange={(html) => {
+                  setForm({ ...form, description: html });
+                  setErrors({ ...errors, description: "" });
+                }}
+                placeholder="Write a detailed tour description with bold, headings, lists..."
+              />
+            </div>
+            {errors.description && (
+              <p className="text-red-500 text-xs mt-1">{errors.description}</p>
+            )}
+          </div>
+
+          {/* Inclusions */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Inclusions — comma-separated *
+            </label>
+            <input
+              type="text"
+              value={form.inclusions}
+              placeholder="Hotel, Breakfast, Transfers"
+              className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
+                errors.inclusions
+                  ? "border-red-300 bg-red-50"
+                  : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
+              }`}
+              onChange={(e) => {
+                setForm({ ...form, inclusions: e.target.value });
+                setErrors({ ...errors, inclusions: "" });
+              }}
+            />
+            {errors.inclusions && (
+              <p className="text-red-500 text-xs mt-1">{errors.inclusions}</p>
+            )}
+          </div>
+
+          {/* Exclusions */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Exclusions — comma-separated *
+            </label>
+            <input
+              type="text"
+              value={form.exclusions}
+              placeholder="Lunch, Flights, Personal expenses"
+              className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
+                errors.exclusions
+                  ? "border-red-300 bg-red-50"
+                  : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
+              }`}
+              onChange={(e) => {
+                setForm({ ...form, exclusions: e.target.value });
+                setErrors({ ...errors, exclusions: "" });
+              }}
+            />
+            {errors.exclusions && (
+              <p className="text-red-500 text-xs mt-1">{errors.exclusions}</p>
+            )}
+          </div>
+
+          {/* Highlights */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Highlights — comma-separated *
+            </label>
+            <input
+              type="text"
+              value={form.highlights}
+              placeholder="Sunrise at Taj Mahal, Camel ride, Boat on Ganges"
+              className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
+                errors.highlights
+                  ? "border-red-300 bg-red-50"
+                  : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
+              }`}
+              onChange={(e) => {
+                setForm({ ...form, highlights: e.target.value });
+                setErrors({ ...errors, highlights: "" });
+              }}
+            />
+            {errors.highlights && (
+              <p className="text-red-500 text-xs mt-1">{errors.highlights}</p>
+            )}
+          </div>
+
+          {/* No. of People and No. of Days */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <Users className="inline w-4 h-4 mr-1" />
+                No. of People *
+              </label>
+              <input
+                type="number"
+                value={form.numberOfPeople}
+                placeholder="10"
+                min="1"
+                className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
+                  errors.numberOfPeople
+                    ? "border-red-300 bg-red-50"
+                    : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
+                }`}
+                onChange={(e) => {
+                  setForm({ ...form, numberOfPeople: e.target.value });
+                  setErrors({ ...errors, numberOfPeople: "" });
+                }}
+              />
+              {errors.numberOfPeople && (
+                <p className="text-red-500 text-xs mt-1">{errors.numberOfPeople}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <Calendar className="inline w-4 h-4 mr-1" />
+                No. of Days *
+              </label>
+              <input
+                type="number"
+                value={form.numberOfDays}
+                placeholder="5"
+                min="1"
+                className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
+                  errors.numberOfDays
+                    ? "border-red-300 bg-red-50"
+                    : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
+                }`}
+                onChange={(e) => {
+                  setForm({ ...form, numberOfDays: e.target.value });
+                  setErrors({ ...errors, numberOfDays: "" });
+                }}
+              />
+              {errors.numberOfDays && (
+                <p className="text-red-500 text-xs mt-1">{errors.numberOfDays}</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column - Image Upload */}
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-2">
+            <Upload className="inline w-4 h-4 mr-1" />
+            Package Images * (Max {MAX_IMAGES})
+          </label>
+
+          <label
+            className={`block w-full h-40 border-3 border-dashed rounded-2xl cursor-pointer transition-all hover:bg-blue-50 ${
+              errors.images
+                ? "border-red-300 bg-red-50"
+                : "border-slate-300 hover:border-blue-400"
+            }`}
+          >
+            <input
+              type="file"
+              multiple
+              accept="image/png,image/webp,image/jpg,image/jpeg"
+              className="hidden"
+              onChange={handleImageChange}
+            />
+            <div className="flex flex-col items-center justify-center h-full text-slate-500">
+              <Upload className="w-10 h-10 mb-2" />
+              <p className="text-sm font-medium">Click to upload images</p>
+              <p className="text-xs mt-1">PNG, JPG, WEBP</p>
+            </div>
+          </label>
+          {errors.images && (
+            <p className="text-red-500 text-xs mt-1">{errors.images}</p>
+          )}
+
+          {previews.length > 0 && (
+            <div className="grid grid-cols-3 gap-3 mt-4">
+              {previews.map((src, i) => (
+                <div key={i} className="relative group">
+                  <img
+                    src={src}
+                    alt={`Preview ${i + 1}`}
+                    className="w-full h-24 object-cover rounded-lg border-2 border-slate-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(i)}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:bg-red-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Step 2: Translations (optional) ── */}
+      <div className="flex items-center gap-3 mb-2">
+        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-slate-300 text-slate-700 text-sm font-bold shrink-0">
+          2
+        </span>
+        <span className="text-base font-semibold text-slate-700">
+          Add Translations{" "}
+          <span className="font-normal text-slate-400">(optional)</span>
+        </span>
+      </div>
+      <p className="text-sm text-slate-500 mb-4">
+        Only content fields are translatable — title, descriptions, city, places, inclusions, exclusions.
+        Price, images, and capacity are shared across all languages.
+      </p>
+
+      <div className="mb-8">
         <div className="flex flex-wrap gap-2 items-center mb-4">
-          <span className="text-sm font-semibold text-slate-600">
-            Add translations (optional):
-          </span>
           {translationLanguages.map((lang) => (
             <button
               key={lang}
@@ -407,350 +772,6 @@ export default function TourForm({ onSubmit }: Props) {
               }
             />
           </div>
-        </div>
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-8">
-        {/* Left Column */}
-        <div className="space-y-6">
-          {/* Package Title */}
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">
-              Package Title (English) *
-            </label>
-            <input
-              type="text"
-              value={form.title}
-              placeholder="Golden Triangle Tour"
-              className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
-                errors.title
-                  ? "border-red-300 bg-red-50"
-                  : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
-              }`}
-              onChange={(e) => {
-                setForm({ ...form, title: e.target.value });
-                setErrors({ ...errors, title: "" });
-              }}
-            />
-            {errors.title && (
-              <p className="text-red-500 text-xs mt-1">{errors.title}</p>
-            )}
-          </div>
-
-          {/* City */}
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">
-              <MapPin className="inline w-4 h-4 mr-1" />
-              City (English) *
-            </label>
-            <input
-              type="text"
-              value={form.city}
-              placeholder="Delhi"
-              className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
-                errors.city
-                  ? "border-red-300 bg-red-50"
-                  : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
-              }`}
-              onChange={(e) => {
-                setForm({ ...form, city: e.target.value });
-                setErrors({ ...errors, city: "" });
-              }}
-            />
-            {errors.city && (
-              <p className="text-red-500 text-xs mt-1">{errors.city}</p>
-            )}
-          </div>
-
-          {/* Places */}
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">
-              Places — comma-separated (English) *
-            </label>
-            <input
-              type="text"
-              value={form.places}
-              placeholder="Taj Mahal, Red Fort, Qutub Minar"
-              className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
-                errors.places
-                  ? "border-red-300 bg-red-50"
-                  : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
-              }`}
-              onChange={(e) => {
-                setForm({ ...form, places: e.target.value });
-                setErrors({ ...errors, places: "" });
-              }}
-            />
-            {errors.places && (
-              <p className="text-red-500 text-xs mt-1">{errors.places}</p>
-            )}
-          </div>
-
-          {/* Price + Currency */}
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                <IndianRupee className="inline w-4 h-4 mr-1" /> Price *
-              </label>
-              <input
-                type="number"
-                value={form.price}
-                placeholder="4999"
-                min="0"
-                className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
-                  errors.price
-                    ? "border-red-300 bg-red-50"
-                    : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
-                }`}
-                onChange={(e) => {
-                  setForm({ ...form, price: e.target.value });
-                  setErrors({ ...errors, price: "" });
-                }}
-              />
-              {errors.price && (
-                <p className="text-red-500 text-xs mt-1">{errors.price}</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                Currency
-              </label>
-              <input
-                type="text"
-                value={form.baseCurrency}
-                placeholder="INR"
-                className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-blue-400 focus:bg-blue-50/30 transition-all outline-none"
-                onChange={(e) =>
-                  setForm({ ...form, baseCurrency: e.target.value })
-                }
-              />
-            </div>
-          </div>
-
-          {/* Short Description */}
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">
-              Short Description (English) *
-            </label>
-            <textarea
-              value={form.shortDescription}
-              placeholder="A brief overview of the tour package..."
-              rows={3}
-              className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none resize-none ${
-                errors.shortDescription
-                  ? "border-red-300 bg-red-50"
-                  : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
-              }`}
-              onChange={(e) => {
-                setForm({ ...form, shortDescription: e.target.value });
-                setErrors({ ...errors, shortDescription: "" });
-              }}
-            />
-            {errors.shortDescription && (
-              <p className="text-red-500 text-xs mt-1">{errors.shortDescription}</p>
-            )}
-          </div>
-
-          {/* Full Description */}
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">
-              Full Description (English) *
-            </label>
-            <textarea
-              value={form.description}
-              placeholder="A detailed tour description..."
-              rows={4}
-              className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none resize-none ${
-                errors.description
-                  ? "border-red-300 bg-red-50"
-                  : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
-              }`}
-              onChange={(e) => {
-                setForm({ ...form, description: e.target.value });
-                setErrors({ ...errors, description: "" });
-              }}
-            />
-            {errors.description && (
-              <p className="text-red-500 text-xs mt-1">{errors.description}</p>
-            )}
-          </div>
-
-          {/* Inclusions */}
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">
-              Inclusions — comma-separated (English) *
-            </label>
-            <input
-              type="text"
-              value={form.inclusions}
-              placeholder="Hotel, Breakfast, Transfers"
-              className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
-                errors.inclusions
-                  ? "border-red-300 bg-red-50"
-                  : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
-              }`}
-              onChange={(e) => {
-                setForm({ ...form, inclusions: e.target.value });
-                setErrors({ ...errors, inclusions: "" });
-              }}
-            />
-            {errors.inclusions && (
-              <p className="text-red-500 text-xs mt-1">{errors.inclusions}</p>
-            )}
-          </div>
-
-          {/* Exclusions */}
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">
-              Exclusions — comma-separated (English) *
-            </label>
-            <input
-              type="text"
-              value={form.exclusions}
-              placeholder="Lunch, Flights, Personal expenses"
-              className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
-                errors.exclusions
-                  ? "border-red-300 bg-red-50"
-                  : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
-              }`}
-              onChange={(e) => {
-                setForm({ ...form, exclusions: e.target.value });
-                setErrors({ ...errors, exclusions: "" });
-              }}
-            />
-            {errors.exclusions && (
-              <p className="text-red-500 text-xs mt-1">{errors.exclusions}</p>
-            )}
-          </div>
-
-          {/* Highlights */}
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">
-              Highlights — comma-separated (English) *
-            </label>
-            <input
-              type="text"
-              value={form.highlights}
-              placeholder="Sunrise at Taj Mahal, Camel ride, Boat on Ganges"
-              className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
-                errors.highlights
-                  ? "border-red-300 bg-red-50"
-                  : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
-              }`}
-              onChange={(e) => {
-                setForm({ ...form, highlights: e.target.value });
-                setErrors({ ...errors, highlights: "" });
-              }}
-            />
-            {errors.highlights && (
-              <p className="text-red-500 text-xs mt-1">{errors.highlights}</p>
-            )}
-          </div>
-
-          {/* No. of People and No. of Days */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                <Users className="inline w-4 h-4 mr-1" />
-                No. of People *
-              </label>
-              <input
-                type="number"
-                value={form.numberOfPeople}
-                placeholder="10"
-                min="1"
-                className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
-                  errors.numberOfPeople
-                    ? "border-red-300 bg-red-50"
-                    : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
-                }`}
-                onChange={(e) => {
-                  setForm({ ...form, numberOfPeople: e.target.value });
-                  setErrors({ ...errors, numberOfPeople: "" });
-                }}
-              />
-              {errors.numberOfPeople && (
-                <p className="text-red-500 text-xs mt-1">{errors.numberOfPeople}</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                <Calendar className="inline w-4 h-4 mr-1" />
-                No. of Days *
-              </label>
-              <input
-                type="number"
-                value={form.numberOfDays}
-                placeholder="5"
-                min="1"
-                className={`w-full px-4 py-3 rounded-xl border-2 transition-all outline-none ${
-                  errors.numberOfDays
-                    ? "border-red-300 bg-red-50"
-                    : "border-slate-200 focus:border-blue-400 focus:bg-blue-50/30"
-                }`}
-                onChange={(e) => {
-                  setForm({ ...form, numberOfDays: e.target.value });
-                  setErrors({ ...errors, numberOfDays: "" });
-                }}
-              />
-              {errors.numberOfDays && (
-                <p className="text-red-500 text-xs mt-1">{errors.numberOfDays}</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column - Image Upload */}
-        <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-2">
-            <Upload className="inline w-4 h-4 mr-1" />
-            Package Images * (Max {MAX_IMAGES})
-          </label>
-
-          <label
-            className={`block w-full h-40 border-3 border-dashed rounded-2xl cursor-pointer transition-all hover:bg-blue-50 ${
-              errors.images
-                ? "border-red-300 bg-red-50"
-                : "border-slate-300 hover:border-blue-400"
-            }`}
-          >
-            <input
-              type="file"
-              multiple
-              accept="image/png,image/webp,image/jpg,image/jpeg"
-              className="hidden"
-              onChange={handleImageChange}
-            />
-            <div className="flex flex-col items-center justify-center h-full text-slate-500">
-              <Upload className="w-10 h-10 mb-2" />
-              <p className="text-sm font-medium">Click to upload images</p>
-              <p className="text-xs mt-1">PNG, JPG, WEBP</p>
-            </div>
-          </label>
-          {errors.images && (
-            <p className="text-red-500 text-xs mt-1">{errors.images}</p>
-          )}
-
-          {previews.length > 0 && (
-            <div className="grid grid-cols-3 gap-3 mt-4">
-              {previews.map((src, i) => (
-                <div key={i} className="relative group">
-                  <img
-                    src={src}
-                    alt={`Preview ${i + 1}`}
-                    className="w-full h-24 object-cover rounded-lg border-2 border-slate-200"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeImage(i)}
-                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:bg-red-600"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 

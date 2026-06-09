@@ -5,7 +5,7 @@ import fs from 'fs';
 import routes from './modules';
 
 import { createLoggerContext, errorHandler, NotFoundError } from 'node-be-utilities';
-import { IS_PRODUCTION, IS_WINDOWS, Path } from './config/const';
+import { IS_WINDOWS, Path } from './config/const';
 
 const allowlist = [
 	'http://localhost:5173',
@@ -36,10 +36,15 @@ const corsOptionsDelegate = (req: any, callback: any) => {
 
 export default function (app: Express) {
 	//Defines all global variables and constants
-	let basedir = __dirname;
-	basedir = basedir.slice(0, basedir.lastIndexOf(IS_WINDOWS ? '\\' : '/'));
-	if (IS_PRODUCTION) {
-		basedir = basedir.slice(0, basedir.lastIndexOf(IS_WINDOWS ? '\\' : '/'));
+	// __dirname is either:
+	//   dev (ts-node):  backend/src
+	//   prod (compiled): backend/build/src
+	// Strip one level to get the immediate parent, then strip again if that parent
+	// is 'build' (compiled mode).
+	const sep = IS_WINDOWS ? '\\' : '/';
+	let basedir = __dirname.slice(0, __dirname.lastIndexOf(sep));
+	if (basedir.endsWith('build') || basedir.endsWith('build/') || basedir.endsWith('build\\')) {
+		basedir = basedir.slice(0, basedir.lastIndexOf(sep));
 	}
 	global.__basedir = basedir;
 

@@ -108,10 +108,10 @@ const packageSlice = createSlice({
       })
       .addCase(fetchPackageById.fulfilled, (state, action: PayloadAction<AdminPackage>) => {
         state.loading = 'succeeded';
-        
-        // Prevent duplicates: only add the package if it's not already in the list
-        const exists = state.items.find(pkg => pkg._id === action.payload._id);
-        if (!exists) {
+        const existingIndex = state.items.findIndex(pkg => pkg._id === action.payload._id);
+        if (existingIndex !== -1) {
+          state.items[existingIndex] = action.payload; // Always replace with fresh data
+        } else {
           state.items.push(action.payload);
         }
       })
