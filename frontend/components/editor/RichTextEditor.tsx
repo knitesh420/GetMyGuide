@@ -32,7 +32,7 @@ export function RichTextEditor({
       Underline,
       TextStyle,
       Color,
-      Highlight,
+      Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       HorizontalRule,
       Placeholder.configure({ placeholder }),

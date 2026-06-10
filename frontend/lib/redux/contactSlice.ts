@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
-import { apiService } from "@/lib/service/api";
+import { apiService, publicApiService } from "@/lib/service/api";
 
 // Define Lead interface
 export interface Lead {
@@ -49,10 +49,12 @@ export const createLead = createAsyncThunk(
   "leads/create",
   async (leadData: LeadData, { rejectWithValue }) => {
     try {
-      const response = await apiService.post<Lead>("/lead/contact", leadData);
+      const response = await publicApiService.post<Lead>("/lead/contact", leadData);
       return response.data!;
     } catch (error: any) {
-      return rejectWithValue(error.message || "Failed to create lead");
+      return rejectWithValue(
+        error?.response?.data?.message || error?.message || "Failed to send message"
+      );
     }
   },
 );

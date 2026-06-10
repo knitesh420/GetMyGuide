@@ -2804,7 +2804,12 @@ function EditServiceModal({
           normalized.exclusions.length &&
           normalized.highlights.length;
 
-        if (lang !== "en" && !isComplete) return acc;
+        if (lang !== "en" && !isComplete) {
+          alert(
+            `${lang.toUpperCase()} translation has some fields filled but is incomplete — it will not be saved. Please fill all fields or clear them entirely.`,
+          );
+          return acc;
+        }
 
         acc[lang] = normalized;
 
@@ -2817,11 +2822,13 @@ function EditServiceModal({
     e.preventDefault();
     const translationPayload = buildTranslations();
     const english = translationPayload.en;
+    // Strip HTML tags to check if description has actual visible text
+    const descriptionText = english?.description?.replace(/<[^>]*>/g, "").trim() ?? "";
     if (
       !english?.title ||
       !english?.city ||
       !english?.shortDescription ||
-      !english?.description ||
+      !descriptionText ||
       !english?.places?.length ||
       !english?.inclusions?.length ||
       !english?.exclusions?.length ||

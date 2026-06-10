@@ -140,7 +140,7 @@ export class PackageController {
 				images,
 			};
 
-			const updatedPackage = await Package.findByIdAndUpdate(packageId, updatedData, {
+			const updatedPackage = await Package.findByIdAndUpdate(packageId, { $set: updatedData }, {
 				new: true,
 				runValidators: true,
 			});

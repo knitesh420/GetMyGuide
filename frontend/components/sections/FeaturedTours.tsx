@@ -42,11 +42,10 @@ const TOURS = [
   },
   {
     id: 2,
-    title: "Kerala Backwaters Houseboat Experience",
+    title: "Khajjiar, Dalhousie, Himachal Pradesh",
     location: "Alleppey",
     country: "Kerala",
-    image:
-      "https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?w=600&q=80", // Kerala backwaters houseboat
+    image:"https://images.unsplash.com/photo-1589702413183-ca141958b7c5?q=80&w=1332&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
     price: 5200,
     rating: 4.8,
     reviews: 218,

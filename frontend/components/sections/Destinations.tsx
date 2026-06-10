@@ -19,10 +19,9 @@ const destinations = [
     href: "/services",
   },
   {
-    name: "Kerala",
+    name: "Kashmir",
     tagline: "God's own country",
-    image:
-      "https://images.unsplash.com/photo-1593693411515-c20261bcad6e?q=80&w=1169&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    image:"https://images.unsplash.com/photo-1715457573748-8e8a70b2c1be?q=80&w=1171&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
     tours: 22,
     href: "/services",
   },
@@ -54,7 +53,7 @@ const destinations = [
     name: "Golden Triangle",
     tagline: "Delhi-Jaipur-Agra",
     image:
-      "https://vui.unsplash.com/resize?height=256&quality=60&type=auto&url=https%3A%2F%2Fsearched-images.s3.us-west-2.amazonaws.com%2F7460119a-2b31-4c10-b104-50ce52bb3f41%3FX-Amz-Algorithm%3DAWS4-HMAC-SHA256%26X-Amz-Credential%3DAKIAQ4GRIA4QZEVBVGJE%252F20260531%252Fus-west-2%252Fs3%252Faws4_request%26X-Amz-Date%3D20260531T172106Z%26X-Amz-Expires%3D86400%26X-Amz-SignedHeaders%3Dhost%26X-Amz-Signature%3Dc63b74ef230d557dd085e18bb285e4fa643233313b2d72894d2d269e038716e8&sign=z0yowUm-8otC3adxamr-FXZP82hb1l6fh7f494twDvY",
+      "Golden_Triangle.png",
     tours: 700,
     href: "/services",
   },

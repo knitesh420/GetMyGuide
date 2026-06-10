@@ -69,6 +69,8 @@ function sanitizeHtml(html: string): string {
   if (typeof window === "undefined") return html; // SSR: skip sanitization
   return DOMPurify.sanitize(html, {
     USE_PROFILES: { html: true },
+    // Allow inline style attributes so Tiptap color/highlight/alignment renders correctly
+    ADD_ATTR: ["style", "data-color"],
     FORBID_TAGS: ["script", "style"],
     FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur"],
   });
@@ -79,15 +81,22 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
   const dispatch = useDispatch<AppDispatch>();
 
   // ── All hooks at the top — before any conditional returns ──
-  const { items: packages, recommended, loading } = useSelector(
+  const { items: packages, recommended } = useSelector(
     (state: RootState) => state.packages,
   );
+
+  // Track whether fetchPackageById has completed for this specific ID.
+  // This avoids the shared `loading` state causing premature notFound().
+  const [isFetchingById, setIsFetchingById] = useState(true);
 
   const [range, setRange] = useState<DateRange | undefined>();
   const [numberOfTourists, setNumberOfTourists] = useState(1);
 
   useEffect(() => {
-    dispatch(fetchPackageById(params.id));
+    setIsFetchingById(true);
+    (dispatch(fetchPackageById(params.id)) as any).finally(() => {
+      setIsFetchingById(false);
+    });
     dispatch(fetchRecommendedPackages({ limit: 8 }));
   }, [dispatch, params.id]);
 
@@ -122,6 +131,9 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
     () => sanitizeHtml(rawDescription),
     [rawDescription],
   );
+
+  // True only when the sanitized HTML has visible text (not just empty tags like <p></p>)
+  const hasDescriptionContent = safeDescription.replace(/<[^>]*>/g, "").trim().length > 0;
 
   const currency = (tour as any)?.baseCurrency ?? "INR";
   const price = tour?.price ?? 0;
@@ -175,7 +187,8 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
   };
 
   // ── Conditional renders AFTER all hooks ──
-  if (loading === "pending" || (loading === "idle" && packages.length === 0)) {
+  // Show skeleton while fetchPackageById is still in-flight
+  if (isFetchingById) {
     return (
       <div className="min-h-screen bg-background pt-20">
         <TourDetailSkeleton />
@@ -183,11 +196,10 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
     );
   }
 
-  if (loading === "succeeded" && !tour) {
+  // fetchPackageById completed but no matching package found → 404
+  if (!tour) {
     notFound();
   }
-
-  if (!tour) return null;
 
   return (
     <div className="min-h-screen bg-background pt-20">
@@ -222,7 +234,7 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
               <h2 className="text-3xl font-bold border-b pb-4 mb-6">
                 Tour Overview
               </h2>
-              {safeDescription ? (
+              {hasDescriptionContent ? (
                 <div
                   className="prose prose-lg max-w-none
                     text-foreground/80 leading-relaxed
@@ -235,7 +247,7 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
                     prose-ol:list-decimal prose-ol:pl-6 prose-ol:my-3
                     prose-li:my-1 prose-li:leading-relaxed
                     prose-hr:border-border prose-hr:my-6
-                    prose-mark:bg-yellow-100 prose-mark:text-foreground prose-mark:px-1 prose-mark:rounded
+                    prose-mark:px-1 prose-mark:rounded
                     prose-blockquote:border-l-4 prose-blockquote:border-primary prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:text-muted-foreground"
                   dangerouslySetInnerHTML={{ __html: safeDescription }}
                 />

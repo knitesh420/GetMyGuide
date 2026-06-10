@@ -52,11 +52,12 @@ function parseTranslation(locale: Locale, body: any): any | string {
 	const city = typeof t.city === 'string' ? t.city.trim() : '';
 	const shortDescription = typeof t.shortDescription === 'string' ? t.shortDescription.trim() : '';
 	const description = typeof t.description === 'string' ? t.description.trim() : '';
+	const descriptionText = description.replace(/<[^>]*>/g, '').trim();
 
 	if (!title) return `translations.${locale}.title is required`;
 	if (!city) return `translations.${locale}.city is required`;
 	if (!shortDescription) return `translations.${locale}.shortDescription is required`;
-	if (!description) return `translations.${locale}.description is required`;
+	if (!descriptionText) return `translations.${locale}.description is required`;
 
 	const places = parseStringArray(t.places);
 	if (!places) return `translations.${locale}.places is required and must be a non-empty array`;
@@ -160,6 +161,12 @@ export async function UpdatePackageValidator(req: Request, _res: Response, next:
 
 		if (body.featured !== undefined) {
 			data.featured = body.featured === 'true' || body.featured === true;
+		}
+
+		if (body.status !== undefined) {
+			if (!['active', 'inactive'].includes(body.status))
+				return next(new BadRequestError('status must be active or inactive'));
+			data.status = body.status;
 		}
 
 		// Partial translation update — only validate locales that are provided
