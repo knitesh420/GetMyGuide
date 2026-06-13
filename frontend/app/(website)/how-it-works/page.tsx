@@ -181,7 +181,7 @@ export default function HowItWorksPage() {
                     }`}
                 >
                   <div
-                    className="flex-1 animate-fade-in-up"
+                    className="flex-1 w-full animate-fade-in-up"
                     style={{ animationDelay: `${index * 0.2}s` }}
                   >
                     <div className="relative h-64 md:h-80 rounded-lg overflow-hidden shadow-lg">
