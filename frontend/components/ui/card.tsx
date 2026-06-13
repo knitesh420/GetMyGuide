@@ -11,7 +11,7 @@ function Card({ className, ...props }: React.ComponentProps<'div'>) {
           'shadow-sm transition-all duration-300 ease-out',
           'hover:shadow-[0_8px_40px_rgba(15,110,86,0.12)] hover:-translate-y-0.5',
           'hover:border-emerald-200/80',
-          'before:absolute before:inset-0 before:rounded-2xl before:opacity-0',
+          'before:absolute before:inset-0 before:rounded-2xl before:opacity-0 before:pointer-events-none',
           'before:ring-2 before:ring-emerald-500/20 before:transition-opacity before:duration-300',
           'hover:before:opacity-100',
           'overflow-hidden',

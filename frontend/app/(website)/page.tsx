@@ -9,6 +9,7 @@ import FeaturedTours from "@/components/sections/FeaturedTours";
 import Destinations from "@/components/sections/Destinations";
 import Testimonials from "@/components/sections/Testimonials";
 import SocialSection from "@/components/sections/SocialSection";
+import GoogleReviews from "@/components/sections/GoogleReviews";
 import { ScrollProgress, BackToTop } from "@/components/ui/ScrollUtils";
 
 export default function HomePage() {
@@ -44,7 +45,10 @@ export default function HomePage() {
       {/* 8. NEW — Testimonials carousel */}
       <Testimonials />
 
-      {/* 9. NEW — Social / Instagram section */}
+      {/* 9. Google Reviews section */}
+      <GoogleReviews />
+
+      {/* 10. NEW — Social / Instagram section */}
       <SocialSection />
     </main>
   );

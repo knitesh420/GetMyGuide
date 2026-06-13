@@ -70,7 +70,7 @@ export default function AboutPlatformSection() {
             <motion.div
               variants={fadeInUp}
               custom={4}
-              className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-auto"
+              className="grid grid-cols-3 gap-4 mt-auto"
             >
               <motion.div
                 whileHover={{
@@ -97,6 +97,24 @@ export default function AboutPlatformSection() {
                   {t("about_stat_cities")}
                 </div>
               </motion.div>
+
+              <motion.div
+                whileHover={{
+                  y: -5,
+                  transition: { type: "spring", stiffness: 300 },
+                }}
+                className="p-4 rounded-xl bg-background/60 backdrop-blur-sm border shadow-sm"
+              >
+                <div className="text-base font-bold text-foreground mb-1">
+                  {t("about_card_gov")}
+                </div>
+                <div className="text-sm text-primary font-semibold mb-1">
+                  {t("about_card_cert")}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {t("about_card_lic")}
+                </div>
+              </motion.div>
             </motion.div>
           </motion.div>
 
@@ -118,24 +136,6 @@ export default function AboutPlatformSection() {
                   fill
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
-              </motion.div>
-              <motion.div
-                initial={{ opacity: 0, x: -20, y: 20 }}
-                whileInView={{ opacity: 1, x: 0, y: 0 }}
-                transition={{ delay: 0.6, duration: 0.6, type: "spring" }}
-                className="absolute -bottom-6 -left-6 bg-background border rounded-xl p-4 shadow-xl backdrop-blur-sm max-w-[180px]"
-              >
-                <div className="text-left">
-                  <div className="text-base font-bold text-foreground mb-1">
-                    {t("about_card_gov")}
-                  </div>
-                  <div className="text-sm text-primary font-semibold mb-1">
-                    {t("about_card_cert")}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {t("about_card_lic")}
-                  </div>
-                </div>
               </motion.div>
             </div>
             <motion.div

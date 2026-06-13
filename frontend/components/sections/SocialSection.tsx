@@ -7,52 +7,77 @@ import { FadeUp } from "@/components/animations/motion-wrappers";
 const posts = [
   {
     image:
-      "https://images.unsplash.com/photo-1587474260584-136574528ed5?w=500&q=80",
+      "/hero/p1.jpg",
     likes: "3.2K",
     comments: "114",
-    caption: "Desert gold in Jaisalmer 🐪",
+    caption: "Jaipur Wedding Invitation🐪",
     tall: true,
   },
   {
     image:
-      "https://images.unsplash.com/photo-1609920658906-8223bd289001?w=500&q=80",
+      "/hero/p2.jpg",
     likes: "2.8K",
     comments: "98",
-    caption: "Kerala backwaters at dawn 🌅",
+    caption: "Historical Monuments",
     tall: false,
   },
   {
     image:
-      "https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=500&q=80",
+      "/hero/p3.jpg",
     likes: "4.1K",
     comments: "176",
-    caption: "Himachal peaks calling 🏔️",
+    caption: "Adventureous Fun ",
     tall: false,
   },
   {
     image:
-      "https://images.unsplash.com/photo-1580137189272-c9379f8864fd?w=500&q=80",
+      "/hero/p4.jpg",
     likes: "5.6K",
     comments: "231",
-    caption: "Goa sunsets never disappoint 🌊",
+    caption: "Delhi Street Food",
     tall: true,
   },
   {
     image:
-      "https://images.unsplash.com/photo-1627894483216-2138af692e32?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8VmFyYW5hc2klMjBtb3JuaW5nJTIwYWFydGl8ZW58MHx8MHx8fDA%3D",
+      "/hero/p5.jpg",
     likes: "2.4K",
     comments: "89",
-    caption: "Varanasi morning aarti 🪔",
+    caption: "Wildlife Santuary",
     tall: false,
   },
   {
     image:
-      "https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=500&q=80",
+      "/hero/p6.jpg",
     likes: "1.9K",
     comments: "67",
-    caption: "Old Delhi food trails 🍢",
+    caption: "Tourist in Rickshaw for Street Explore",
     tall: false,
   },
+   {
+    image:
+      "/hero/p7.jpg",
+    likes: "1.9K",
+    comments: "67",
+    caption: "Handmade Craft",
+    tall: false,
+  },
+   {
+    image:
+      "/hero/p8.jpg",
+    likes: "1.9K",
+    comments: "67",
+    caption: "Ghoomar",
+    tall: false,
+  },
+  {
+    image:
+      "/hero/p9.jpg",
+    likes: "1.9K",
+    comments: "67",
+    caption: "Rajasthan Desert Safari and Camel Ride",
+    tall: false,
+  },
+  
 ];
 
 export default function SocialSection() {
@@ -120,7 +145,7 @@ export default function SocialSection() {
               />
 
               {/* Hover overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-400" />
+              <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-400" />
 
               {/* Content on hover */}
               <div className="absolute inset-0 p-4 flex flex-col justify-between opacity-0 group-hover:opacity-100 transition-all duration-400">

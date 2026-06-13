@@ -64,7 +64,7 @@ export default function ContactPage() {
     "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent";
 
   const contactInfo = [
-    { icon: <Phone className="w-6 h-6 text-primary" />, title: t("contact_info_phone_title"), details: ["9891888444", "7470222666"], desc: t("contact_info_phone_desc") },
+    { icon: <Phone className="w-6 h-6 text-primary" />, title: t("contact_info_phone_title"), details: ["+91 9891888444", "+91 7470222666"], desc: t("contact_info_phone_desc") },
     { icon: <Mail className="w-6 h-6 text-primary" />, title: t("contact_info_email_title"), details: ["Contact@getmyguide.in"], desc: t("contact_info_email_desc") },
     { icon: <MapPin className="w-6 h-6 text-primary" />, title: t("contact_info_office_title"), details: ["A-1/100 Chattarpur Extension", "New Delhi - 110074"], desc: t("contact_info_office_desc") },
     { icon: <Clock className="w-6 h-6 text-primary" />, title: t("contact_info_hours_title"), details: ["Mon-Sun: 6 AM - 11 PM", "Emergency: 24/7"], desc: t("contact_info_hours_desc") },

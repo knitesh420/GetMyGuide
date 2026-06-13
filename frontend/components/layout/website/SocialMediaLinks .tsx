@@ -33,23 +33,6 @@
 //                     </div>
 //                 </a>
 
-//                 {/* Google Reviews Link */}
-//                 <a
-//                     href="https://www.google.com/search?q=getyourguide+reviews"
-//                     target="_blank"
-//                     rel="noopener noreferrer"
-//                     className="group"
-//                 >
-//                     <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border border-gray-100">
-//                         <div className="flex flex-col items-center">
-//                             <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300 shadow-md">
-//                                 <SiGoogle className="w-9 h-9 text-white" />
-//                             </div>
-//                             <h4 className="text-xl font-bold text-gray-800 mb-2 text-center">Google Reviews</h4>
-//                             <p className="text-sm text-gray-500 text-center">Read customer reviews</p>
-//                         </div>
-//                     </div>
-//                 </a>
 
 //                 {/* Instagram Link */}
 //                 <a
@@ -106,7 +89,7 @@ const socialLinks = [
   },
   {
     key: "google",
-    href: "https://www.google.com/search?q=getyourguide+reviews",
+    href: "https://maps.app.goo.gl/qKCPG5E9WuWdFSTh8?g_st=awb",
     label: "Google Reviews",
     desc: "Read customer reviews",
     cta: "★ Read reviews",

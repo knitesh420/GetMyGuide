@@ -14,6 +14,9 @@ export const metadata: Metadata = {
   description:
     "Connect with certified local guides for authentic eco tours, heritage walks, cooking classes, and cultural experiences worldwide.",
   generator: "v0.app",
+  icons: {
+    icon: "/images/new_logo.jpeg",
+  },
 };
 export default function RootLayout({
   children,
