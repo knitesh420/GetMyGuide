@@ -145,7 +145,7 @@ export default function GoldenTriangleSection() {
                 initial={{ opacity: 0, scale: 0.95 }}
                 whileInView={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.8, ease: "easeOut" }}
-                className="flex-grow rounded-2xl overflow-hidden bg-gradient-to-br from-orange-500/20 to-pink-500/10 shadow-2xl relative group"
+                className="flex-grow min-h-[300px] rounded-2xl overflow-hidden bg-gradient-to-br from-orange-500/20 to-pink-500/10 shadow-2xl relative group"
               >
                 <Image
                   src={t("gt_image")}

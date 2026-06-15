@@ -127,7 +127,7 @@ export default function AboutPlatformSection() {
                 initial={{ opacity: 0, scale: 0.95 }}
                 whileInView={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.8, ease: "easeOut" }}
-                className="flex-grow rounded-2xl overflow-hidden bg-gradient-to-br from-primary/10 to-blue-500/10 shadow-2xl relative"
+                className="flex-grow min-h-[280px] rounded-2xl overflow-hidden bg-gradient-to-br from-primary/10 to-blue-500/10 shadow-2xl relative"
               >
                 <Image
                   src={t("about_platform_logo")}

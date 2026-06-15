@@ -57,6 +57,7 @@ const createTranslationState = (): TranslationFormState => ({
 });
 
 export default function TourForm({ onSubmit }: Props) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState<FormState>({
     title: "",
     city: "",
@@ -212,15 +213,25 @@ export default function TourForm({ onSubmit }: Props) {
     return translationLanguages.reduce((acc, lang) => {
       const values = translations[lang];
       const payload = buildTranslationPayload(values);
-      if (Object.keys(payload).length) acc[lang] = payload;
+      const isComplete =
+        payload.title &&
+        payload.city &&
+        payload.shortDescription &&
+        payload.description &&
+        payload.places?.length &&
+        payload.inclusions?.length &&
+        payload.exclusions?.length;
+      if (isComplete) acc[lang] = payload;
       return acc;
     }, result);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!validateForm()) return;
 
+    setIsSubmitting(true);
     const placesArray = normalizeArray(form.places);
 
     const tourData: TourData = {
@@ -241,6 +252,7 @@ export default function TourForm({ onSubmit }: Props) {
     };
 
     const ok = await onSubmit(tourData);
+    setIsSubmitting(false);
     if (!ok) return;
 
     previews.forEach((url) => URL.revokeObjectURL(url));
@@ -779,9 +791,10 @@ export default function TourForm({ onSubmit }: Props) {
       <div className="mt-8">
         <button
           type="submit"
-          className="w-full bg-linear-to-r from-orange-600 to-pink-600 text-white font-bold py-4 px-6 rounded-xl hover:from-orange-700 hover:to-pink-700 transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg"
+          disabled={isSubmitting}
+          className="w-full bg-linear-to-r from-orange-600 to-pink-600 text-white font-bold py-4 px-6 rounded-xl hover:from-orange-700 hover:to-pink-700 transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
         >
-          Create Package
+          {isSubmitting ? "Creating..." : "Create Package"}
         </button>
       </div>
     </form>

@@ -248,7 +248,8 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
                     prose-li:my-1 prose-li:leading-relaxed
                     prose-hr:border-border prose-hr:my-6
                     prose-mark:px-1 prose-mark:rounded
-                    prose-blockquote:border-l-4 prose-blockquote:border-primary prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:text-muted-foreground"
+                    prose-blockquote:border-l-4 prose-blockquote:border-primary prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:text-muted-foreground
+                    [&_table]:w-full [&_table]:block [&_thead]:block [&_tbody]:block [&_tr]:block [&_th]:block [&_th]:w-full [&_td]:block [&_td]:w-full"
                   dangerouslySetInnerHTML={{ __html: safeDescription }}
                 />
               ) : (
@@ -260,11 +261,11 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
 
             {/* Inclusions */}
             {inclusions.length > 0 && (
-              <div className="mt-12 animate-slide-in-left animate-delay-200">
+              <div className="mt-12 w-full animate-slide-in-left animate-delay-200">
                 <h2 className="text-3xl font-bold border-b pb-4 mb-4">
                   What&apos;s Included
                 </h2>
-                <ul className="space-y-3 text-lg">
+                <ul className="flex flex-col space-y-3 text-lg">
                   {inclusions.map((item, i) => (
                     <li key={i} className="flex items-start gap-3">
                       <CheckCircle className="w-6 h-6 text-primary shrink-0 mt-0.5" />
@@ -277,11 +278,11 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
 
             {/* Exclusions */}
             {exclusions.length > 0 && (
-              <div className="mt-10 animate-slide-in-left animate-delay-200">
+              <div className="mt-10 w-full animate-slide-in-left animate-delay-200">
                 <h2 className="text-3xl font-bold border-b pb-4 mb-4">
                   What&apos;s Not Included
                 </h2>
-                <ul className="space-y-3 text-lg text-muted-foreground">
+                <ul className="flex flex-col space-y-3 text-lg text-muted-foreground">
                   {exclusions.map((item, i) => (
                     <li key={i} className="flex items-start gap-3">
                       <span className="w-6 h-6 rounded-full border-2 border-muted-foreground/40 flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold">
