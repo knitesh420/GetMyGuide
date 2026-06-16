@@ -115,5 +115,5 @@
 		"skipLibCheck": true /* Skip type checking all .d.ts files. */
 	},
 	"include": ["*.config.ts", "src/**/*.ts", "tests/**/*.ts", "src/index.js"],
-	"exclude": ["node_modules", "src/static"]
+	"exclude": ["node_modules", "src/static", "src/scripts"]
 }
