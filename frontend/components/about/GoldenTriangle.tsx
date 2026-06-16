@@ -8,7 +8,7 @@ import {
   slideInRight,
   scaleIn,
 } from "@/lib/motion-variants";
-import { MapPin, Star, Camera, Crown } from "lucide-react";
+import { Crown } from "lucide-react";
 import Image from "next/image";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -145,36 +145,15 @@ export default function GoldenTriangleSection() {
                 initial={{ opacity: 0, scale: 0.95 }}
                 whileInView={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.8, ease: "easeOut" }}
-                className="flex-grow min-h-[300px] rounded-2xl overflow-hidden bg-gradient-to-br from-orange-500/20 to-pink-500/10 shadow-2xl relative group"
+                className="rounded-2xl overflow-hidden shadow-2xl group"
               >
                 <Image
                   src={t("gt_image")}
                   alt="Golden Triangle destinations - Delhi, Agra, Jaipur"
-                  fill
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                  width={800}
+                  height={600}
+                  className="w-full h-auto object-contain group-hover:scale-105 transition-transform duration-700 ease-out"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-
-                <div className="absolute bottom-6 left-6 right-6">
-                  <div className="bg-background/90 backdrop-blur-sm rounded-xl p-4 border">
-                    <div className="flex items-center gap-3 mb-3">
-                      <MapPin className="w-5 h-5 text-orange-500" />
-                      <span className="font-bold text-foreground">
-                        {t("gt_overlay_title")}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                        <span>{t("gt_overlay_feat1")}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Camera className="w-4 h-4 text-blue-500" />
-                        <span>{t("gt_overlay_feat2")}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </motion.div>
 
               <motion.div
