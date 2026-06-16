@@ -67,7 +67,7 @@ export default function AimsObjectivesSection() {
                 className="relative aspect-video rounded-xl overflow-hidden bg-gradient-to-br from-primary/10 to-blue-500/10 hidden lg:block mt-auto"
               >
                 <Image
-                  src="/2.jpg"
+                  src="/about-aims.jpg"
                   alt="Tour guides and objectives visualization"
                   className="w-full h-full object-cover"
                   fill

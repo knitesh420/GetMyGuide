@@ -96,7 +96,7 @@ export default function WhyGuideSection() {
                 className="relative aspect-video rounded-xl overflow-hidden bg-gradient-to-br from-primary/10 to-blue-500/10 hidden lg:block mt-auto"
               >
                 <Image
-                  src="/4.jpg"
+                  src="/about-guide.jpg"
                   alt="Certified tour guide credentials"
                   fill
                   className="w-full h-full object-cover"
