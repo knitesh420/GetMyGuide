@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { staggerContainer, fadeInUp, scaleIn } from "@/lib/motion-variants";
+import { IMAGES } from "@/lib/images";
 import {
   CheckCircle,
   Users,
@@ -64,13 +65,14 @@ export default function AimsObjectivesSection() {
                 initial={{ opacity: 0, scale: 0.9 }}
                 whileInView={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.3, duration: 0.6 }}
-                className="relative aspect-video rounded-xl overflow-hidden bg-gradient-to-br from-primary/10 to-blue-500/10 hidden lg:block mt-auto"
+                className="rounded-xl overflow-hidden mt-6 lg:mt-auto"
               >
                 <Image
-                  src="/about-aims.jpg"
+                  src={IMAGES.aboutAims}
                   alt="Tour guides and objectives visualization"
-                  className="w-full h-full object-cover"
-                  fill
+                  width={800}
+                  height={533}
+                  className="w-full h-auto"
                 />
               </motion.div>
             </motion.div>

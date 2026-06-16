@@ -16,7 +16,8 @@
 		"lint:fix": "eslint . --ext .ts --fix",
 		"format": "prettier --write \"**/*.{ts,js,json,md}\"",
 		"format:check": "prettier --check \"**/*.{ts,js,json,md}\"",
-		"lint:format": "pnpm lint:fix && pnpm format"
+		"lint:format": "pnpm lint:fix && pnpm format",
+		"upload:public-images": "ts-node -r tsconfig-paths/register src/scripts/uploadPublicImages.ts"
 	},
 	"keywords": [],
 	"author": "",

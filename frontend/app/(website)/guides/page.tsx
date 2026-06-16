@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { IMAGES } from "@/lib/images";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Award,
@@ -62,7 +63,7 @@ export default function BecomeAGuidePage() {
           // badgeText={t("guide_page_badge")}
           title={t("guide_page_title")}
           description={t("guide_page_desc")}
-          backgroundImage="/1.jpg"
+          backgroundImage={IMAGES.scene1}
         />
 
         <section className="py-16 md:py-24">

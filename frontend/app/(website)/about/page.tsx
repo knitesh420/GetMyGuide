@@ -6,6 +6,7 @@ import WhyChooseSection from "@/components/about/WhyChooseSection";
 import WhyGuideSection from "@/components/about/WhyGuideSection";
 import YouTubeMemorySection from "@/components/about/YouTubeMemorySection";
 import HeroSection from "@/components/all/CommonHeroSection";
+import { IMAGES } from "@/lib/images";
 
 export const metadata = {
   title: "About GetMyGuide.in",
@@ -17,7 +18,7 @@ export default function AboutPage() {
   return (
     <main className="min-h-screen bg-background">
       <HeroSection
-        backgroundImage="/about-hero.jpg"
+        backgroundImage={IMAGES.aboutHero}
         // badgeText="About GetMyGuide"
         title={
           <>

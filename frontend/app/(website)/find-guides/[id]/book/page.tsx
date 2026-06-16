@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, FC } from 'react';
+import { IMAGES } from '@/lib/images';
 import { useParams, useSearchParams, useRouter } from 'next/navigation'; 
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/lib/store';
@@ -173,7 +174,7 @@ export default function BookGuidePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-black">
-      <section className="relative py-20 md:py-28 bg-cover bg-center" style={{ backgroundImage: "url('/3.jpg')" }}>
+      <section className="relative py-20 md:py-28 bg-cover bg-center" style={{ backgroundImage: `url('${IMAGES.scene3}')` }}>
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-black/50" />
         <div className="container max-w-7xl mx-auto px-4 text-center relative z-10">
           <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4 tracking-tight">Book Your Tour with {guide.name}</h1>

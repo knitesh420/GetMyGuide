@@ -3,81 +3,18 @@
 import { motion } from "framer-motion";
 import { Instagram, Heart, MessageCircle, ExternalLink } from "lucide-react";
 import { FadeUp } from "@/components/animations/motion-wrappers";
+import { IMAGES } from "@/lib/images";
 
 const posts = [
-  {
-    image:
-      "/hero/p1.jpg",
-    likes: "3.2K",
-    comments: "114",
-    caption: "Jaipur Wedding Invitation🐪",
-    tall: true,
-  },
-  {
-    image:
-      "/hero/p2.jpg",
-    likes: "2.8K",
-    comments: "98",
-    caption: "Historical Monuments",
-    tall: false,
-  },
-  {
-    image:
-      "/hero/p3.jpg",
-    likes: "4.1K",
-    comments: "176",
-    caption: "Adventureous Fun ",
-    tall: false,
-  },
-  {
-    image:
-      "/hero/p4.jpg",
-    likes: "5.6K",
-    comments: "231",
-    caption: "Delhi Street Food",
-    tall: true,
-  },
-  {
-    image:
-      "/hero/p5.jpg",
-    likes: "2.4K",
-    comments: "89",
-    caption: "Wildlife Santuary",
-    tall: false,
-  },
-  {
-    image:
-      "/hero/p6.jpg",
-    likes: "1.9K",
-    comments: "67",
-    caption: "Tourist in Rickshaw for Street Explore",
-    tall: false,
-  },
-   {
-    image:
-      "/hero/p7.jpg",
-    likes: "1.9K",
-    comments: "67",
-    caption: "Handmade Craft",
-    tall: false,
-  },
-   {
-    image:
-      "/hero/p8.jpg",
-    likes: "1.9K",
-    comments: "67",
-    caption: "Ghoomar",
-    tall: false,
-  },
-  {
-    image:
-      "/hero/p9.jpg",
-    likes: "1.9K",
-    comments: "67",
-    caption: "Rajasthan Desert Safari and Camel Ride",
-    tall: false,
-  },
-  
+  { image: IMAGES.social[0], likes: "3.2K", comments: "114", caption: "Jaipur Wedding Invitation🐪", tall: true },
+  { image: IMAGES.social[1], likes: "2.8K", comments: "98",  caption: "Historical Monuments", tall: false },
+  { image: IMAGES.social[2], likes: "4.1K", comments: "176", caption: "Adventureous Fun", tall: false },
+  { image: IMAGES.social[3], likes: "5.6K", comments: "231", caption: "Delhi Street Food", tall: true },
+  { image: IMAGES.social[4], likes: "2.4K", comments: "89",  caption: "Wildlife Santuary", tall: false },
+  { image: IMAGES.social[5], likes: "1.9K", comments: "67",  caption: "Tourist in Rickshaw for Street Explore", tall: false },
+  { image: IMAGES.social[6], likes: "1.9K", comments: "67",  caption: "Handmade Craft", tall: false },
+  { image: IMAGES.social[7], likes: "1.9K", comments: "67",  caption: "Ghoomar", tall: false },
+  { image: IMAGES.social[8], likes: "1.9K", comments: "67",  caption: "Rajasthan Desert Safari and Camel Ride", tall: false },
 ];
 
 export default function SocialSection() {

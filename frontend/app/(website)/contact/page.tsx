@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import HeroSection from "@/components/all/CommonHeroSection";
+import { IMAGES } from "@/lib/images";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   Phone,
@@ -82,7 +83,7 @@ export default function ContactPage() {
         badgeText={t("contact_badge")}
         title={t("contact_title")}
         description={t("contact_desc")}
-        backgroundImage="/5.jpg"
+        backgroundImage={IMAGES.scene5}
       />
 
       {/* Contact info cards */}

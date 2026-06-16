@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { IMAGES } from "@/lib/images";
 import {
   Card,
   CardContent,
@@ -165,7 +166,7 @@ export default function HowItWorksPage() {
           badgeText={t("how_badge")}
           title={t("how_title")}
           description={t("how_desc")}
-          backgroundImage="/3.jpg"
+          backgroundImage={IMAGES.scene3}
         />
 
         <section className="py-16 md:py-24">

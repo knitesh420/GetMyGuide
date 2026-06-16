@@ -25,6 +25,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { IMAGES } from "@/lib/images";
 import {
   useLanguage,
   supportedLanguages,
@@ -117,7 +118,7 @@ export function Header() {
                 transition={{ duration: 0.4 }}
               >
                 <Image
-                  src="/images/new_logo.jpeg"
+                  src={IMAGES.logo}
                   alt="GetMyGuide"
                   fill
                   className="object-contain rounded-lg"

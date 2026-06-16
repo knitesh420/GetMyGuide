@@ -6,6 +6,7 @@ import { useDispatch, useSelector } from "react-redux";
 
 import { GuideCard } from "@/components/GuideCard";
 import HeroSection from "@/components/all/CommonHeroSection";
+import { IMAGES } from "@/lib/images";
 import { XCircle } from "lucide-react";
 import { RootState, AppDispatch } from "@/lib/store";
 import { fetchPackages } from "@/lib/redux/thunks/admin/packageThunks";
@@ -125,7 +126,7 @@ function GuideSelectionContent() {
                 badgeText={`For ${numberOfTourists} Guest(s) from ${formattedStartDate} - ${formattedEndDate}`}
                 title="Available Local Guides"
                 description={`Here are the expert guides available for your ${tour.title} tour.`}
-                backgroundImage="/3.jpg"
+                backgroundImage={IMAGES.scene3}
             />
 
             <section className="py-6 bg-background/80 backdrop-blur-sm border-b sticky top-0 z-10">

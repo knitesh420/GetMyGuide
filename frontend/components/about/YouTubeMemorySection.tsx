@@ -8,6 +8,7 @@ import {
   slideInRight,
   scaleIn,
 } from "@/lib/motion-variants";
+import { IMAGES } from "@/lib/images";
 // Added 'Play' to imports
 import { Video, Share, Heart, Film, Play } from "lucide-react";
 import Image from "next/image";
@@ -67,13 +68,14 @@ export default function YouTubeMemorySection() {
                 initial={{ opacity: 0, scale: 0.95 }}
                 whileInView={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.8, ease: "easeOut" }}
-                className="flex-grow rounded-2xl overflow-hidden bg-gradient-to-br from-red-500/20 to-pink-500/10 shadow-2xl relative group"
+                className="rounded-2xl overflow-hidden bg-linear-to-br from-red-500/20 to-pink-500/10 shadow-2xl relative group"
               >
                 <Image
-                  src="/about-youtube.jpg"
+                  src={IMAGES.aboutYoutube}
                   alt="Travel video creation process"
-                  fill
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                  width={800}
+                  height={533}
+                  className="w-full h-auto group-hover:scale-105 transition-transform duration-700 ease-out"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
 

@@ -11,6 +11,7 @@ import { clearGuides } from "@/lib/redux/guideSlice";
 
 import { GuideCard } from "@/components/GuideCard";
 import HeroSection from "@/components/all/CommonHeroSection";
+import { IMAGES } from "@/lib/images";
 import {
   Select,
   SelectContent,
@@ -125,7 +126,7 @@ export default function FindGuidesPage() {
         badgeText={t("find_guides_badge")}
         title={t("find_guides_title")}
         description={t("find_guides_desc")}
-        backgroundImage="/3.jpg"
+        backgroundImage={IMAGES.scene3}
       />
 
       <section

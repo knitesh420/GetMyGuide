@@ -9,13 +9,14 @@ import { ReduxProvider } from "@/lib/provider";
 import ToastProvider from "@/lib/ToastProvider";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import AuthInitializer from "@/components/AuthInitializer";
+import { IMAGES } from "@/lib/images";
 export const metadata: Metadata = {
   title: "GetMyGuide",
   description:
     "Connect with certified local guides for authentic eco tours, heritage walks, cooking classes, and cultural experiences worldwide.",
   generator: "v0.app",
   icons: {
-    icon: "/images/new_logo.jpeg",
+    icon: IMAGES.logo,
   },
 };
 export default function RootLayout({

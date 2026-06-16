@@ -1,6 +1,7 @@
 "use client";
 
 import { useLanguage } from "@/contexts/LanguageContext";
+import { IMAGES } from "@/lib/images";
 import { Globe, Instagram, Mail, MapPin, Phone, Youtube } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -60,7 +61,7 @@ export function Footer() {
               <div className="flex items-center space-x-2 mb-4">
               <div className="relative w-12 h-12 shrink-0">
                 <Image
-                  src="/images/new_logo.jpeg"
+                  src={IMAGES.logo}
                   alt="GetMyGuide"
                   fill
                   className="object-contain rounded-lg"
@@ -195,11 +196,11 @@ export function Footer() {
               </p>
               <div className="flex items-center justify-center md:justify-start gap-3">
                 <img
-                  src="/mastercard.png"
+                  src={IMAGES.mastercard}
                   alt="Mastercard"
                   className="h-6 w-auto"
                 />
-                <img src="/visa.png" alt="Visa" className="h-6 w-auto" />
+                <img src={IMAGES.visa} alt="Visa" className="h-6 w-auto" />
               </div>
             </div>
 

@@ -3,18 +3,9 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { IMAGES } from "@/lib/images";
 
-const images = [
-  "/hero/hero-1.jpg",
-  "/hero/hero-2.jpg",
-  "/hero/hero-3.jpg",
-  "/hero/hero-4.jpg",
-  "/hero/hero-5.jpg",
-  "/hero/hero-6.jpg",
-  "/hero/hero-7.jpg",
-  "/hero/hero-8.jpg",
-  "/hero/hero-9.jpg",
-];
+const images = IMAGES.heroCarousel;
 
 const slideVariants = {
   enter: (direction: number) => ({
