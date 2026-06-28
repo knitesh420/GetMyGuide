@@ -59,7 +59,7 @@ export function Footer() {
           {/* Company Info */}
           <div className="lg:col-span-1 animate-fade-in-up">
               <div className="flex items-center space-x-2 mb-4">
-              <div className="relative w-12 h-12 shrink-0">
+              <div className="relative w-14 h-14 shrink-0">
                 <Image
                   src={IMAGES.logo}
                   alt="GetMyGuide"

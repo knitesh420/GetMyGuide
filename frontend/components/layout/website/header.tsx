@@ -113,7 +113,7 @@ export function Header() {
             {/* ── Logo ── */}
             <Link href="/" className="flex items-center gap-2 shrink-0 group">
               <motion.div
-                className="relative w-10 h-10 lg:w-12 lg:h-12 shrink-0"
+                className="relative w-12 h-12 lg:w-14 lg:h-14 shrink-0"
                 whileHover={{ scale: 1.08, rotate: [0, -3, 3, 0] }}
                 transition={{ duration: 0.4 }}
               >

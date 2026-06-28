@@ -18,7 +18,7 @@ export const IMAGES = {
   goldenTriangle: `${BASE}/Golden_Triangle.jpg`,
 
   // Brand assets
-  logo: `${BASE}/images/new_logo.jpg`,
+  logo: `/images/new_logo.jpeg`,
   mastercard: `${BASE}/mastercard.png`,
   visa: `${BASE}/visa.png`,
 

@@ -26,7 +26,9 @@ export default function RootLayout({
   return (
     <>
       <Header />
-      <Suspense fallback={null}>{children}</Suspense>
+      <div className="pt-14 lg:pt-16">
+        <Suspense fallback={null}>{children}</Suspense>
+      </div>
       <Footer />
       <FloatingVideoAd />
       <WhatsAppFloatingButton

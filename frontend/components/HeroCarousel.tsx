@@ -43,7 +43,7 @@ export default function HeroCarousel() {
   };
 
   return (
-    <section className="w-full bg-gray-100 pt-20 pb-10 px-4 md:px-10 lg:px-20">
+    <section className="w-full bg-gray-100 pt-4 pb-10 px-4 md:px-10 lg:px-20">
       <div className="relative w-full h-[50vh] md:h-[65vh] lg:h-[78vh] overflow-hidden rounded-3xl shadow-2xl">
         <AnimatePresence initial={false} custom={direction}>
           <motion.div
