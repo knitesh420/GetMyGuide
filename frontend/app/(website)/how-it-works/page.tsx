@@ -166,7 +166,7 @@ export default function HowItWorksPage() {
           badgeText={t("how_badge")}
           title={t("how_title")}
           description={t("how_desc")}
-          backgroundImage={IMAGES.scene3}
+          backgroundImage={IMAGES.scene5}
         />
 
         <section className="py-16 md:py-24">

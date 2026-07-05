@@ -16,12 +16,25 @@ import {
   PersonStanding,
   PlaneLanding,
   Binoculars,
+  ClipboardList,
+  MapPinned,
+  Star,
+  Bell,
+  BarChart3,
+  History,
 } from "lucide-react";
 import { useAuth } from "@/lib/hooks/useAuth";
 
 // --- Navigation Links for Each Role ---
 const adminNavigation = [
   { name: "Dashboard", href: "/admin", icon: LayoutGrid },
+  { name: "Travel Ops Dashboard", href: "/dashboard/admin", icon: LayoutGrid },
+  { name: "Assignments", href: "/dashboard/admin/assignments", icon: ClipboardList },
+  { name: "Trips", href: "/dashboard/admin/trips", icon: MapPinned },
+  { name: "Reviews", href: "/dashboard/admin/reviews", icon: Star },
+  { name: "Reports", href: "/dashboard/admin/reports", icon: BarChart3 },
+  { name: "Activity Log", href: "/dashboard/admin/activity-log", icon: History },
+  { name: "Notifications", href: "/dashboard/notifications", icon: Bell },
 ];
 
 const guideNavigation = [
@@ -48,6 +61,14 @@ const guideNavigation = [
     href: "/dashboard/guide/buy-subscription",
     icon: Banknote,
   },
+  {
+    name: "Assignment Requests",
+    href: "/dashboard/guide/assignments",
+    icon: ClipboardList,
+  },
+  { name: "My Trips", href: "/dashboard/guide/trips", icon: MapPinned },
+  { name: "My Reviews", href: "/dashboard/guide/reviews", icon: Star },
+  { name: "Notifications", href: "/dashboard/notifications", icon: Bell },
 ];
 
 const userNavigation = [
@@ -70,6 +91,9 @@ const userNavigation = [
     icon: BookOpen,
   },
   { name: "My Bookings", href: "/dashboard/user/my-bookings", icon: BookOpen },
+  { name: "My Trips", href: "/dashboard/user/trips", icon: MapPinned },
+  { name: "Write a Review", href: "/dashboard/user/reviews", icon: Star },
+  { name: "Notifications", href: "/dashboard/notifications", icon: Bell },
 ];
 
 // Role to navigation mapping

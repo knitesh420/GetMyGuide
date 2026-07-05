@@ -1,11 +1,31 @@
-import { AccountDB, ContactInquiryDB, GuideEnrollmentDB } from '@mongo';
+import { GUIDE_MEMBERSHIP_DURATION_DAYS, GUIDE_MEMBERSHIP_FEE } from '@config/const';
+import { AccountDB, ContactInquiryDB, GuideDB, GuideEnrollmentDB } from '@mongo';
 import IGuideEnrollment from '@mongo/types/guideEnrollment';
 import { sendGuidePaymentConfirmationEmail } from '@provider/email';
 import { verifyRazorpaySignature } from '@utils/paymentVerify';
 import { randomBytes } from 'crypto';
 import { Types } from 'mongoose';
-import { NotFoundError, ServerError } from 'node-be-utilities';
+import { BadRequestError, NotFoundError, ServerError, error as logError } from 'node-be-utilities';
 import TransactionService from './transaction';
+
+interface GuideProfileData {
+	languages: string[];
+	experience: string;
+	city: string;
+	state: string;
+	country: string;
+	price: number;
+	about: string;
+	specialization: string[];
+	availableDays: string[];
+	availableTime: string;
+}
+
+interface GuideProfileFiles {
+	profileImage?: string;
+	identityProofs?: string[];
+	galleryImages?: string[];
+}
 
 interface EnrollData {
 	name: string;
@@ -258,6 +278,9 @@ class GuideService {
 			password, // Will be hashed by pre-save hook
 			role: 'guide',
 			status: 'verified',
+			// Razorpay payment + submitted KYC docs already prove control of this
+			// email/identity — trusted path, same as admin creation.
+			emailVerified: true,
 			isActive: true,
 		});
 
@@ -406,7 +429,7 @@ class GuideService {
 	}
 
 	/**
-	 * Get guide profile (Account) for the current user
+	 * Get guide profile (Account + Guide membership) for the current user
 	 */
 	async getGuideProfile(userId: string) {
 		const account = await AccountDB.findOne({ _id: userId, role: 'guide' });
@@ -414,7 +437,13 @@ class GuideService {
 			throw new NotFoundError('Guide profile not found');
 		}
 
+		const guide = await GuideDB.findOne({ accountId: account._id });
+		// Legacy record from the old anonymous KYC-and-pay flow — used as a
+		// fallback source for guides who haven't filled the new profile form yet.
 		const enrollment = await GuideEnrollmentDB.findOne({ email: account.email.toLowerCase() });
+
+		const now = new Date();
+		const membershipExpired = !guide?.membershipExpiryDate || guide.membershipExpiryDate <= now;
 
 		return {
 			_id: account._id.toString(),
@@ -422,14 +451,207 @@ class GuideService {
 			name: account.name,
 			email: account.email,
 			mobile: account.phone,
-			languages: enrollment?.languages || [],
-			serviceLocations: enrollment ? [enrollment.city] : [],
-			photo: enrollment?.photo || '',
+			countryCode: account.countryCode,
+			languages: guide?.languages?.length ? guide.languages : enrollment?.languages || [],
+			experience: guide?.experience || '',
+			city: guide?.city || enrollment?.city || '',
+			state: guide?.state || '',
+			country: guide?.country || '',
+			price: guide?.price || 0,
+			about: guide?.about || '',
+			specialization: guide?.specialization || [],
+			availableDays: guide?.availableDays || [],
+			availableTime: guide?.availableTime || '',
+			profileImage: guide?.profileImage || enrollment?.photo || '',
+			identityProofs: guide?.identityProofs || [],
+			galleryImages: guide?.galleryImages || [],
+			// Legacy field names some existing frontend code still reads
+			serviceLocations: guide?.city ? [guide.city] : enrollment ? [enrollment.city] : [],
+			photo: guide?.profileImage || enrollment?.photo || '',
 			isApproved: account.status === 'verified',
-			profileComplete: true,
 			isCertified: enrollment?.type === 'escort',
 			unavailableDates: account.unavailableDates || [],
+			// Membership
+			registrationCompleted: guide?.registrationCompleted || false,
+			paymentStatus: guide?.paymentStatus || 'pending',
+			isVisible: guide?.isVisible || false,
+			membershipStartDate: guide?.membershipStartDate || null,
+			membershipExpiryDate: guide?.membershipExpiryDate || null,
+			membershipExpired,
+			profileComplete: !!guide?.registrationCompleted,
 		};
+	}
+
+	/**
+	 * Create or update the post-login guide profile (languages, experience,
+	 * location, pricing, KYC/gallery files, etc). Does not touch
+	 * payment/visibility/membership fields — those only change via the
+	 * membership payment flow below.
+	 */
+	async upsertGuideProfile(
+		accountId: string,
+		data: GuideProfileData,
+		files: GuideProfileFiles
+	) {
+		const account = await AccountDB.findOne({ _id: accountId, role: 'guide' });
+		if (!account) {
+			throw new NotFoundError('Guide account not found');
+		}
+
+		const existing = await GuideDB.findOne({ accountId: account._id });
+
+		// Profile image + identity proof are required on first submission only —
+		// edits to an already-completed profile can omit files to keep the ones
+		// already on record.
+		if (!existing) {
+			if (!files.profileImage) {
+				throw new BadRequestError('Profile image is required');
+			}
+			if (!files.identityProofs || files.identityProofs.length === 0) {
+				throw new BadRequestError('At least one identity proof document is required');
+			}
+		}
+
+		const update: Record<string, unknown> = { ...data, registrationCompleted: true };
+		if (files.profileImage) update.profileImage = files.profileImage;
+		if (files.identityProofs?.length) update.identityProofs = files.identityProofs;
+		if (files.galleryImages?.length) update.galleryImages = files.galleryImages;
+
+		if (existing) {
+			await GuideDB.findOneAndUpdate({ accountId: account._id }, { $set: update });
+		} else {
+			await GuideDB.create({ accountId: account._id, ...update });
+		}
+
+		return this.getGuideProfile(accountId);
+	}
+
+	/**
+	 * Create a Razorpay order for the guide membership fee. Serves both the
+	 * very first payment and every future renewal — the same order-creation
+	 * shape either way.
+	 */
+	async createMembershipOrder(accountId: string) {
+		const account = await AccountDB.findOne({ _id: accountId, role: 'guide' });
+		if (!account) {
+			throw new NotFoundError('Guide account not found');
+		}
+
+		const guide = await GuideDB.findOne({ accountId: account._id });
+		if (!guide || !guide.registrationCompleted) {
+			throw new BadRequestError('Please complete your guide profile before paying for membership');
+		}
+
+		return TransactionService.createTransaction(
+			{
+				name: account.name,
+				email: account.email,
+				phone_number: account.phone,
+			},
+			GUIDE_MEMBERSHIP_FEE,
+			{
+				reference_id: guide._id.toString(),
+				reference_type: 'guide_membership',
+				type: 'guide',
+				description: `Guide Membership Fee - ${GUIDE_MEMBERSHIP_DURATION_DAYS} days`,
+			}
+		);
+	}
+
+	/**
+	 * Synchronous (browser-side) confirmation after a successful Razorpay
+	 * checkout. The Razorpay webhook (services/payment.ts) independently
+	 * reconciles the same transaction — both paths converge on
+	 * finalizeMembershipPaymentByGuideId, guarded so whichever arrives first
+	 * is the only one that actually extends the membership window.
+	 */
+	async confirmMembershipPayment(
+		accountId: string,
+		params: {
+			transaction_id: string;
+			razorpay_order_id: string;
+			razorpay_payment_id: string;
+			razorpay_signature: string;
+		}
+	) {
+		const { transaction_id, razorpay_order_id, razorpay_payment_id, razorpay_signature } = params;
+
+		const isValid = verifyRazorpaySignature(
+			razorpay_order_id,
+			razorpay_payment_id,
+			razorpay_signature
+		);
+		if (!isValid) {
+			throw new ServerError('Payment verification failed: invalid signature');
+		}
+
+		const transaction = await TransactionService.getTransaction(transaction_id);
+		if (transaction.razorpay_order_id !== razorpay_order_id) {
+			throw new ServerError('Order ID mismatch');
+		}
+		if (transaction.reference_type !== 'guide_membership') {
+			throw new ServerError('Transaction is not a guide membership payment');
+		}
+
+		const guide = await GuideDB.findOne({ accountId });
+		if (!guide || guide._id.toString() !== transaction.reference_id) {
+			throw new NotFoundError('Guide profile not found for this transaction');
+		}
+
+		// Only the first caller to observe a still-pending transaction performs
+		// the flip + membership extension — the webhook may win this race
+		// instead, in which case this call just reports the already-updated state.
+		const alreadyFinalized = transaction.status === 'success' || transaction.status === 'paid';
+		if (!alreadyFinalized) {
+			transaction.razorpay_payment_id = razorpay_payment_id;
+			transaction.status = 'paid';
+			await transaction.save();
+			await this.finalizeMembershipPaymentByGuideId(guide._id.toString(), 'success');
+		}
+
+		const updatedGuide = await GuideDB.findById(guide._id);
+		return { message: 'Membership payment confirmed successfully.', guide: updatedGuide };
+	}
+
+	/**
+	 * Idempotent core of membership finalization — the single place that
+	 * actually mutates isVisible/membershipExpiryDate. Called from both the
+	 * synchronous confirm path above and the Razorpay webhook
+	 * (services/payment.ts's updateRegistrationStatus).
+	 */
+	async finalizeMembershipPaymentByGuideId(guideId: string, status: 'success' | 'failed') {
+		const guide = await GuideDB.findById(guideId);
+		if (!guide) {
+			logError('Guide membership finalize: guide not found', { guideId });
+			return null;
+		}
+
+		if (status === 'failed') {
+			guide.paymentStatus = 'failed';
+			await guide.save();
+			return guide;
+		}
+
+		const now = new Date();
+		// Renewal-safe: extend from whichever is later (now, or the current
+		// expiry) so renewing early never loses already-paid-for days.
+		const base =
+			guide.membershipExpiryDate && guide.membershipExpiryDate > now
+				? guide.membershipExpiryDate
+				: now;
+		const newExpiry = new Date(
+			base.getTime() + GUIDE_MEMBERSHIP_DURATION_DAYS * 24 * 60 * 60 * 1000
+		);
+
+		guide.paymentStatus = 'success';
+		guide.isVisible = true;
+		if (!guide.membershipStartDate) {
+			guide.membershipStartDate = now;
+		}
+		guide.membershipExpiryDate = newExpiry;
+		await guide.save();
+
+		return guide;
 	}
 
 	/**
@@ -465,7 +687,11 @@ class GuideService {
 	}
 
 	/**
-	 * Get all approved guides (public)
+	 * Get all approved guides (public). Visibility is now driven entirely by
+	 * the Guide collection's membership fields (isVisible + unexpired
+	 * membershipExpiryDate), not Account.status — a guide's public listing
+	 * lapses automatically when their 30-day membership expires, with no
+	 * cron job needed since this filter is evaluated on every read.
 	 */
 	async getAllApprovedGuides(params?: {
 		location?: string;
@@ -477,33 +703,34 @@ class GuideService {
 		const page = params?.page || 1;
 		const limit = params?.limit || 10;
 		const skip = (page - 1) * limit;
+		const now = new Date();
 
-		const query: any = { role: 'guide', isActive: true, status: 'verified' };
+		const guideQuery: any = { isVisible: true, membershipExpiryDate: { $gt: now } };
 
-		if (params?.search) {
-			const escapedSearch = params.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-			query.name = { $regex: escapedSearch, $options: 'i' };
+		if (params?.location) {
+			const escapedLocation = params.location.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+			guideQuery.city = { $regex: `^${escapedLocation}$`, $options: 'i' };
+		}
+		if (params?.language) {
+			const escapedLanguage = params.language.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+			guideQuery.languages = { $regex: `^${escapedLanguage}$`, $options: 'i' };
 		}
 
-		const accounts = await AccountDB.find(query).skip(skip).limit(limit).lean();
-		const total = await AccountDB.countDocuments(query);
+		const total = await GuideDB.countDocuments(guideQuery);
+		const guides = await GuideDB.find(guideQuery).skip(skip).limit(limit).lean();
 
-		const guides = await Promise.all(
-			accounts.map(async (account) => {
-				const enrollment = await GuideEnrollmentDB.findOne({
-					email: account.email.toLowerCase(),
+		const results = await Promise.all(
+			guides.map(async (guide) => {
+				const account = await AccountDB.findOne({
+					_id: guide.accountId,
+					role: 'guide',
+					isActive: true,
 				}).lean();
+				if (!account) return null;
 
-				if (params?.location && enrollment?.city?.toLowerCase() !== params.location.toLowerCase()) {
-					return null;
-				}
-				if (
-					params?.language &&
-					!enrollment?.languages?.some(
-						(l: string) => l.toLowerCase() === params.language!.toLowerCase()
-					)
-				) {
-					return null;
+				if (params?.search) {
+					const escapedSearch = params.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+					if (!new RegExp(escapedSearch, 'i').test(account.name)) return null;
 				}
 
 				return {
@@ -512,29 +739,32 @@ class GuideService {
 					name: account.name,
 					email: account.email,
 					mobile: account.phone,
-					languages: enrollment?.languages || [],
-					serviceLocations: enrollment ? [enrollment.city] : [],
-					photo: enrollment?.photo || '',
+					languages: guide.languages || [],
+					serviceLocations: guide.city ? [guide.city] : [],
+					photo: guide.profileImage || '',
 					isApproved: true,
-					profileComplete: true,
-					isCertified: enrollment?.type === 'escort',
+					profileComplete: guide.registrationCompleted,
+					isCertified: false,
 					unavailableDates: (account as any).unavailableDates || [],
 				};
 			})
 		);
 
-		const filtered = guides.filter(Boolean);
+		const filtered = results.filter(Boolean);
 
 		return {
 			data: filtered,
-			total: params?.location || params?.language ? filtered.length : total,
+			total,
 			page,
 			totalPages: Math.ceil(total / limit),
 		};
 	}
 
 	/**
-	 * Get guide by ID (public)
+	 * Get guide by ID (public). Unlike the listing above, this is NOT gated on
+	 * current visibility — existing bookings/history may still need to show a
+	 * guide whose membership has since lapsed. `isApproved` reflects current
+	 * visibility for the UI to decide what to show.
 	 */
 	async getGuideById(guideId: string) {
 		const account = await AccountDB.findOne({ _id: guideId, role: 'guide' });
@@ -542,7 +772,10 @@ class GuideService {
 			throw new NotFoundError('Guide not found');
 		}
 
+		const guide = await GuideDB.findOne({ accountId: account._id });
 		const enrollment = await GuideEnrollmentDB.findOne({ email: account.email.toLowerCase() });
+		const now = new Date();
+		const isVisible = !!guide?.isVisible && !!guide?.membershipExpiryDate && guide.membershipExpiryDate > now;
 
 		return {
 			_id: account._id.toString(),
@@ -550,11 +783,11 @@ class GuideService {
 			name: account.name,
 			email: account.email,
 			mobile: account.phone,
-			languages: enrollment?.languages || [],
-			serviceLocations: enrollment ? [enrollment.city] : [],
-			photo: enrollment?.photo || '',
-			isApproved: account.status === 'verified',
-			profileComplete: true,
+			languages: guide?.languages?.length ? guide.languages : enrollment?.languages || [],
+			serviceLocations: guide?.city ? [guide.city] : enrollment ? [enrollment.city] : [],
+			photo: guide?.profileImage || enrollment?.photo || '',
+			isApproved: isVisible,
+			profileComplete: !!guide?.registrationCompleted,
 			isCertified: enrollment?.type === 'escort',
 			unavailableDates: account.unavailableDates || [],
 		};

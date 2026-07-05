@@ -2,6 +2,7 @@ import { RAZORPAY_WEBHOOK_SECRET } from '@config/const';
 import { AccountDB, GuideEnrollmentDB, TransactionDB } from '@mongo';
 import WebhookEventDB from '@mongo/repo/WebhookEvent';
 import RazorpayProvider from '@provider/razorpay';
+import GuideService from '@services/guide';
 import crypto from 'crypto';
 import { error as logError, info } from 'node-be-utilities';
 
@@ -109,7 +110,12 @@ class PaymentService {
 		await transaction.save();
 
 		// Update registration status with retry
-		await this.updateRegistrationStatus(transaction.reference_id, transaction.type, 'completed');
+		await this.updateRegistrationStatus(
+			transaction.reference_id,
+			transaction.type,
+			transaction.reference_type,
+			'completed'
+		);
 	}
 
 	/**
@@ -133,21 +139,37 @@ class PaymentService {
 		await transaction.save();
 
 		// Update registration status
-		await this.updateRegistrationStatus(transaction.reference_id, transaction.type, 'failed');
+		await this.updateRegistrationStatus(
+			transaction.reference_id,
+			transaction.type,
+			transaction.reference_type,
+			'failed'
+		);
 	}
 
 	/**
-	 * Update the registration record (GuideEnrollment or Account) with retry.
-	 * If all retries fail, marks transaction as PENDING_VERIFICATION.
+	 * Update the registration record (Guide membership, GuideEnrollment, or
+	 * Account) with retry. If all retries fail, marks transaction as
+	 * PENDING_VERIFICATION.
 	 */
 	private async updateRegistrationStatus(
 		referenceId: string,
 		type: string,
+		referenceType: string,
 		status: 'completed' | 'failed'
 	): Promise<void> {
 		for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
 			try {
-				if (type === 'guide' || type === 'enrollment') {
+				if (referenceType === 'guide_membership') {
+					// Recurring guide membership payment — reference_id is a Guide
+					// document id, NOT a GuideEnrollment id. Must be routed here
+					// separately or this would silently no-op against the wrong
+					// collection.
+					await GuideService.finalizeMembershipPaymentByGuideId(
+						referenceId,
+						status === 'completed' ? 'success' : 'failed'
+					);
+				} else if (type === 'guide' || type === 'enrollment') {
 					await GuideEnrollmentDB.findByIdAndUpdate(referenceId, { status });
 				} else if (type === 'tourist' || type === 'booking') {
 					const accountStatus = status === 'completed' ? 'success' : 'failed';
@@ -156,7 +178,13 @@ class PaymentService {
 					});
 				}
 
-				info('Payment: Registration status updated', { referenceId, type, status, attempt });
+				info('Payment: Registration status updated', {
+					referenceId,
+					type,
+					referenceType,
+					status,
+					attempt,
+				});
 				return;
 			} catch (err) {
 				logError('Payment: Failed to update registration status', {

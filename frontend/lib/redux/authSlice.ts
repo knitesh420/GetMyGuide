@@ -12,8 +12,11 @@ import { apiService } from "../service/api";
 import {
   AuthState,
   LoginRequest,
-  OTPRequest,
   OtpLoginRequest,
+  RegisterSendOtpRequest,
+  RegisterVerifyOtpRequest,
+  ForgotPasswordOtpRequest,
+  ResetPasswordOtpRequest,
   User,
   AuthResponse,
 } from "@/types/auth";
@@ -91,11 +94,12 @@ export const loginWithOtp = createAsyncThunk<AuthResponse, OtpLoginRequest>(
   },
 );
 
-export const sendOTP = createAsyncThunk<AuthResponse, OTPRequest>(
-  "auth/sendOTP",
+// Registration — step 1: send OTP to email
+export const sendRegistrationOtp = createAsyncThunk<any, RegisterSendOtpRequest>(
+  "auth/sendRegistrationOtp",
   async (data, { rejectWithValue }) => {
     try {
-      const result = await apiService.post("/auth/send-otp", data);
+      const result = await apiService.post("/session/register/send-otp", data);
       if (!result.success) return rejectWithValue(result.message);
       return result;
     } catch (err: any) {
@@ -104,17 +108,40 @@ export const sendOTP = createAsyncThunk<AuthResponse, OTPRequest>(
   },
 );
 
-export const verifyOtpAndRegister = createAsyncThunk<AuthResponse, FormData>(
-  "auth/verifyOtpAndRegister",
-  async (formData, { rejectWithValue }) => {
+// Registration — step 2: verify OTP, creates the account and logs in
+export const verifyRegistrationOtp = createAsyncThunk<AuthResponse, RegisterVerifyOtpRequest>(
+  "auth/verifyRegistrationOtp",
+  async (data, { rejectWithValue }) => {
     try {
-      const payload = {
-        name: formData.get("name") as string,
-        email: formData.get("email") as string,
-        phone: formData.get("mobile") as string,
-        password: formData.get("password") as string,
-      };
-      const result = await apiService.post("/session/signup", payload);
+      const result = await apiService.post("/session/register/verify-otp", data);
+      if (!result.success) return rejectWithValue(result.message);
+      return result;
+    } catch (err: any) {
+      return rejectWithValue(handleError(err));
+    }
+  },
+);
+
+// Forgot password — step 1: send OTP to email
+export const sendForgotPasswordOtp = createAsyncThunk<any, ForgotPasswordOtpRequest>(
+  "auth/sendForgotPasswordOtp",
+  async (data, { rejectWithValue }) => {
+    try {
+      const result = await apiService.post("/session/forgot-password", data);
+      if (!result.success) return rejectWithValue(result.message);
+      return result;
+    } catch (err: any) {
+      return rejectWithValue(handleError(err));
+    }
+  },
+);
+
+// Forgot password — step 2: verify OTP + set new password, logs in
+export const resetPasswordWithOtp = createAsyncThunk<AuthResponse, ResetPasswordOtpRequest>(
+  "auth/resetPasswordWithOtp",
+  async (data, { rejectWithValue }) => {
+    try {
+      const result = await apiService.post("/session/reset-password", data);
       if (!result.success) return rejectWithValue(result.message);
       return result;
     } catch (err: any) {
@@ -246,17 +273,30 @@ const authSlice = createSlice({
       .addCase(loginWithOtp.rejected, setRejected);
 
     builder
-      .addCase(sendOTP.pending, setPending)
-      .addCase(sendOTP.fulfilled, (state) => {
+      .addCase(sendRegistrationOtp.pending, setPending)
+      .addCase(sendRegistrationOtp.fulfilled, (state) => {
         state.loading = false;
         state.error = null;
       })
-      .addCase(sendOTP.rejected, setRejected);
+      .addCase(sendRegistrationOtp.rejected, setRejected);
 
     builder
-      .addCase(verifyOtpAndRegister.pending, setPending)
-      .addCase(verifyOtpAndRegister.fulfilled, setFulfilled)
-      .addCase(verifyOtpAndRegister.rejected, setRejected);
+      .addCase(verifyRegistrationOtp.pending, setPending)
+      .addCase(verifyRegistrationOtp.fulfilled, setFulfilled)
+      .addCase(verifyRegistrationOtp.rejected, setRejected);
+
+    builder
+      .addCase(sendForgotPasswordOtp.pending, setPending)
+      .addCase(sendForgotPasswordOtp.fulfilled, (state) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(sendForgotPasswordOtp.rejected, setRejected);
+
+    builder
+      .addCase(resetPasswordWithOtp.pending, setPending)
+      .addCase(resetPasswordWithOtp.fulfilled, setFulfilled)
+      .addCase(resetPasswordWithOtp.rejected, setRejected);
 
     builder
       .addCase(getCurrentUser.pending, setPending)

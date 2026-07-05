@@ -46,7 +46,7 @@ export const updateMyGuideProfile = createAsyncThunk<GuideProfile, FormData>(
   async (formData, { rejectWithValue }) => {
     try {
       const response = await apiService.put<GuideProfile>(
-        "/guides/profile/update",
+        "/guides/profile",
         formData,
         {
           headers: {
@@ -60,6 +60,56 @@ export const updateMyGuideProfile = createAsyncThunk<GuideProfile, FormData>(
     }
   }
 );
+
+// Guide membership (30-day recurring) — create a Razorpay order
+export const createGuideMembershipOrder = createAsyncThunk<
+  {
+    transaction_id: string;
+    razorpay_options: {
+      description: string;
+      currency: string;
+      amount: number;
+      name: string;
+      order_id: string;
+      prefill: { name: string; contact: string; email: string };
+      key: string;
+    };
+  },
+  void
+>("guide/createMembershipOrder", async (_, { rejectWithValue }) => {
+  try {
+    const response = await apiService.post(
+      "/guides/membership/create-order",
+      undefined,
+      { headers: { "x-idempotency-key": crypto.randomUUID() } },
+    );
+    return response.data;
+  } catch (err: any) {
+    return rejectWithValue(handleError(err));
+  }
+});
+
+// Guide membership — confirm payment after Razorpay checkout succeeds.
+// Serves both the very first payment and every future renewal.
+export const confirmGuideMembershipPayment = createAsyncThunk<
+  GuideProfile,
+  {
+    transaction_id: string;
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }
+>("guide/confirmMembershipPayment", async (payload, { rejectWithValue }) => {
+  try {
+    const response = await apiService.post(
+      "/guides/membership/confirm-payment",
+      payload,
+    );
+    return response.data?.guide;
+  } catch (err: any) {
+    return rejectWithValue(handleError(err));
+  }
+});
 
 // Get all guides admin
 export const adminGetAllGuides = createAsyncThunk<

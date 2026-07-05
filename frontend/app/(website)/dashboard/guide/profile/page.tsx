@@ -5,237 +5,241 @@ import { useEffect, useState, ChangeEvent, FormEvent } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/store";
 import { getMyGuideProfile, updateMyGuideProfile } from "@/lib/redux/thunks/guide/guideThunk";
-// ✅ CORRECTED: These thunks will update the 'admin' slice state
 import { fetchLanguages } from "@/lib/redux/thunks/admin/languageThunks";
-import { fetchAdminLocations } from "@/lib/redux/thunks/admin/locationThunks";
 import Image from "next/image";
 
-// Import your ShadCN UI components
-import { MultiSelect, Option } from "@/components/ui/multi-select"; // Assuming this path is correct
+import { MultiSelect, Option } from "@/components/ui/multi-select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 
-// Helper function to format date strings for the date input field
-const formatDateForInput = (isoDate?: string) => {
-  if (!isoDate) return "";
-  try {
-    return new Date(isoDate).toISOString().split("T")[0];
-  } catch (error) {
-    console.error("Invalid date format:", isoDate);
-    return "";
-  }
-};
+const DAY_OPTIONS: Option[] = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+].map((d) => ({ value: d, label: d }));
 
 const GuideProfilePage = () => {
   const dispatch: AppDispatch = useDispatch();
-  
-  // --- REDUX STATE ---
-  const { myProfile, loading, error } = useSelector(
-    (state: RootState) => state.guide
-  );
-  
-  // ✅ CORRECTED: Access locations and languages from within the 'admin' state slice.
-  const { locations, languages } = useSelector(
-    (state: RootState) => state.admin
-  );
 
-  // --- LOCAL STATE FOR THE FORM ---
+  const { myProfile, loading, error } = useSelector((state: RootState) => state.guide);
+  const { languages } = useSelector((state: RootState) => state.admin);
+
   const [formData, setFormData] = useState({
-    name: "",
-    mobile: "",
-    dob: "",
+    experience: "",
+    city: "",
     state: "",
     country: "",
-    experience: "",
-    description: "",
-    specializations: "",
+    price: "",
+    about: "",
+    specialization: "",
+    availableTime: "",
   });
-  
+
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
-  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
 
-  // State for file objects and previews
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [licenseFile, setLicenseFile] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [licensePreview, setLicensePreview] = useState<string | null>(null);
-
-  // --- SIDE EFFECTS ---
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
+  const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
+  const [identityProofFiles, setIdentityProofFiles] = useState<File[]>([]);
+  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
 
   useEffect(() => {
     dispatch(getMyGuideProfile());
-    // These thunks will correctly populate state.admin.languages and state.admin.locations
     dispatch(fetchLanguages());
-    dispatch(fetchAdminLocations());
   }, [dispatch]);
 
   useEffect(() => {
     if (myProfile) {
       setFormData({
-        name: myProfile.name || "",
-        mobile: myProfile.mobile || "",
-        dob: formatDateForInput(myProfile.dob),
+        experience: myProfile.experience || "",
+        city: myProfile.city || "",
         state: myProfile.state || "",
         country: myProfile.country || "",
-        experience: myProfile.experience || "",
-        description: myProfile.description || "",
-        specializations: myProfile.specializations?.join(", ") || "",
+        price: myProfile.price ? String(myProfile.price) : "",
+        about: myProfile.about || "",
+        specialization: myProfile.specialization?.join(", ") || "",
+        availableTime: myProfile.availableTime || "",
       });
 
-      if (myProfile.languages) {
-        setSelectedLanguages(myProfile.languages);
-      }
-      
-      if (myProfile.serviceLocations) {
-        setSelectedLocations(myProfile.serviceLocations);
-      }
-      
-      if (myProfile.photo) setPhotoPreview(myProfile.photo);
-      if (myProfile.license) setLicensePreview(myProfile.license);
+      if (myProfile.languages) setSelectedLanguages(myProfile.languages);
+      if (myProfile.availableDays) setSelectedDays(myProfile.availableDays);
+      if (myProfile.profileImage) setProfileImagePreview(myProfile.profileImage);
     }
   }, [myProfile]);
-
-  // --- EVENT HANDLERS ---
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const { name, files } = e.target;
-    if (files && files.length > 0) {
-      const file = files[0];
-      const previewUrl = URL.createObjectURL(file);
-      if (name === "photo") {
-        setPhotoFile(file);
-        setPhotoPreview(previewUrl);
-      } else if (name === "license") {
-        setLicenseFile(file);
-        setLicensePreview(file.type.startsWith("image/") ? previewUrl : file.name);
-      }
+  const handleProfileImageChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setProfileImageFile(file);
+      setProfileImagePreview(URL.createObjectURL(file));
     }
+  };
+
+  const handleIdentityProofsChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) setIdentityProofFiles(Array.from(e.target.files));
+  };
+
+  const handleGalleryChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) setGalleryFiles(Array.from(e.target.files));
   };
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const submissionFormData = new FormData();
 
-    Object.entries(formData).forEach(([key, value]) => {
-      if (key === "specializations") {
-        const arrayValue = value.split(",").map(item => item.trim()).filter(Boolean);
-        arrayValue.forEach(item => submissionFormData.append(`${key}[]`, item));
-      } else {
-        submissionFormData.append(key, String(value));
+    if (!myProfile?.registrationCompleted) {
+      if (!profileImageFile) {
+        return; // required on first submission — input already marks required
       }
-    });
+      if (identityProofFiles.length === 0) {
+        return;
+      }
+    }
 
-    selectedLanguages.forEach(lang => submissionFormData.append('languages[]', lang));
-    selectedLocations.forEach(loc => submissionFormData.append('serviceLocations[]', loc));
+    const submissionFormData = new FormData();
+    submissionFormData.append("experience", formData.experience);
+    submissionFormData.append("city", formData.city);
+    submissionFormData.append("state", formData.state);
+    submissionFormData.append("country", formData.country);
+    submissionFormData.append("price", formData.price);
+    submissionFormData.append("about", formData.about);
+    submissionFormData.append("availableTime", formData.availableTime);
 
-    if (photoFile) submissionFormData.append("photo", photoFile);
-    if (licenseFile) submissionFormData.append("license", licenseFile);
-    
+    formData.specialization
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .forEach((s) => submissionFormData.append("specialization[]", s));
+
+    selectedLanguages.forEach((lang) => submissionFormData.append("languages[]", lang));
+    selectedDays.forEach((day) => submissionFormData.append("availableDays[]", day));
+
+    if (profileImageFile) submissionFormData.append("profileImage", profileImageFile);
+    identityProofFiles.forEach((f) => submissionFormData.append("identityProofs", f));
+    galleryFiles.forEach((f) => submissionFormData.append("galleryImages", f));
+
     dispatch(updateMyGuideProfile(submissionFormData));
   };
-  
-  // --- OPTIONS FOR SELECT DROPDOWNS ---
-  // Ensure that 'languages' and 'locations' are arrays before mapping
-  const languageOptions: Option[] = Array.isArray(languages) ? languages.map(lang => ({ value: lang.languageName, label: lang.languageName })) : [];
-  const locationOptions: Option[] = Array.isArray(locations) ? locations.map(loc => ({ value: loc.placeName, label: loc.placeName })) : [];
+
+  const languageOptions: Option[] = Array.isArray(languages)
+    ? languages.map((lang) => ({ value: lang.languageName, label: lang.languageName }))
+    : [];
 
   return (
     <div className="container mx-auto p-4 md:p-8 bg-background">
       <div className="bg-card p-6 md:p-8 rounded-lg shadow-md border">
         <div className="flex justify-between items-center mb-6 pb-4 border-b">
           <h1 className="text-2xl md:text-3xl font-bold text-card-foreground">
-            Profile Information
+            Guide Profile
           </h1>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8">
-          {/* Section 1: Personal Information */}
+          {/* Section 1: Account (read-only) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <Label htmlFor="name">Name</Label>
-              <Input id="name" name="name" value={formData.name} onChange={handleInputChange} />
+              <Input id="name" value={myProfile?.name || ""} disabled />
             </div>
             <div>
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" value={myProfile?.email || ""} disabled />
             </div>
+          </div>
+
+          {/* Section 2: Location */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
-              <Label htmlFor="mobile">Mobile</Label>
-              <Input id="mobile" name="mobile" type="tel" value={formData.mobile} onChange={handleInputChange} />
-            </div>
-            <div>
-              <Label htmlFor="dob">Date of Birth</Label>
-              <Input id="dob" name="dob" type="date" value={formData.dob} onChange={handleInputChange} />
+              <Label htmlFor="city">City</Label>
+              <Input id="city" name="city" value={formData.city} onChange={handleInputChange} required />
             </div>
             <div>
               <Label htmlFor="state">State</Label>
-              <Input id="state" name="state" value={formData.state} onChange={handleInputChange} />
+              <Input id="state" name="state" value={formData.state} onChange={handleInputChange} required />
             </div>
             <div>
               <Label htmlFor="country">Country</Label>
-              <Input id="country" name="country" value={formData.country} onChange={handleInputChange} />
+              <Input id="country" name="country" value={formData.country} onChange={handleInputChange} required />
             </div>
           </div>
 
-          {/* Section 2: Professional Information */}
+          {/* Section 3: Professional Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="md:col-span-2">
+            <div>
               <Label htmlFor="experience">Experience (e.g., 5 years)</Label>
-              <Input id="experience" name="experience" value={formData.experience} onChange={handleInputChange} />
+              <Input id="experience" name="experience" value={formData.experience} onChange={handleInputChange} required />
+            </div>
+            <div>
+              <Label htmlFor="price">Price per day (₹)</Label>
+              <Input id="price" name="price" type="number" min="0" value={formData.price} onChange={handleInputChange} required />
             </div>
             <div className="bg-white z-50">
               <Label>Languages</Label>
-              <MultiSelect className="bg-white" options={languageOptions} selected={selectedLanguages} onChange={setSelectedLanguages} placeholder="Select languages..."/>
+              <MultiSelect className="bg-white" options={languageOptions} selected={selectedLanguages} onChange={setSelectedLanguages} placeholder="Select languages..." />
+            </div>
+            <div className="bg-white z-50">
+              <Label>Available Days</Label>
+              <MultiSelect className="bg-white" options={DAY_OPTIONS} selected={selectedDays} onChange={setSelectedDays} placeholder="Select available days..." />
             </div>
             <div>
-                <Label>Service Locations</Label>
-                <MultiSelect options={locationOptions} selected={selectedLocations} onChange={setSelectedLocations} placeholder="Select locations..."/>
+              <Label htmlFor="availableTime">Available Time (e.g., 9 AM - 6 PM)</Label>
+              <Input id="availableTime" name="availableTime" value={formData.availableTime} onChange={handleInputChange} required />
+            </div>
+            <div>
+              <Label htmlFor="specialization">Specialization (comma separated)</Label>
+              <Input id="specialization" name="specialization" value={formData.specialization} onChange={handleInputChange} placeholder="e.g. History, Adventure, Food Tours" />
             </div>
             <div className="md:col-span-2">
-              <Label htmlFor="specializations">Specializations (comma separated)</Label>
-              <Input id="specializations" name="specializations" value={formData.specializations} onChange={handleInputChange} placeholder="e.g. History, Adventure, Food Tours" />
-            </div>
-            <div className="md:col-span-2">
-              <Label htmlFor="description">Description / Bio</Label>
-              <Textarea id="description" name="description" value={formData.description} onChange={handleInputChange} rows={5} placeholder="Tell travelers a little about yourself..." />
+              <Label htmlFor="about">About / Bio</Label>
+              <Textarea id="about" name="about" value={formData.about} onChange={handleInputChange} rows={5} placeholder="Tell travelers a little about yourself..." required />
             </div>
           </div>
 
-          {/* Section 3: File Uploads */}
+          {/* Section 4: File Uploads */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
             <div>
-              <Label className="mb-2 block">Profile Photo</Label>
+              <Label className="mb-2 block">
+                Profile Photo {!myProfile?.registrationCompleted && "(required)"}
+              </Label>
               <div className="flex items-center gap-4 mt-2">
-                {photoPreview && <Image src={photoPreview} alt="Profile Preview" width={80} height={80} className="rounded-full object-cover w-20 h-20" />}
-                <Input type="file" name="photo" onChange={handleFileChange} accept="image/*" />
+                {profileImagePreview && (
+                  <Image src={profileImagePreview} alt="Profile Preview" width={80} height={80} className="rounded-full object-cover w-20 h-20" />
+                )}
+                <Input type="file" onChange={handleProfileImageChange} accept="image/*" required={!myProfile?.registrationCompleted} />
               </div>
             </div>
             <div>
-              <Label className="mb-2 block">License/Certificate (Image or PDF)</Label>
-              <div className="flex flex-col gap-4 mt-2">
-                {licensePreview && (
-                  <div className="p-2 border border-dashed rounded-md">
-                    {licensePreview.startsWith('blob:') || licenseFile?.type.startsWith('image/') || /\.(jpe?g|png|gif|webp)$/i.test(licensePreview) ? (
-                      <Image src={licensePreview} alt="License Preview" width={120} height={80} className="rounded-md object-contain" />
-                    ) : (
-                      <p className="text-sm text-muted-foreground p-2">
-                        Current document: {licenseFile?.name || licensePreview.split('/').pop()}
-                      </p>
-                    )}
-                  </div>
-                )}
-                <Input type="file" name="license" onChange={handleFileChange} accept="image/*,.pdf" />
-              </div>
+              <Label className="mb-2 block">
+                Identity Proof(s) {!myProfile?.registrationCompleted && "(required)"}
+              </Label>
+              <Input type="file" multiple onChange={handleIdentityProofsChange} accept="image/*,.pdf" required={!myProfile?.registrationCompleted} />
+              {identityProofFiles.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">{identityProofFiles.length} file(s) selected</p>
+              )}
+              {myProfile?.identityProofs && myProfile.identityProofs.length > 0 && identityProofFiles.length === 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {myProfile.identityProofs.length} document(s) already on file
+                </p>
+              )}
+            </div>
+            <div className="md:col-span-2">
+              <Label className="mb-2 block">Gallery Images (optional)</Label>
+              <Input type="file" multiple onChange={handleGalleryChange} accept="image/*" />
+              {galleryFiles.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">{galleryFiles.length} file(s) selected</p>
+              )}
             </div>
           </div>
 
-          {/* Section 4: Submission */}
           <div className="pt-6 border-t flex items-center justify-end gap-4">
             {error && <p className="text-sm text-destructive animate-pulse">{error}</p>}
             <Button type="submit" disabled={loading}>

@@ -130,6 +130,31 @@ export interface VerifyOTPRequest extends RegisterRequest {
   otp: string;
 }
 
+export interface RegisterSendOtpRequest {
+  name: string;
+  email: string;
+  phone: string;
+  countryCode: string;
+  password: string;
+  confirmPassword?: string;
+  accountType: "tourist" | "guide";
+}
+
+export interface RegisterVerifyOtpRequest {
+  email: string;
+  otp: string;
+}
+
+export interface ForgotPasswordOtpRequest {
+  email: string;
+}
+
+export interface ResetPasswordOtpRequest {
+  email: string;
+  otp: string;
+  newPassword: string;
+}
+
 export interface AuthResponse {
   success: boolean;
   token: string;

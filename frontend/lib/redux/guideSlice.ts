@@ -12,7 +12,8 @@ import {
   fetchGuidePricingDetails ,
   adminGetAllGuides,
   fetchMyBookingsThunk,
-  fetchGuidesForTour
+  fetchGuidesForTour,
+  confirmGuideMembershipPayment,
 } from "@/lib/redux/thunks/guide/guideThunk";
 
 const initialState: GuideState = {
@@ -66,7 +67,17 @@ const guideSlice = createSlice({
         state.myProfile = action.payload;
       })
       .addCase(updateMyGuideProfile.rejected, setRejected)
-      
+
+      // Handle Confirm Membership Payment (first payment or renewal)
+      .addCase(confirmGuideMembershipPayment.pending, setPending)
+      .addCase(confirmGuideMembershipPayment.fulfilled, (state, action) => {
+        state.loading = false;
+        if (state.myProfile && action.payload) {
+          state.myProfile = { ...state.myProfile, ...action.payload };
+        }
+      })
+      .addCase(confirmGuideMembershipPayment.rejected, setRejected)
+
       // Handle Get All Guides
       .addCase(getAllGuides.pending, setPending)
       .addCase(getAllGuides.fulfilled, (state, action) => {

@@ -9,6 +9,8 @@ import {
 	ForgotPasswordValidator,
 	LoginValidator,
 	OtpLoginValidator,
+	RegisterSendOtpValidator,
+	RegisterVerifyOtpValidator,
 	ResetPasswordValidator,
 	SendOtpValidator,
 	SignupValidator,
@@ -46,6 +48,28 @@ const forgotPasswordLimiter = rateLimit({
 	keyFn: (req) => `${req.ip}:${(req.body?.email || '').toLowerCase()}`,
 });
 
+const resetPasswordVerifyLimiter = rateLimit({
+	prefix: 'reset-password-verify',
+	windowSeconds: OTP_RATE_LIMIT_WINDOW_SECONDS,
+	max: OTP_RATE_LIMIT_MAX * 2,
+	keyFn: (req) => `${req.ip}:${(req.body?.email || '').toLowerCase()}`,
+});
+
+// Registration-OTP send is keyed by email for the same reason as admin OTP-send.
+const registerOtpSendLimiter = rateLimit({
+	prefix: 'register-otp-send',
+	windowSeconds: OTP_RATE_LIMIT_WINDOW_SECONDS,
+	max: OTP_RATE_LIMIT_MAX,
+	keyFn: (req) => `${req.ip}:${(req.body?.email || '').toLowerCase()}`,
+});
+
+const registerOtpVerifyLimiter = rateLimit({
+	prefix: 'register-otp-verify',
+	windowSeconds: OTP_RATE_LIMIT_WINDOW_SECONDS,
+	max: OTP_RATE_LIMIT_MAX * 2,
+	keyFn: (req) => `${req.ip}:${(req.body?.email || '').toLowerCase()}`,
+});
+
 // ---- Public -----------------------------------------------------------------
 router.route('/signup').post(SignupValidator, Controller.signup);
 router.route('/login').post(loginLimiter, LoginValidator, Controller.login);
@@ -57,7 +81,15 @@ router.route('/refresh').post(Controller.refresh);
 router
 	.route('/forgot-password')
 	.post(forgotPasswordLimiter, ForgotPasswordValidator, Controller.forgotPassword);
-router.route('/reset-password').post(ResetPasswordValidator, Controller.resetPassword);
+router
+	.route('/reset-password')
+	.post(resetPasswordVerifyLimiter, ResetPasswordValidator, Controller.resetPassword);
+router
+	.route('/register/send-otp')
+	.post(registerOtpSendLimiter, RegisterSendOtpValidator, Controller.sendRegistrationOtp);
+router
+	.route('/register/verify-otp')
+	.post(registerOtpVerifyLimiter, RegisterVerifyOtpValidator, Controller.verifyRegistrationOtp);
 
 // ---- Protected --------------------------------------------------------------
 router.route('/validate-auth').get(VerifySession, Controller.validateAuth);

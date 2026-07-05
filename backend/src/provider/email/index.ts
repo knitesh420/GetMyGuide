@@ -7,10 +7,16 @@ import {
 	BookingAllocatedTouristTemplate,
 	GuideCredentialsTemplate,
 	PasswordResetTemplate,
+	PasswordResetOtpTemplate,
 	PaymentLinkTemplate,
+	RegistrationOtpTemplate,
 	WelcomeEmailTemplate,
 	TouristPaymentConfirmationTemplate,
 	GuidePaymentConfirmationTemplate,
+	GuideAssignedTemplate,
+	GuideAcceptedTemplate,
+	TripStartedTemplate,
+	TripCompletedTemplate,
 } from './templates';
 
 const resend = new Resend(RESEND_API_KEY);
@@ -214,6 +220,115 @@ export async function sendAdminOtpEmail(to: string, otp: string) {
 
 	if (error) {
 		logError('Resend Error: Error Sending admin OTP email', error);
+		return false;
+	}
+	return true;
+}
+
+export async function sendRegistrationOtpEmail(to: string, otp: string) {
+	const { error } = await resend.emails.send({
+		from: 'Get My Guide <support@getmyguide.in>',
+		to: [to],
+		subject: 'Verify Your Email - Get My Guide',
+		html: RegistrationOtpTemplate(otp),
+	});
+
+	if (error) {
+		logError('Resend Error: Error Sending registration OTP email', error);
+		return false;
+	}
+	return true;
+}
+
+export async function sendPasswordResetOtpEmail(to: string, otp: string) {
+	const { error } = await resend.emails.send({
+		from: 'Get My Guide <support@getmyguide.in>',
+		to: [to],
+		subject: 'Reset Your Password - Get My Guide',
+		html: PasswordResetOtpTemplate(otp),
+	});
+
+	if (error) {
+		logError('Resend Error: Error Sending password reset OTP email', error);
+		return false;
+	}
+	return true;
+}
+
+export async function sendGuideAssignedEmail(
+	to: string,
+	details: {
+		guideName: string;
+		city: string;
+		places: string[];
+		date: string;
+		noOfPersons: number;
+		adminNotes?: string;
+	}
+) {
+	const { error } = await resend.emails.send({
+		from: 'Get My Guide <support@getmyguide.in>',
+		to: [to],
+		subject: 'New Assignment Request - Get My Guide',
+		html: GuideAssignedTemplate(details),
+	});
+
+	if (error) {
+		logError('Resend Error: Error Sending guide assigned email', error);
+		return false;
+	}
+	return true;
+}
+
+export async function sendGuideAcceptedEmail(
+	to: string,
+	details: { guideName: string; city: string; date: string; noOfPersons: number }
+) {
+	const { error } = await resend.emails.send({
+		from: 'Get My Guide <support@getmyguide.in>',
+		to: [to],
+		subject: 'Guide Accepted Assignment - Get My Guide',
+		html: GuideAcceptedTemplate(details),
+	});
+
+	if (error) {
+		logError('Resend Error: Error Sending guide accepted email', error);
+		return false;
+	}
+	return true;
+}
+
+export async function sendTripStartedEmail(
+	to: string,
+	details: { touristName: string; guideName: string; city: string }
+) {
+	const { error } = await resend.emails.send({
+		from: 'Get My Guide <support@getmyguide.in>',
+		to: [to],
+		subject: 'Your Trip Has Started - Get My Guide',
+		html: TripStartedTemplate(details),
+	});
+
+	if (error) {
+		logError('Resend Error: Error Sending trip started email', error);
+		return false;
+	}
+	return true;
+}
+
+export async function sendTripCompletedEmail(
+	to: string,
+	details: { touristName: string; guideName: string; city: string }
+) {
+	const { error } = await resend.emails.send({
+		from: 'Get My Guide <support@getmyguide.in>',
+		to: [to],
+		subject: 'Your Trip Is Complete - Get My Guide',
+		html: TripCompletedTemplate(details),
+	});
+
+	if (error) {
+		logError('Resend Error: Error Sending trip completed email', error);
 		return false;
 	}
 	return true;

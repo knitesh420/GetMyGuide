@@ -1,7 +1,12 @@
 import GuideService from '@services/guide';
 import { NextFunction, Request, Response } from 'express';
 import { BadRequestError, Respond } from 'node-be-utilities';
-import { ConfirmPaymentValidationResult, EnrollValidationResult } from './guide.validator';
+import {
+	ConfirmPaymentValidationResult,
+	EnrollValidationResult,
+	GuideProfileValidationResult,
+	MembershipConfirmPaymentValidationResult,
+} from './guide.validator';
 
 async function enroll(req: Request, res: Response, next: NextFunction) {
 	try {
@@ -214,6 +219,71 @@ async function getGuideProfile(req: Request, res: Response, next: NextFunction) 
 	}
 }
 
+async function updateGuideProfile(req: Request, res: Response, next: NextFunction) {
+	try {
+		const user = req.locals.user;
+		if (!user || !user.userId) {
+			return next(new BadRequestError('User not authenticated'));
+		}
+
+		const data = req.locals.data as GuideProfileValidationResult;
+		const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+
+		const profile = await GuideService.upsertGuideProfile(user.userId, data, {
+			profileImage: files?.profileImage?.[0]?.filename,
+			identityProofs: files?.identityProofs?.map((f) => f.filename),
+			galleryImages: files?.galleryImages?.map((f) => f.filename),
+		});
+
+		return Respond({
+			res,
+			status: 200,
+			data: profile,
+		});
+	} catch (error) {
+		return next(error);
+	}
+}
+
+async function createMembershipOrder(req: Request, res: Response, next: NextFunction) {
+	try {
+		const user = req.locals.user;
+		if (!user || !user.userId) {
+			return next(new BadRequestError('User not authenticated'));
+		}
+
+		const result = await GuideService.createMembershipOrder(user.userId);
+
+		return Respond({
+			res,
+			status: 201,
+			data: result,
+		});
+	} catch (error) {
+		return next(error);
+	}
+}
+
+async function confirmMembershipPayment(req: Request, res: Response, next: NextFunction) {
+	try {
+		const user = req.locals.user;
+		if (!user || !user.userId) {
+			return next(new BadRequestError('User not authenticated'));
+		}
+
+		const data = req.locals.data as MembershipConfirmPaymentValidationResult;
+		const result = await GuideService.confirmMembershipPayment(user.userId, data);
+
+		return Respond({
+			res,
+			status: 200,
+			data: result,
+		});
+	} catch (error) {
+		return next(error);
+	}
+}
+
 async function updateAvailability(req: Request, res: Response, next: NextFunction) {
 	try {
 		const user = req.locals.user;
@@ -311,6 +381,9 @@ const Controller = {
 	deleteEnrollment,
 	getMyGuideEnrollment,
 	getGuideProfile,
+	updateGuideProfile,
+	createMembershipOrder,
+	confirmMembershipPayment,
 	updateAvailability,
 	getAllApprovedGuides,
 	getGuideByIdPublic,

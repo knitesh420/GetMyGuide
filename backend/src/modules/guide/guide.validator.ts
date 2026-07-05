@@ -84,6 +84,104 @@ export async function ConfirmPaymentValidator(req: Request, res: Response, next:
 	return next(new BadRequestError(message));
 }
 
+// ---- Guide profile (post-login, membership) --------------------------------
+
+const stringArray = (label: string, required = false) =>
+	z.preprocess(
+		(val) => {
+			if (val === undefined || val === null || val === '') return [];
+			if (typeof val === 'string') {
+				try {
+					const parsed = JSON.parse(val);
+					return Array.isArray(parsed) ? parsed : [parsed];
+				} catch {
+					return val
+						.split(',')
+						.map((s) => s.trim())
+						.filter(Boolean);
+				}
+			}
+			return Array.isArray(val) ? val : [val];
+		},
+		required
+			? z.array(z.string().trim().min(1)).min(1, `At least one ${label} is required`)
+			: z.array(z.string().trim().min(1)).default([])
+	);
+
+export type GuideProfileValidationResult = {
+	languages: string[];
+	experience: string;
+	city: string;
+	state: string;
+	country: string;
+	price: number;
+	about: string;
+	specialization: string[];
+	availableDays: string[];
+	availableTime: string;
+};
+
+export async function GuideProfileValidator(req: Request, res: Response, next: NextFunction) {
+	const reqValidator = z.object({
+		languages: stringArray('language', true),
+		experience: z.string().trim().min(1, 'Experience is required'),
+		city: z.string().trim().min(1, 'City is required'),
+		state: z.string().trim().min(1, 'State is required'),
+		country: z.string().trim().min(1, 'Country is required'),
+		price: z.coerce.number().positive('Price must be a positive number'),
+		about: z.string().trim().min(1, 'About is required'),
+		specialization: stringArray('specialization'),
+		availableDays: stringArray('available day', true),
+		availableTime: z.string().trim().min(1, 'Available time is required'),
+	});
+
+	const reqValidatorResult = reqValidator.safeParse(req.body);
+
+	if (reqValidatorResult.success) {
+		req.locals.data = reqValidatorResult.data;
+		return next();
+	}
+
+	const message = reqValidatorResult.error.issues
+		.map((err) => `${err.path.join('.')}: ${err.message}`)
+		.join(', ');
+
+	return next(new BadRequestError(message));
+}
+
+export type MembershipConfirmPaymentValidationResult = {
+	transaction_id: string;
+	razorpay_order_id: string;
+	razorpay_payment_id: string;
+	razorpay_signature: string;
+};
+
+export async function MembershipConfirmPaymentValidator(
+	req: Request,
+	res: Response,
+	next: NextFunction
+) {
+	const reqValidator = z.object({
+		transaction_id: z.string().trim().min(1, 'Transaction ID is required'),
+		razorpay_order_id: z.string().trim().min(1, 'Razorpay order ID is required'),
+		razorpay_payment_id: z.string().trim().min(1, 'Razorpay payment ID is required'),
+		razorpay_signature: z.string().trim().min(1, 'Razorpay signature is required'),
+	});
+
+	const reqValidatorResult = reqValidator.safeParse(req.body);
+
+	if (reqValidatorResult.success) {
+		req.locals.data = reqValidatorResult.data;
+		return next();
+	}
+
+	const message = reqValidatorResult.error.issues
+		.map((err) => `${err.path.join('.')}: ${err.message}`)
+		.join(', ');
+
+	return next(new BadRequestError(message));
+}
+
 export type ContactInquiryValidationResult = {
 	fullName: string;
 	phoneNumber: string;
