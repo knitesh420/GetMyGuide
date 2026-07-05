@@ -8,6 +8,7 @@ import {
   StaggerContainer,
   StaggerItem,
 } from "@/components/animations/motion-wrappers";
+import { IMAGES } from "@/lib/images";
 
 const destinations = [
   {
@@ -52,8 +53,7 @@ const destinations = [
   {
     name: "Golden Triangle",
     tagline: "Delhi-Jaipur-Agra",
-    image:
-      "Golden_Triangle.png",
+    image: IMAGES.goldenTriangle,
     tours: 700,
     href: "/services",
   },
