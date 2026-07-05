@@ -11,6 +11,7 @@ import { Ticket, Calendar, MapPin, User as UserIcon, Loader2, AlertCircle } from
 import type { Booking, BookingStatus } from "@/lib/data";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { resolvePackageImageUrl } from "@/lib/utils/utils";
 
 function GuideBookingCard({ booking }: { booking: Booking }) {
   const tour = typeof booking.tour === "object" ? booking.tour : null;
@@ -39,7 +40,7 @@ function GuideBookingCard({ booking }: { booking: Booking }) {
       <div className="flex flex-col md:flex-row">
         <div className="md:w-1/3 relative h-60 md:h-auto flex-shrink-0">
           <Image
-            src={tour.images?.[0] || "/placeholder.png"}
+            src={resolvePackageImageUrl(tour.images?.[0])}
             alt={tour.title}
             fill
             className="object-cover"

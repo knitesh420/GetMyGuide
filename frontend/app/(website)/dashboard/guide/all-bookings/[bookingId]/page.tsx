@@ -27,6 +27,7 @@ import {
   IndianRupee,
   Undo2,
 } from "lucide-react";
+import { resolvePackageImageUrl } from "@/lib/utils/utils";
 
 const getStatusVariant = (status: BookingStatus) => {
   switch (status) {
@@ -170,7 +171,7 @@ export default function GuideBookingDetailsPage() {
               <CardContent className="p-0">
                 <div className="relative w-full h-80 rounded-lg overflow-hidden">
                   <Image
-                    src={tour.images?.[0] || "/placeholder.png"}
+                    src={resolvePackageImageUrl(tour.images?.[0])}
                     alt={tour.title || "Tour"}
                     fill
                     className="object-cover"

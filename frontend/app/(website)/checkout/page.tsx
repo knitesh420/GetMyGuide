@@ -15,6 +15,7 @@ import { clearBookingError } from "@/lib/redux/bookingSlice";
 import { createRazorpayOrder } from "@/lib/redux/thunks/booking/bookingThunks";
 import { fetchPackageById } from "@/lib/redux/thunks/admin/packageThunks";
 import { getGuideById } from "@/lib/redux/thunks/guide/guideThunk";
+import { resolvePackageImageUrl } from "@/lib/utils/utils";
 
 declare global {
   interface Window {
@@ -206,7 +207,7 @@ function CheckoutContent() {
           <CardHeader>
             <div className="relative h-48 w-full rounded-t-lg overflow-hidden">
               <Image
-                src={tour.images[0]}
+                src={resolvePackageImageUrl(tour.images?.[0])}
                 alt={tour.title}
                 fill
                 className="object-cover"

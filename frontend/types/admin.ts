@@ -140,7 +140,7 @@ export interface AdminPackage {
   baseCurrency?: string;
   duration: string;
   locations: string[]; // Array of location names or IDs
-  images: string[];
+  images: Array<string | { url?: string; publicId?: string }>;
   isActive: boolean;
   isFeatured: boolean;
   featured?: boolean;

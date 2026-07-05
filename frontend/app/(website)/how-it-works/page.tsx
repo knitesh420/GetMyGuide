@@ -185,12 +185,12 @@ export default function HowItWorksPage() {
                     className="flex-1 w-full animate-fade-in-up"
                     style={{ animationDelay: `${index * 0.2}s` }}
                   >
-                    <div className="relative h-64 md:h-80 rounded-lg overflow-hidden shadow-lg">
+                    <div className="relative h-64 md:h-80 rounded-lg overflow-hidden shadow-lg bg-muted">
                       <Image
-                        src={`/${step.step}.jpg`}
+                        src={IMAGES[`scene${step.step}` as keyof typeof IMAGES] as string}
                         alt={t(step.titleKey)}
                         fill
-                        className="object-cover"
+                        className="object-contain"
                       />
                     </div>
                   </div>

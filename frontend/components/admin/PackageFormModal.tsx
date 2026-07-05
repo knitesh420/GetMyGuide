@@ -148,7 +148,9 @@ export function PackageFormModal({
         isFeatured:
           editingPackage.featured ?? editingPackage.isFeatured ?? false,
         locations: editingPackage.locations || [], // This is already an array of names, which is correct
-        images: editingPackage.images || [],
+        images: (editingPackage.images || []).map((img) =>
+          resolvePackageImageUrl(img),
+        ),
       });
 
       // Load each language independently from database, don't copy English to other languages
