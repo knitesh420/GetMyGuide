@@ -1,6 +1,13 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
 import { apiService } from "@/lib/service/api";
-import { AdminBookingSummary, AssignableGuide, Assignment, PaginatedResult } from "@/lib/data";
+import {
+  AdminBookingSummary,
+  AssignableGuide,
+  Assignment,
+  GuideAvailabilityInfo,
+  GuideCalendar,
+  PaginatedResult,
+} from "@/lib/data";
 
 const handleError = (err: any) =>
   err.response?.data?.message || err.message || "An error occurred";
@@ -23,7 +30,13 @@ export const fetchBookingsAwaitingAssignment = createAsyncThunk<AdminBookingSumm
 
 export const createAssignment = createAsyncThunk<
   Assignment,
-  { bookingId: string; guideId: string; adminNotes?: string }
+  {
+    bookingId: string;
+    guideId: string;
+    adminNotes?: string;
+    override?: boolean;
+    overrideReason?: string;
+  }
 >("assignment/create", async (payload, { rejectWithValue }) => {
   try {
     const response = await apiService.post<Assignment>("/assignment", payload);
@@ -50,12 +63,20 @@ export const respondToAssignment = createAsyncThunk<
 
 export const reassignGuide = createAsyncThunk<
   Assignment,
-  { id: string; newGuideId: string; adminNotes?: string }
->("assignment/reassign", async ({ id, newGuideId, adminNotes }, { rejectWithValue }) => {
+  {
+    id: string;
+    newGuideId: string;
+    adminNotes?: string;
+    override?: boolean;
+    overrideReason?: string;
+  }
+>("assignment/reassign", async ({ id, newGuideId, adminNotes, override, overrideReason }, { rejectWithValue }) => {
   try {
     const response = await apiService.post<Assignment>(`/assignment/${id}/reassign`, {
       newGuideId,
       adminNotes,
+      override,
+      overrideReason,
     });
     return response.data!;
   } catch (err: any) {
@@ -98,3 +119,34 @@ export const fetchMyAssignments = createAsyncThunk<
     return rejectWithValue(handleError(err));
   }
 });
+
+// --- Guide Availability & Booking Conflict System (admin) ---
+
+// Assignable guides annotated with availability + conflicts for a date
+// range — feeds the Available/Unavailable Guides panel and the Assign
+// Guide modal's conflict badges.
+export const fetchGuidesAvailability = createAsyncThunk<
+  GuideAvailabilityInfo[],
+  { startDate: string; endDate?: string }
+>("assignment/fetchGuidesAvailability", async (params, { rejectWithValue }) => {
+  try {
+    const response = await apiService.get<GuideAvailabilityInfo[]>("/guide-availability/guides", { params });
+    return response.data ?? [];
+  } catch (err: any) {
+    return rejectWithValue(handleError(err));
+  }
+});
+
+// Merged calendar (unavailable dates + leaves + booked ranges) for a single
+// guide — feeds the admin Guide Calendar page.
+export const fetchGuideCalendar = createAsyncThunk<GuideCalendar, string>(
+  "assignment/fetchGuideCalendar",
+  async (guideId, { rejectWithValue }) => {
+    try {
+      const response = await apiService.get<GuideCalendar>(`/guide-availability/calendar/${guideId}`);
+      return response.data!;
+    } catch (err: any) {
+      return rejectWithValue(handleError(err));
+    }
+  },
+);

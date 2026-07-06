@@ -11,11 +11,14 @@ import {
 
 async function createAssignment(req: Request, res: Response, next: NextFunction) {
 	try {
-		const { bookingId, guideId, adminNotes } = req.locals.data as AssignmentCreateValidationResult;
+		const { bookingId, guideId, adminNotes, override, overrideReason } =
+			req.locals.data as AssignmentCreateValidationResult;
 		const assignment = await AssignmentService.createAssignment({
 			bookingId,
 			guideId,
 			adminNotes,
+			override,
+			overrideReason,
 			adminUserId: req.locals.user!.userId,
 		});
 
@@ -43,11 +46,14 @@ async function respond(req: Request, res: Response, next: NextFunction) {
 
 async function reassign(req: Request, res: Response, next: NextFunction) {
 	try {
-		const { newGuideId, adminNotes } = req.locals.data as AssignmentReassignValidationResult;
+		const { newGuideId, adminNotes, override, overrideReason } =
+			req.locals.data as AssignmentReassignValidationResult;
 		const assignment = await AssignmentService.reassignGuide({
 			currentAssignmentId: req.locals.id!,
 			newGuideId,
 			adminNotes,
+			override,
+			overrideReason,
 			adminUserId: req.locals.user!.userId,
 		});
 

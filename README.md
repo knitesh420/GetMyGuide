@@ -54,6 +54,7 @@ email.
 | File uploads | Multer (disk storage) + Cloudinary (some assets) |
 | Validation | Zod (backend request validators) |
 | Testing | Jest + mongodb-memory-server (unit/integration) |
+| Charts | Recharts, via the shadcn/ui `chart.tsx` wrapper — Phase 2 Reports & Analytics only |
 
 ---
 
@@ -536,6 +537,61 @@ Unrelated to this document's focus — see their respective `*.route.ts` files. 
 is the single Razorpay webhook receiver for **all** payment types (enrollment, membership,
 bookings), dispatched internally by `reference_type`.
 
+### `/assignment` — Phase 2
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| POST | `/assignment` | VerifyMinLevel('admin') | Propose a guide for a booking — reuses `BookingService.allocateGuide` |
+| GET | `/assignment` | VerifyMinLevel('admin') | Paginated list, filter by `status`/`guideId`/`bookingId` |
+| GET | `/assignment/guides` | VerifyMinLevel('admin') | Assignable-guide picker (Account + Guide profile merged) |
+| GET | `/assignment/my` | VerifyMinLevel('guide') | The calling guide's own assignments |
+| GET | `/assignment/:id` | VerifyMinLevel('guide') | Admin or the assigned guide only (service-layer check) |
+| PATCH | `/assignment/:id/respond` | VerifyMinLevel('guide') | `{ action: 'accept'\|'decline', declineReason? }` — accept auto-creates a `Trip` |
+| POST | `/assignment/:id/reassign` | VerifyMinLevel('admin') | Swap to a new guide; blocked once the current assignment is `accepted` |
+
+### `/trip` — Phase 2
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| GET | `/trip` | VerifyMinLevel('admin') | Paginated list, filter by `status`/`guideId` |
+| GET | `/trip/my` | VerifyMinLevel('guide') | The calling guide's own trips |
+| GET | `/trip/mine` | VerifyMinLevel('tourist') | The calling tourist's own trips (via their bookings) |
+| GET | `/trip/:id` | VerifyMinLevel('tourist') | Admin, the trip's guide, or the booking's tourist (service-layer check) |
+| PATCH | `/trip/:id/start` | VerifyMinLevel('guide') | Owning guide only; `not-started` → `in-progress` |
+| PATCH | `/trip/:id/complete` | VerifyMinLevel('guide') | Owning guide only; `in-progress` → `completed`, also flips `Booking.status` to `completed` |
+| PATCH | `/trip/:id/cancel` | VerifyMinLevel('admin') | Any non-terminal status → `cancelled` |
+
+### `/review` — Phase 2
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| POST | `/review` | VerifyMinLevel('tourist') | Only on a `completed` booking they own; one review per booking |
+| GET | `/review/guide/:guideId` | public | `{ reviews, average, total }` — computed live, never stored on `Guide` |
+| GET | `/review/my` | VerifyMinLevel('tourist') | Own submitted reviews |
+| GET | `/review/mine/guide` | VerifyMinLevel('guide') | Reviews received + rating summary |
+| GET | `/review` | VerifyMinLevel('admin') | Paginated, filter by `guideId`/`minRating`/`isHidden` |
+| PATCH | `/review/:id/hide` | VerifyMinLevel('admin') | Moderation — hide/unhide |
+| DELETE | `/review/:id` | VerifyMinLevel('admin') | Moderation — delete |
+
+### `/notification` — Phase 2
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| GET | `/notification/my` | VerifySession | Own inbox, paginated, `unreadOnly` filter |
+| GET | `/notification/my/unread-count` | VerifySession | `{ count }` |
+| PATCH | `/notification/:id/read` | VerifySession | Must own the notification |
+| PATCH | `/notification/read-all` | VerifySession | Marks every unread notification read |
+| GET | `/notification` | VerifyMinLevel('admin') | Oversight, filter by `type`/`recipient` |
+
+### `/report` — Phase 2 (admin only, read-only aggregation)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/report/overview` | Revenue, active guides/tourists, pending assignments, trip counts, membership renewals, avg rating |
+| GET | `/report/bookings-trend?range=7d\|30d\|90d` | Daily booking count + revenue series |
+| GET | `/report/guide-performance` | Per-guide assignments/trips-completed/rating, ranked |
+| GET | `/report/activity-log` | Wraps `ActivityLogService.getAll` |
+
 ---
 
 ## Frontend Route Map
@@ -554,12 +610,26 @@ bookings), dispatched internally by `reference_type`.
   tourist/onboarding        NEW tourist profile form (post-signup, first login)
   dashboard/
     layout.tsx              auth guard (cookie-based; redirects to /signin if unauthenticated)
+    notifications/          Phase 2 — shared inbox page, same route for every role
     user/                   tourist dashboard (hard-redirects to onboarding if incomplete)
+      trips/                Phase 2 — read-only trip timeline
+      reviews/               Phase 2 — leave a review once a trip is completed
     guide/
       page.tsx              guide dashboard — profile-completion + membership status
       profile/              guide profile form (post-signup, or ongoing edits)
       buy-subscription/     membership payment / renewal
       availability/, all-bookings/, tourguide-booking/, upcomming-tours/   (booking-related, unrelated to auth)
+      assignments/           Phase 2 — accept/decline proposed bookings
+      trips/, trips/[tripId]/  Phase 2 — start/complete trips
+      reviews/               Phase 2 — reviews received + rating
+    admin/                   Phase 2 — NEW travel-ops section (own client-side role guard, since
+                             dashboard/layout.tsx has no role gating). Distinct from the legacy
+                             app/(website)/admin/page.tsx monolith below, which is untouched.
+      page.tsx               KPI overview + booking/revenue trend chart
+      assignments/, trips/, reviews/, reports/, activity-log/
+  admin/                    LEGACY standalone admin dashboard (raw fetch, tab-based) — pre-dates
+                            the cookie-auth migration, left running as-is; not to be confused with
+                            dashboard/admin/ above
   find-guides/, guides/     public guide discovery, consumes GET /guide/all
 ```
 
@@ -632,3 +702,164 @@ Documented here so it isn't mistaken for something broken or in-scope for future
 - Forgot-password was **changed** from an emailed reset-link+token to OTP-based (confirmed correct
   by the project owner) — if you see references to a `pwreset:<token>` `Storage` key pattern in
   old notes/history, that's the retired mechanism; the current one uses `pwreset-otp:<email>`.
+
+---
+
+## Travel Operations — Assignment, Trip, Notification, Review, Reports (Phase 2)
+
+Everything above ends at "a guide is bookable and a tourist can pay for a booking." This phase adds
+the **operational layer** on top: turning a paid `Booking` into a tracked trip with guide
+acceptance, completion, and a review/rating loop, plus admin visibility over all of it.
+
+```
+Tourist → Booking → Admin assigns a guide → Guide accepts/declines → Trip starts → Trip completes → Review
+```
+
+**Hard constraint this phase was built under**: Auth, JWT, RBAC, OTP, Payment, Membership, Guide
+Profile, Tourist Profile, Booking, and the shared Dashboard layout were **never modified** — only
+five new collections were added (`Assignment`, `Trip`, `Notification`, `Review`, `ActivityLog`), and
+everything else is reused strictly through its existing exported service methods (e.g.
+`BookingService.allocateGuide`) or read directly, never by editing those files.
+
+### The state machine
+
+```
+Booking.status:  payment-pending → successful/confirmed → allocated ─────────→ completed
+                                          │                    ▲                    ▲
+Assignment.status:                        └── admin "assign guide" ──┘                    │
+                    creates Assignment(pending), calls the existing                       │
+                    BookingService.allocateGuide() (unmodified)                           │
+                                                                                            │
+                    pending → accepted  ──→ auto-creates a Trip ───────────────────────────┤
+                    pending → declined  ──→ Booking reverted directly to 'successful'      │
+                                             (no existing Booking method covers this, so    │
+                                             Assignment writes BookingDB directly — the      │
+                                             one transition with no reuse precedent)         │
+                    reassign-while-pending → new Assignment created; if the booking is       │
+                                             already 'allocated', BookingDB.allocated_guide  │
+                                             is updated directly (allocateGuide() would      │
+                                             reject a booking already 'allocated')            │
+                                                                                            │
+Trip.status:        not-started → in-progress → completed ────────────────────────────────┘
+                                                  (this is the first code path anywhere that
+                                                   ever sets Booking.status = 'completed')
+```
+
+Reassignment is blocked once an `Assignment` reaches `accepted` (its `Trip` already exists) —
+reassigning an in-flight trip is out of scope.
+
+### Assignment (`backend/src/services/assignment.ts`)
+
+```
+Assignment { booking, guide, assignedBy, status: 'pending'|'accepted'|'declined'|'reassigned',
+             adminNotes?, declineReason?, respondedAt?, previousAssignment? }
+```
+
+A partial-unique index on `{ booking }` (only for `status in [pending, accepted]`) guarantees at
+the database level that a booking never has two live assignments at once. `createAssignment` calls
+the existing `BookingService.allocateGuide()` — meaning it inherits that method's own guard (the
+booking must already be `successful`/`confirmed`); a decline reverts the booking with a direct
+write since no existing method models "un-allocate."
+
+### Trip (`backend/src/services/trip.ts`)
+
+```
+Trip { booking (unique), assignment, guide, status: 'not-started'|'in-progress'|'completed'|'cancelled',
+       startedAt?, completedAt?, startNotes?, completionNotes? }
+```
+
+`TripService.createFromAssignment()` has no HTTP route of its own — it's called internally by
+`AssignmentService` the moment a guide accepts. `complete()` is the first code path in the whole
+codebase to ever write `Booking.status = 'completed'`.
+
+### Review (`backend/src/services/review.ts`)
+
+```
+Review { booking (unique), guide, tourist, rating (1-5), comment?, isHidden, moderatedBy?, moderatedAt? }
+```
+
+A review can only be created on a `completed` booking with an `allocated_guide`, and only by that
+booking's tourist — one review per booking, enforced by a unique index. **A guide's average
+rating/total review count is computed live via a Mongo aggregation every time it's requested — it
+is never written onto the `Guide` document.** This was a deliberate choice: the `Guide` model is on
+the do-not-modify list, and this phase's public-facing surface is intentionally scoped to the new
+dashboard pages only (existing public guide pages don't show ratings yet).
+
+### Notification (`backend/src/services/notification.ts` + `notificationWatcher.ts`)
+
+```
+Notification { recipient, type, title, message, relatedEntity?, dedupeKey (unique), isRead, readAt? }
+```
+
+Most notification types (`guide_assigned`, `guide_accepted`, `guide_declined`, `trip_started`,
+`trip_completed`, `booking_updated`, `review_received`) are created directly by the
+Assignment/Trip/Review services at the moment the underlying event happens. Two types —
+`payment_successful` and `membership_expiring` — originate from events inside `services/payment.ts`
+and `Guide.membershipExpiryDate`, both files this phase must not touch. Instead,
+**`notificationWatcher.ts` runs a plain `setInterval` (started from `server.ts`, default every 5
+minutes, no cron dependency added) that read-only polls `Transaction` and `Guide`** and creates the
+corresponding notifications itself. Every notification — direct or watcher-created — goes through
+`NotificationService.create()`, which relies entirely on the unique `dedupeKey` index (e.g.
+`payment_successful:<transactionId>`, `membership_expiring:<guideId>:<7|3|1>`) for idempotency: a
+duplicate write is silently swallowed (Mongo error 11000 → returns `null`), so re-scanning the same
+data on every tick is harmless.
+
+### Reports & Analytics (`backend/src/services/report.ts`)
+
+No new collection — pure read-only Mongo aggregation over `Assignment`/`Trip`/`Review`/
+`ActivityLog` plus the existing `Booking`/`Transaction`/`Guide`/`Tourist` collections. Powers the
+new `dashboard/admin` KPI overview, the trend chart, and the "top guides" table.
+
+### ActivityLog (`backend/src/services/activityLog.ts`)
+
+Shared audit trail written by every service above (`action` strings like `assignment.created`,
+`trip.completed`, `review.created`, `notification.payment_successful`). `ActivityLogService.log()`
+is wrapped in a try/catch and **never throws** — a logging failure must never break the caller's
+actual business transaction.
+
+### Frontend surface
+
+New Redux slice + thunk pair per domain (`assignmentSlice`, `tripSlice`, `reviewSlice`,
+`notificationSlice`, `reportSlice`), all calling the existing `apiService` axios client — no new
+HTTP client was introduced. New pages live under `dashboard/admin/**` (a fresh section reusing the
+existing `DashboardLayout`/`Sidebar`/`Header`), `dashboard/guide/**`, and `dashboard/user/**`, plus
+one shared `dashboard/notifications` page used by all three roles. `dashboard/admin/**` pages each
+carry their own client-side `role !== 'admin'` guard, since the shared `dashboard/layout.tsx` only
+checks *authentication*, not role — see [Frontend Route Map](#frontend-route-map).
+
+The pre-existing `Sidebar.tsx` nav arrays gained new entries for all of the above (Assignments,
+Trips, Reviews, Reports, Activity Log, Notifications) — additive only; no existing entry was
+changed, including the legacy `Dashboard → /admin` link.
+
+---
+
+## Testing
+
+Backend tests live in `backend/tests/`, run via Jest (`pnpm test` / `pnpm test:unit` /
+`pnpm test:integration` / `pnpm test:coverage`).
+
+```
+tests/
+├── unit/          one function/class at a time, external deps mocked (email, Razorpay, ...)
+│   ├── services/       business-logic tests — e.g. assignment.test.ts, trip.test.ts, review.test.ts,
+│   │                   notification.test.ts, activityLog.test.ts, report.test.ts (Phase 2)
+│   ├── modules/        controller + validator tests, per feature folder
+│   ├── middleware/, mongo/, utils/
+├── integration/   full HTTP-route tests through Express (blog, booking, guide, session, package, media)
+├── setup/         db.setup.ts (mongodb-memory-server connect/clear/disconnect), jest.setup.ts, mocks.ts
+└── helpers/       shared fixtures (testUser/testGuide/testAdmin) and mock req/res/next builders
+```
+
+**Why an in-memory database matters here specifically**: `backend/.env` on this machine points at
+the **live production** MongoDB cluster (see [Environment Variables](#environment-variables)).
+`tests/setup/db.setup.ts` spins up a throwaway `mongodb-memory-server` instance for every test run
+instead — this is the only way to exercise real Mongoose/service behavior without touching
+production data. Never point a test at `DATABASE_URL` directly.
+
+Phase 2 service tests (`assignment.test.ts`, `trip.test.ts`, `review.test.ts`,
+`notification.test.ts`, `activityLog.test.ts`, `report.test.ts`) follow the same pattern as the
+pre-existing `booking.test.ts`/`guide.test.ts`: real fixture documents created via the actual
+Mongoose models, `jest.mock('@provider/email', ...)` to stub outgoing email, and assertions against
+both the returned value and the resulting DB state. `notification.test.ts` specifically exercises
+the `dedupeKey` idempotency guarantee (a duplicate `create()` call returns `null` and does not
+insert a second row) since that's the correctness property the notification watcher depends on.

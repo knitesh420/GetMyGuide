@@ -1,10 +1,12 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import { AdminBookingSummary, AssignableGuide, Assignment } from "@/lib/data";
+import { AdminBookingSummary, AssignableGuide, Assignment, GuideAvailabilityInfo, GuideCalendar } from "@/lib/data";
 import {
   createAssignment,
   fetchAssignableGuides,
   fetchAssignments,
   fetchBookingsAwaitingAssignment,
+  fetchGuideCalendar,
+  fetchGuidesAvailability,
   fetchMyAssignments,
   reassignGuide,
   respondToAssignment,
@@ -15,6 +17,8 @@ interface AssignmentState {
   myAssignments: Assignment[];
   assignableGuides: AssignableGuide[];
   bookingsAwaitingAssignment: AdminBookingSummary[];
+  guidesAvailability: GuideAvailabilityInfo[];
+  selectedGuideCalendar: GuideCalendar | null;
   loading: boolean;
   error: string | null;
   pagination: { total: number; page: number; totalPages: number };
@@ -25,6 +29,8 @@ const initialState: AssignmentState = {
   myAssignments: [],
   assignableGuides: [],
   bookingsAwaitingAssignment: [],
+  guidesAvailability: [],
+  selectedGuideCalendar: null,
   loading: false,
   error: null,
   pagination: { total: 0, page: 1, totalPages: 0 },
@@ -77,6 +83,14 @@ const assignmentSlice = createSlice({
         if (myIndex !== -1) state.myAssignments[myIndex] = updated;
         const allIndex = state.assignments.findIndex((a) => a._id === updated._id);
         if (allIndex !== -1) state.assignments[allIndex] = updated;
+      })
+      .addCase(fetchGuidesAvailability.fulfilled, (state, action) => {
+        state.loading = false;
+        state.guidesAvailability = action.payload;
+      })
+      .addCase(fetchGuideCalendar.fulfilled, (state, action) => {
+        state.loading = false;
+        state.selectedGuideCalendar = action.payload;
       })
       .addMatcher(
         (action) => action.type.startsWith("assignment/") && action.type.endsWith("/pending"),

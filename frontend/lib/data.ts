@@ -368,6 +368,8 @@ export interface GuideState {
     page: number;
     totalPages: number;
   };
+  myLeaves: GuideLeave[];
+  myCalendar: GuideCalendar | null;
 }
 
 export interface tourGuideBooking {
@@ -540,6 +542,59 @@ export interface Trip {
   completionNotes?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// --- Guide Availability & Booking Conflict System ---
+
+export type GuideLeaveType = "vacation" | "emergency";
+export type GuideLeaveStatus = "active" | "cancelled";
+
+export interface GuideLeave {
+  _id: string;
+  guide: string;
+  type: GuideLeaveType;
+  startDate: string;
+  endDate: string;
+  reason?: string;
+  status: GuideLeaveStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GuideBookedRange {
+  start: string;
+  end: string;
+  bookingId: string;
+  city: string;
+  status: string;
+}
+
+export interface GuideCalendar {
+  unavailableDates: string[];
+  leaves: GuideLeave[];
+  bookedRanges: GuideBookedRange[];
+}
+
+export interface GuideAvailabilityConflict {
+  type: "assignment" | "leave" | "unavailable_date";
+  start: string;
+  end: string;
+  reason?: string;
+  bookingId?: string;
+  city?: string;
+}
+
+export interface GuideAvailabilityInfo {
+  accountId: string;
+  name: string;
+  email: string;
+  phone?: string;
+  city: string;
+  languages: string[];
+  isVisible: boolean;
+  membershipExpiryDate: string | null;
+  isAvailable: boolean;
+  conflicts: GuideAvailabilityConflict[];
 }
 
 export type NotificationType =

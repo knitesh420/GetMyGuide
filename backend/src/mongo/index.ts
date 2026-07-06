@@ -9,6 +9,7 @@ export {
 	ContactInquiryDB,
 	GuideDB,
 	GuideEnrollmentDB,
+	GuideLeaveDB,
 	NotificationDB,
 	PackageDB,
 	PendingRegistrationDB,

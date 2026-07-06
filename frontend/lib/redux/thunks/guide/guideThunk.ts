@@ -3,6 +3,7 @@ import { apiService } from "@/lib/service/api";
 import { GuideProfile } from "@/lib/data";
 import { AdminLocation, LanguageOption } from '@/lib/data';
 import { tourGuideBooking } from '@/lib/data';
+import { GuideCalendar, GuideLeave, GuideLeaveType } from '@/lib/data';
 
 const handleError = (err: any) =>
   err.response?.data?.message || err.message || "An error occurred";
@@ -249,6 +250,62 @@ export const fetchMyBookingsThunk = createAsyncThunk<tourGuideBooking[]>(
       return response.data;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch bookings');
+    }
+  }
+);
+
+// --- Guide Availability & Booking Conflict System ---
+
+// Create a vacation/emergency leave period for the current guide
+export const createMyLeave = createAsyncThunk<
+  GuideLeave,
+  { type: GuideLeaveType; startDate: string; endDate: string; reason?: string }
+>("guide/createMyLeave", async (payload, { rejectWithValue }) => {
+  try {
+    const response = await apiService.post<GuideLeave>("/guide-availability/leave", payload);
+    return response.data!;
+  } catch (err: any) {
+    return rejectWithValue(handleError(err));
+  }
+});
+
+// List the current guide's own leaves (vacation/emergency)
+export const fetchMyLeaves = createAsyncThunk<GuideLeave[], void>(
+  "guide/fetchMyLeaves",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await apiService.get<GuideLeave[]>("/guide-availability/leave/my");
+      return response.data ?? [];
+    } catch (err: any) {
+      return rejectWithValue(handleError(err));
+    }
+  }
+);
+
+// Cancel a future leave belonging to the current guide — the record is kept
+// (status flips to 'cancelled') rather than deleted, so it stays visible in
+// the guide's leave history.
+export const cancelMyLeave = createAsyncThunk<GuideLeave, string>(
+  "guide/cancelMyLeave",
+  async (leaveId, { rejectWithValue }) => {
+    try {
+      const response = await apiService.delete<GuideLeave>(`/guide-availability/leave/${leaveId}`);
+      return response.data!;
+    } catch (err: any) {
+      return rejectWithValue(handleError(err));
+    }
+  }
+);
+
+// Merged calendar for the current guide: unavailable dates + leaves + booked ranges
+export const fetchMyGuideCalendar = createAsyncThunk<GuideCalendar, void>(
+  "guide/fetchMyCalendar",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await apiService.get<GuideCalendar>("/guide-availability/calendar/me");
+      return response.data!;
+    } catch (err: any) {
+      return rejectWithValue(handleError(err));
     }
   }
 );

@@ -1,4 +1,5 @@
 import { AccountDB, AssignmentDB, BookingDB, GuideDB } from '@mongo';
+import IBooking from '@mongo/types/booking';
 import {
 	sendBookingAllocatedGuideEmail,
 	sendBookingAllocatedTouristEmail,
@@ -6,12 +7,39 @@ import {
 	sendGuideAssignedEmail,
 } from '@provider/email';
 import { JWTPayload } from '@services/jwt';
+import { getBookingOccupiedRange } from '@utils/bookingOccupiedRange';
 import { Types } from 'mongoose';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from 'node-be-utilities';
 import ActivityLogService from './activityLog';
 import BookingService from './booking';
+import GuideAvailabilityService, { ConflictDetail } from './guideAvailability';
 import NotificationService from './notification';
 import TripService from './trip';
+
+function conflictSummary(conflicts: ConflictDetail[]): string {
+	return conflicts.map((c) => c.reason).join('; ');
+}
+
+async function assertNoConflictOrOverride(params: {
+	guideId: string;
+	booking: Pick<IBooking, 'travel_details' | 'booking_configuration'>;
+	excludeAssignmentId?: string;
+	override?: boolean;
+}): Promise<ConflictDetail[]> {
+	const { guideId, booking, excludeAssignmentId, override } = params;
+	const range = getBookingOccupiedRange(booking);
+	const { hasConflict, conflicts } = await GuideAvailabilityService.checkGuideConflict(
+		guideId,
+		range,
+		excludeAssignmentId
+	);
+
+	if (hasConflict && !override) {
+		throw new ConflictError(`Guide is not available for these dates: ${conflictSummary(conflicts)}`);
+	}
+
+	return conflicts;
+}
 
 interface PageParams {
 	page?: number;
@@ -34,9 +62,11 @@ class AssignmentService {
 		bookingId: string;
 		guideId: string;
 		adminNotes?: string;
+		override?: boolean;
+		overrideReason?: string;
 		adminUserId: string;
 	}) {
-		const { bookingId, guideId, adminNotes, adminUserId } = params;
+		const { bookingId, guideId, adminNotes, override, overrideReason, adminUserId } = params;
 
 		const booking = await BookingDB.findById(bookingId);
 		if (!booking) {
@@ -52,6 +82,11 @@ class AssignmentService {
 		}
 
 		const guide = await assertGuideAccount(guideId);
+
+		// Guide must not already be occupied (another active assignment, an
+		// active leave, or a self-marked unavailable date) for this booking's
+		// dates — unless the admin explicitly overrides with a reason.
+		const conflicts = await assertNoConflictOrOverride({ guideId, booking, override });
 
 		// Reuses the existing, unmodified BookingService.allocateGuide — flips
 		// Booking to 'allocated' and sends its existing allocation emails.
@@ -73,6 +108,17 @@ class AssignmentService {
 			description: `Assigned guide ${guide.name} to booking ${bookingId}`,
 			metadata: { bookingId, guideId },
 		});
+
+		if (conflicts.length > 0) {
+			await ActivityLogService.log({
+				actor: adminUserId,
+				action: 'assignment.conflict_overridden',
+				targetType: 'Assignment',
+				targetId: assignment._id.toString(),
+				description: `Admin overrode an availability conflict to assign guide ${guide.name}: ${overrideReason}`,
+				metadata: { bookingId, guideId, conflicts, overrideReason },
+			});
+		}
 
 		await NotificationService.create({
 			recipient: guideId,
@@ -229,9 +275,11 @@ class AssignmentService {
 		currentAssignmentId: Types.ObjectId;
 		newGuideId: string;
 		adminNotes?: string;
+		override?: boolean;
+		overrideReason?: string;
 		adminUserId: string;
 	}) {
-		const { currentAssignmentId, newGuideId, adminNotes, adminUserId } = params;
+		const { currentAssignmentId, newGuideId, adminNotes, override, overrideReason, adminUserId } = params;
 
 		const current = await AssignmentDB.findById(currentAssignmentId);
 		if (!current) {
@@ -249,6 +297,17 @@ class AssignmentService {
 		if (!booking) {
 			throw new NotFoundError('Booking not found');
 		}
+
+		// New guide must not already be occupied for this booking's dates —
+		// unless the admin explicitly overrides with a reason. Excludes the
+		// assignment being reassigned away so its own (soon-to-be-stale) hold
+		// on the calendar can't conflict against itself.
+		const conflicts = await assertNoConflictOrOverride({
+			guideId: newGuideId,
+			booking,
+			excludeAssignmentId: current._id.toString(),
+			override,
+		});
 
 		current.status = 'reassigned';
 		current.respondedAt = current.respondedAt ?? new Date();
@@ -299,6 +358,17 @@ class AssignmentService {
 			description: `Reassigned booking ${booking._id.toString()} from guide ${current.guide.toString()} to ${guide.name}`,
 			metadata: { previousAssignmentId: current._id.toString() },
 		});
+
+		if (conflicts.length > 0) {
+			await ActivityLogService.log({
+				actor: adminUserId,
+				action: 'assignment.conflict_overridden',
+				targetType: 'Assignment',
+				targetId: newAssignment._id.toString(),
+				description: `Admin overrode an availability conflict to reassign guide ${guide.name}: ${overrideReason}`,
+				metadata: { bookingId: booking._id.toString(), guideId: newGuideId, conflicts, overrideReason },
+			});
+		}
 
 		await NotificationService.create({
 			recipient: newGuideId,

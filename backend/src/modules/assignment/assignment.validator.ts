@@ -6,14 +6,23 @@ export type AssignmentCreateValidationResult = {
 	bookingId: string;
 	guideId: string;
 	adminNotes?: string;
+	override?: boolean;
+	overrideReason?: string;
 };
 
 export async function AssignmentCreateValidator(req: Request, res: Response, next: NextFunction) {
-	const reqValidator = z.object({
-		bookingId: z.string().trim().min(1, 'Booking ID is required'),
-		guideId: z.string().trim().min(1, 'Guide ID is required'),
-		adminNotes: z.string().trim().optional(),
-	});
+	const reqValidator = z
+		.object({
+			bookingId: z.string().trim().min(1, 'Booking ID is required'),
+			guideId: z.string().trim().min(1, 'Guide ID is required'),
+			adminNotes: z.string().trim().optional(),
+			override: z.boolean().optional(),
+			overrideReason: z.string().trim().optional(),
+		})
+		.refine((data) => !data.override || !!data.overrideReason, {
+			message: 'A reason is required to override an availability conflict',
+			path: ['overrideReason'],
+		});
 
 	const reqValidatorResult = reqValidator.safeParse(req.body);
 
@@ -56,13 +65,22 @@ export async function AssignmentRespondValidator(req: Request, res: Response, ne
 export type AssignmentReassignValidationResult = {
 	newGuideId: string;
 	adminNotes?: string;
+	override?: boolean;
+	overrideReason?: string;
 };
 
 export async function AssignmentReassignValidator(req: Request, res: Response, next: NextFunction) {
-	const reqValidator = z.object({
-		newGuideId: z.string().trim().min(1, 'New guide ID is required'),
-		adminNotes: z.string().trim().optional(),
-	});
+	const reqValidator = z
+		.object({
+			newGuideId: z.string().trim().min(1, 'New guide ID is required'),
+			adminNotes: z.string().trim().optional(),
+			override: z.boolean().optional(),
+			overrideReason: z.string().trim().optional(),
+		})
+		.refine((data) => !data.override || !!data.overrideReason, {
+			message: 'A reason is required to override an availability conflict',
+			path: ['overrideReason'],
+		});
 
 	const reqValidatorResult = reqValidator.safeParse(req.body);
 

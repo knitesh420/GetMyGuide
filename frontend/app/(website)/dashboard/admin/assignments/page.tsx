@@ -9,6 +9,7 @@ import {
   fetchAssignableGuides,
   fetchAssignments,
   fetchBookingsAwaitingAssignment,
+  fetchGuidesAvailability,
   reassignGuide,
 } from "@/lib/redux/thunks/assignment/assignmentThunks";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,7 +42,7 @@ export default function AdminAssignmentsPage() {
   const router = useRouter();
   const { user, isAuthenticated, loading: authLoading } = useAuth();
 
-  const { assignments, assignableGuides, bookingsAwaitingAssignment, loading } = useSelector(
+  const { assignments, assignableGuides, bookingsAwaitingAssignment, guidesAvailability, loading } = useSelector(
     (state: RootState) => state.assignments,
   );
 
@@ -71,9 +72,11 @@ export default function AdminAssignmentsPage() {
     setReassignId(null);
   };
 
-  const handleAssign = async (guideId: string, adminNotes?: string) => {
+  const handleAssign = async (guideId: string, adminNotes?: string, override?: boolean, overrideReason?: string) => {
     if (reassignId) {
-      const result = await dispatch(reassignGuide({ id: reassignId, newGuideId: guideId, adminNotes }));
+      const result = await dispatch(
+        reassignGuide({ id: reassignId, newGuideId: guideId, adminNotes, override, overrideReason }),
+      );
       if (reassignGuide.fulfilled.match(result)) {
         showToast.success("Guide reassigned");
         closeModal();
@@ -85,7 +88,9 @@ export default function AdminAssignmentsPage() {
     }
 
     if (!selectedBookingId) return;
-    const result = await dispatch(createAssignment({ bookingId: selectedBookingId, guideId, adminNotes }));
+    const result = await dispatch(
+      createAssignment({ bookingId: selectedBookingId, guideId, adminNotes, override, overrideReason }),
+    );
     if (createAssignment.fulfilled.match(result)) {
       showToast.success("Guide assigned");
       closeModal();
@@ -128,6 +133,7 @@ export default function AdminAssignmentsPage() {
                       setSelectedBookingId(booking.id);
                       setReassignId(null);
                       setModalOpen(true);
+                      dispatch(fetchGuidesAvailability({ startDate: booking.travel_details.date }));
                     }}
                   >
                     Assign Guide
@@ -183,6 +189,9 @@ export default function AdminAssignmentsPage() {
                               setReassignId(assignment._id);
                               setSelectedBookingId(null);
                               setModalOpen(true);
+                              if (booking) {
+                                dispatch(fetchGuidesAvailability({ startDate: booking.travel_details.date }));
+                              }
                             }}
                           >
                             Reassign
@@ -210,6 +219,7 @@ export default function AdminAssignmentsPage() {
             ? "Choose a new guide to propose for this booking."
             : "Choose a guide to propose for this booking."
         }
+        availability={guidesAvailability}
       />
     </div>
   );

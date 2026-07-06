@@ -7,6 +7,7 @@ export { default as BookingDB } from './Booking';
 export { default as ContactInquiryDB } from './ContactInquiry';
 export { default as GuideDB } from './Guide';
 export { default as GuideEnrollmentDB } from './GuideEnrollment';
+export { default as GuideLeaveDB } from './GuideLeave';
 export { default as IdempotencyKeyDB } from './IdempotencyKey';
 export { default as NotificationDB } from './Notification';
 export { default as PackageDB } from './Package';

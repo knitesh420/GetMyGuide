@@ -30,6 +30,7 @@ const adminNavigation = [
   { name: "Dashboard", href: "/admin", icon: LayoutGrid },
   { name: "Travel Ops Dashboard", href: "/dashboard/admin", icon: LayoutGrid },
   { name: "Assignments", href: "/dashboard/admin/assignments", icon: ClipboardList },
+  { name: "Guide Calendar", href: "/dashboard/admin/guide-calendar", icon: Calendar },
   { name: "Trips", href: "/dashboard/admin/trips", icon: MapPinned },
   { name: "Reviews", href: "/dashboard/admin/reviews", icon: Star },
   { name: "Reports", href: "/dashboard/admin/reports", icon: BarChart3 },

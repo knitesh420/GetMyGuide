@@ -7,6 +7,7 @@ export type ActivityLogTargetType =
 	| 'Notification'
 	| 'Review'
 	| 'Guide'
+	| 'GuideLeave'
 	| 'Transaction';
 
 export default interface IActivityLog extends Document {
