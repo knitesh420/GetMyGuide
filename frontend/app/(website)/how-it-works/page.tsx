@@ -164,7 +164,8 @@ export default function HowItWorksPage() {
       <main>
         <HeroSection
           backgroundImage={IMAGES.howItWorkHero}
-          imageContainerClassName="w-full aspect-[2/1]"
+          imageContainerClassName="w-full aspect-[4/3] sm:aspect-[2/1]"
+          imageClassName="object-[95%_35%] sm:object-center"
           overlayOpacity={0}
           dimImage={false}
         />
