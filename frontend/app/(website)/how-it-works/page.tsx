@@ -163,10 +163,10 @@ export default function HowItWorksPage() {
     <div className="min-h-screen bg-background">
       <main>
         <HeroSection
-          badgeText={t("how_badge")}
-          title={t("how_title")}
-          description={t("how_desc")}
-          backgroundImage={IMAGES.scene3}
+          backgroundImage={IMAGES.howItWorkHero}
+          imageContainerClassName="w-full aspect-[2/1]"
+          overlayOpacity={0}
+          dimImage={false}
         />
 
         <section className="py-16 md:py-24">
@@ -190,7 +190,7 @@ export default function HowItWorksPage() {
                         src={IMAGES[`scene${step.step}` as keyof typeof IMAGES] as string}
                         alt={t(step.titleKey)}
                         fill
-                        className="object-contain"
+                        className="object-cover"
                       />
                     </div>
                   </div>

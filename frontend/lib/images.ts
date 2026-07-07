@@ -8,6 +8,7 @@ export const IMAGES = {
   scene3: `${BASE}/3.jpg`,
   scene4: `${BASE}/4.jpg`,
   scene5: `${BASE}/5.jpg`,
+  howItWorkHero: `${BASE}/how-it-work.jpg`,
 
   // About page images
   aboutHero: `${BASE}/about-hero.jpg`,
