@@ -1,143 +1,3 @@
-// "use client";
-
-// import { useDispatch, useSelector } from "react-redux";
-// import { useRouter } from "next/navigation";
-// import { AppDispatch, RootState } from "../store";
-// import {
-//   loginUser,
-//   registerUser,
-//   verifyOtpAndRegister,
-//   sendOTP,
-//   getCurrentUser,
-//   logoutUser,
-//   refreshToken,
-//   updateUser,
-//   setError,
-//   clearAuth,
-// } from "@/lib/redux/authSlice";
-// import { LoginRequest, OTPRequest, User } from "@/types/auth";
-// import { showToast } from "@/lib/utils/toastHelper";
-// import { useCallback } from "react"; // Import useCallback
-
-// const ROLE_ROUTES: Record<string, string> = {
-//   guide: "/dashboard/guide",
-//   admin: "/admin",
-//   manager: "/admin",
-//   user: "/dashboard/user",
-//   tourist: "/dashboard/user", // Backend uses 'tourist' role
-// };
-
-// export const useAuth = () => {
-//   const dispatch = useDispatch<AppDispatch>();
-//   const router = useRouter();
-//   const { user, loading, error, isAuthenticated } = useSelector(
-//     (state: RootState) => state.auth,
-//   );
-
-//   const login = useCallback(
-//     async (credentials: LoginRequest) => {
-//       const result = await dispatch(loginUser(credentials)).unwrap();
-
-//       if (result) {
-//         // Extract user data from the response
-//         // Backend returns { success: true, data: { token, user } }
-//         const userData = result.user;
-//         const role = userData?.role ?? "user";
-//         const userName = userData?.name || "User";
-
-//         showToast.success(`Welcome back, ${userName}!`);
-
-//         // Redirect based on role
-//         const redirectPath = ROLE_ROUTES[role] ?? "/dashboard";
-//         console.log(
-//           "Login successful - Role:",
-//           role,
-//           "Redirecting to:",
-//           redirectPath,
-//         );
-//         router.push(redirectPath);
-//       } else {
-//         showToast.error((result.payload as string) || "Login failed");
-//       }
-//       return result;
-    
-//     [dispatch, router],
-//   );
-
-//   const sendOtp = useCallback(
-//     async (data: OTPRequest) => {
-//       const result = await dispatch(sendOTP(data));
-//       if (sendOTP.fulfilled.match(result)) {
-//         showToast.success("OTP sent successfully to your email!");
-//       } else {
-//         showToast.error((result.payload as string) || "Failed to send OTP");
-//       }
-//       return result;
-//     },
-//     [dispatch],
-//   );
-
-//   const verifyAndRegister = useCallback(
-//     async (formData: FormData) => {
-//       const result = await dispatch(verifyOtpAndRegister(formData));
-//       if (verifyOtpAndRegister.fulfilled.match(result)) {
-//         showToast.success("Registration successful! Redirecting...");
-//       } else {
-//         showToast.error((result.payload as string) || "Registration failed");
-//       }
-//       return result;
-//     },
-//     [dispatch],
-//   );
-
-//   const register = useCallback(
-//     async (data: any) => {
-//       const result = await dispatch(registerUser(data));
-//       if (registerUser.fulfilled.match(result)) {
-//         showToast.success("Registration successful! Redirecting...");
-//       } else {
-//         showToast.error((result.payload as string) || "Registration failed");
-//       }
-//       return result;
-//     },
-//     [dispatch],
-//   );
-
-//   const fetchCurrentUser = useCallback(async () => {
-//     // This function should only fetch the user, not handle redirects.
-//     // Page-level protection should handle redirects.
-//     return dispatch(getCurrentUser());
-//   }, [dispatch]);
-
-//   const refresh = useCallback(async () => {
-//     return dispatch(refreshToken());
-//   }, [dispatch]);
-
-//   const logout = useCallback(async () => {
-//     await dispatch(logoutUser());
-//     showToast.info("Logged out successfully. See you soon!");
-//     router.push("/");
-//   }, [dispatch, router]);
-
-//   return {
-//     user,
-//     loading,
-//     error,
-//     isAuthenticated,
-//     login,
-//     register,
-//     sendOtp,
-//     verifyAndRegister,
-//     fetchCurrentUser,
-//     refresh,
-//     logout,
-//     clearAuthError: () => dispatch(setError(null)),
-//     updateAuthUser: (data: Partial<User>) => dispatch(updateUser(data)),
-//     clearAuth: () => dispatch(clearAuth()),
-//   };
-// };
-
-
 "use client";
 
 import { useDispatch, useSelector } from "react-redux";
@@ -148,6 +8,10 @@ import {
   registerUser,
   sendLoginOtp,
   loginWithOtp,
+  sendRegistrationOtp as sendRegistrationOtpThunk,
+  verifyRegistrationOtp as verifyRegistrationOtpThunk,
+  sendForgotPasswordOtp as sendForgotPasswordOtpThunk,
+  resetPasswordWithOtp as resetPasswordWithOtpThunk,
   getCurrentUser,
   logoutUser,
   refreshToken,
@@ -155,7 +19,7 @@ import {
   setError,
   clearAuth,
 } from "@/lib/redux/authSlice";
-import { LoginRequest, User } from "@/types/auth";
+import { LoginRequest, RegisterSendOtpRequest, User } from "@/types/auth";
 import { showToast } from "@/lib/utils/toastHelper";
 import { useCallback } from "react";
 
@@ -237,6 +101,68 @@ export const useAuth = () => {
     [dispatch],
   );
 
+  const sendRegistrationOtp = useCallback(
+    async (data: RegisterSendOtpRequest) => {
+      try {
+        await dispatch(sendRegistrationOtpThunk(data)).unwrap();
+        showToast.success("Verification code sent to your email!");
+        return true;
+      } catch (err: any) {
+        showToast.error(err || "Failed to send verification code");
+        return false;
+      }
+    },
+    [dispatch],
+  );
+
+  const verifyRegistrationOtp = useCallback(
+    async (email: string, otp: string) => {
+      try {
+        const result = await dispatch(verifyRegistrationOtpThunk({ email, otp })).unwrap();
+        const userData = result.user;
+        showToast.success(`Welcome, ${userData?.name || "there"}!`);
+        const role = userData?.role ?? "tourist";
+        router.push(ROLE_ROUTES[role] ?? "/dashboard");
+        return result;
+      } catch (err: any) {
+        showToast.error(err || "Invalid or expired code");
+      }
+    },
+    [dispatch, router],
+  );
+
+  const sendForgotPasswordOtp = useCallback(
+    async (email: string) => {
+      try {
+        await dispatch(sendForgotPasswordOtpThunk({ email })).unwrap();
+        showToast.success("If that email is registered, a reset code has been sent.");
+        return true;
+      } catch (err: any) {
+        showToast.error(err || "Failed to send reset code");
+        return false;
+      }
+    },
+    [dispatch],
+  );
+
+  const resetPasswordWithOtp = useCallback(
+    async (email: string, otp: string, newPassword: string) => {
+      try {
+        const result = await dispatch(
+          resetPasswordWithOtpThunk({ email, otp, newPassword }),
+        ).unwrap();
+        showToast.success("Password reset! You're now logged in.");
+        const userData = result.user;
+        const role = userData?.role ?? "tourist";
+        router.push(ROLE_ROUTES[role] ?? "/dashboard");
+        return result;
+      } catch (err: any) {
+        showToast.error(err || "Invalid or expired code");
+      }
+    },
+    [dispatch, router],
+  );
+
   const fetchCurrentUser = useCallback(async () => {
     return dispatch(getCurrentUser());
   }, [dispatch]);
@@ -260,6 +186,10 @@ export const useAuth = () => {
     sendOtp,
     verifyOtpLogin,
     register,
+    sendRegistrationOtp,
+    verifyRegistrationOtp,
+    sendForgotPasswordOtp,
+    resetPasswordWithOtp,
     fetchCurrentUser,
     refresh,
     logout,

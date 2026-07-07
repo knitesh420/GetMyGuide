@@ -12,47 +12,22 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { user, isAuthenticated, loading, fetchCurrentUser } = useAuth();
-  const [isVerifying, setIsVerifying] = useState(true);
+  const { user, isAuthenticated, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    // Check authentication status
-    const verifyAuth = async () => {
-      // Check if token exists in localStorage
-      const token = localStorage.getItem("authToken");
-
-      if (!token) {
-        // No token, redirect to login immediately
-        setIsVerifying(false);
-        router.push("/login?message=Please login to access this page");
-        return;
-      }
-
-      // Token exists, fetch current user only if we don't have user data
-      if (!user) {
-        try {
-          await fetchCurrentUser();
-        } catch (error) {
-          console.error("Failed to fetch user:", error);
-        }
-      }
-
-      setIsVerifying(false);
-    };
-
-    verifyAuth();
-  }, [fetchCurrentUser, router, user]);
-
-  useEffect(() => {
-    // Redirect if not authenticated after verification
-    if (!isVerifying && !loading && isAuthenticated === false) {
-      router.push("/login?message=Please login to access this page");
+    // isAuthenticated starts out `null` (unknown) until the app-wide
+    // AuthInitializer's cookie-based session check resolves — only redirect
+    // once we actually know the visitor isn't logged in.
+    if (isAuthenticated === false) {
+      router.push("/signin?message=Please login to access this page");
     }
-  }, [isAuthenticated, isVerifying, loading, router]);
+  }, [isAuthenticated, router]);
 
-  // Show loader while verifying or loading
-  if (isVerifying || loading) {
+  // Still resolving the session (or a session-affecting request is in
+  // flight) — show a loader instead of flashing content or redirecting
+  // prematurely.
+  if (isAuthenticated === null || loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
@@ -60,7 +35,7 @@ export default function DashboardLayout({
     );
   }
 
-  // If not authenticated, show nothing (will redirect)
+  // Not authenticated — the redirect above will fire; render nothing meanwhile.
   if (!isAuthenticated || !user) {
     return null;
   }

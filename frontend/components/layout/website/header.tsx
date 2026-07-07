@@ -81,7 +81,7 @@ export function Header() {
     setIsMenuOpen(false);
   }, [pathname]);
 
-  const handleLogin = () => router.push("/login");
+  const handleLogin = () => router.push("/signin");
   const handleLogout = async () => { await logout(); setIsProfileOpen(false); };
   const handleProfileClick = () => {
     if (user) {

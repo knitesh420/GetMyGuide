@@ -7,6 +7,7 @@ import configServer from './server-config';
 
 import { DATABASE_URL, PORT } from '@config/const';
 import connectDB from '@mongo';
+import { startNotificationWatcher } from '@services/notificationWatcher';
 import { error, info } from 'node-be-utilities';
 
 //  ------------------------- Setup Variables
@@ -19,6 +20,7 @@ let server: ReturnType<typeof app.listen>;
 connectDB(DATABASE_URL)
 	.then(async () => {
 		info('Database connected');
+		startNotificationWatcher();
 		server = app.listen(PORT, async () => {
 			info(`Server started on port ${PORT}`);
 		});

@@ -21,6 +21,10 @@ const AccountSchema = new mongoose.Schema<IAccount>(
 			required: true,
 			trim: true,
 		},
+		countryCode: {
+			type: String,
+			trim: true,
+		},
 		password: {
 			type: String,
 			required: true,
@@ -39,6 +43,14 @@ const AccountSchema = new mongoose.Schema<IAccount>(
 			type: String,
 			enum: ['non_verified', 'verified'],
 			default: 'non_verified',
+		},
+		// Distinct from `status` above, which today also drives guide public-listing
+		// visibility elsewhere — kept separate so email verification can never
+		// accidentally change that. True once the account owner has proven control
+		// of their inbox (registration OTP, or a completed password reset).
+		emailVerified: {
+			type: Boolean,
+			default: false,
 		},
 		paymentStatus: {
 			type: String,
@@ -62,6 +74,14 @@ const AccountSchema = new mongoose.Schema<IAccount>(
 // Hash password before saving
 AccountSchema.pre('save', async function () {
 	if (!this.isModified('password')) {
+		return;
+	}
+
+	// Set by the registration-OTP-verify flow when it hands us a password that
+	// is ALREADY bcrypt-hashed (it was hashed at rest in PendingRegistration).
+	// Without this guard we'd hash an already-hashed value, permanently
+	// breaking login for every account created that way.
+	if (this.$locals?.skipPasswordHash) {
 		return;
 	}
 

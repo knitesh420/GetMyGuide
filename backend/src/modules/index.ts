@@ -1,12 +1,19 @@
 import express from 'express';
 import AdvertisementRoute from './advertisement/advertisement.route';
+import AssignmentRoute from './assignment/assignment.route';
 import BlogRoute from './blog/blog.route';
 import BookingRoute from './booking/booking.route';
 import GuideRoute from './guide/guide.route';
+import GuideAvailabilityRoute from './guideAvailability/guideAvailability.route';
+import NotificationRoute from './notification/notification.route';
 import PackageRoute from './package/package.route';
 import PaymentRoute from './payment/payment.route';
+import ReportRoute from './report/report.route';
+import ReviewRoute from './review/review.route';
 import SessionRoute from './session/session.route';
 import LeadRoute from './lead/lead.route';
+import TouristRoute from './tourist/tourist.route';
+import TripRoute from './trip/trip.route';
 import UserRoute from './user/user.route';
 
 import { NotFoundError, Respond, ServerError } from 'node-be-utilities';
@@ -19,13 +26,20 @@ const router = express.Router();
 router.use('/payment', PaymentRoute);
 
 router.use('/advertisement', AdvertisementRoute);
+router.use('/assignment', AssignmentRoute);
 router.use('/session', SessionRoute);
 router.use('/blog', BlogRoute);
 router.use('/booking', BookingRoute);
 router.use('/guide', GuideRoute);
 router.use('/guides', GuideRoute);
+router.use('/guide-availability', GuideAvailabilityRoute);
+router.use('/notification', NotificationRoute);
 router.use('/package', PackageRoute);
+router.use('/report', ReportRoute);
+router.use('/review', ReviewRoute);
 router.use('/lead', LeadRoute);
+router.use('/tourist', TouristRoute);
+router.use('/trip', TripRoute);
 router.use('/user', UserRoute);
 
 router.post('/upload-media', async function (req, res, next) {

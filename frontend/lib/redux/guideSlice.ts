@@ -12,7 +12,12 @@ import {
   fetchGuidePricingDetails ,
   adminGetAllGuides,
   fetchMyBookingsThunk,
-  fetchGuidesForTour
+  fetchGuidesForTour,
+  confirmGuideMembershipPayment,
+  createMyLeave,
+  fetchMyLeaves,
+  cancelMyLeave,
+  fetchMyGuideCalendar,
 } from "@/lib/redux/thunks/guide/guideThunk";
 
 const initialState: GuideState = {
@@ -25,7 +30,8 @@ const initialState: GuideState = {
   pricingDetails: null,
   pricingLoading: false,
   pagination: { total: 0, page: 1, totalPages: 0 },
-  
+  myLeaves: [],
+  myCalendar: null,
 };
 
 const guideSlice = createSlice({
@@ -66,7 +72,17 @@ const guideSlice = createSlice({
         state.myProfile = action.payload;
       })
       .addCase(updateMyGuideProfile.rejected, setRejected)
-      
+
+      // Handle Confirm Membership Payment (first payment or renewal)
+      .addCase(confirmGuideMembershipPayment.pending, setPending)
+      .addCase(confirmGuideMembershipPayment.fulfilled, (state, action) => {
+        state.loading = false;
+        if (state.myProfile && action.payload) {
+          state.myProfile = { ...state.myProfile, ...action.payload };
+        }
+      })
+      .addCase(confirmGuideMembershipPayment.rejected, setRejected)
+
       // Handle Get All Guides
       .addCase(getAllGuides.pending, setPending)
       .addCase(getAllGuides.fulfilled, (state, action) => {
@@ -188,7 +204,35 @@ const guideSlice = createSlice({
           totalPages: action.payload.totalPages,
         };
       })
-      .addCase(fetchGuidesForTour.rejected, setRejected);
+      .addCase(fetchGuidesForTour.rejected, setRejected)
+
+      // Guide Availability & Booking Conflict System
+      .addCase(createMyLeave.pending, setPending)
+      .addCase(createMyLeave.fulfilled, (state, action) => {
+        state.loading = false;
+        state.myLeaves = [action.payload, ...state.myLeaves];
+      })
+      .addCase(createMyLeave.rejected, setRejected)
+
+      .addCase(fetchMyLeaves.pending, setPending)
+      .addCase(fetchMyLeaves.fulfilled, (state, action) => {
+        state.loading = false;
+        state.myLeaves = action.payload;
+      })
+      .addCase(fetchMyLeaves.rejected, setRejected)
+
+      .addCase(cancelMyLeave.fulfilled, (state, action) => {
+        const index = state.myLeaves.findIndex((l) => l._id === action.payload._id);
+        if (index !== -1) state.myLeaves[index] = action.payload;
+      })
+      .addCase(cancelMyLeave.rejected, setRejected)
+
+      .addCase(fetchMyGuideCalendar.pending, setPending)
+      .addCase(fetchMyGuideCalendar.fulfilled, (state, action) => {
+        state.loading = false;
+        state.myCalendar = action.payload;
+      })
+      .addCase(fetchMyGuideCalendar.rejected, setRejected);
   },
 });
 

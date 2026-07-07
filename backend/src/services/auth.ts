@@ -1,22 +1,43 @@
 import bcrypt from 'bcrypt';
-import { randomBytes, randomInt } from 'crypto';
+import { randomInt } from 'crypto';
 import {
 	BadRequestError,
 	ConflictError,
 	NotFoundError,
 	ServerError,
+	TooManyRequestsError,
 	UnauthorizedError,
 } from 'node-be-utilities';
-import { AccountDB, StorageDB } from '@mongo';
-import { sendAdminOtpEmail, sendPasswordResetEmail } from '@provider/email';
+import { AccountDB, PendingRegistrationDB, StorageDB } from '@mongo';
+import {
+	sendAdminOtpEmail,
+	sendPasswordResetOtpEmail,
+	sendRegistrationOtpEmail,
+} from '@provider/email';
 import JWTService, { JWTPayload } from '@services/jwt';
-import { OTP_MAX_VERIFY_ATTEMPTS, OTP_TTL_SECONDS } from '@config/const';
+import {
+	OTP_MAX_VERIFY_ATTEMPTS,
+	OTP_TTL_SECONDS,
+	PASSWORD_RESET_OTP_TTL_SECONDS,
+	PENDING_REGISTRATION_TTL_SECONDS,
+	REGISTRATION_OTP_RESEND_COOLDOWN_SECONDS,
+	REGISTRATION_OTP_TTL_SECONDS,
+} from '@config/const';
 
 interface SignupData {
 	name: string;
 	email: string;
 	phone: string;
 	password: string;
+}
+
+interface RegisterSendOtpData {
+	name: string;
+	email: string;
+	phone: string;
+	countryCode: string;
+	password: string;
+	accountType: 'tourist' | 'guide';
 }
 
 interface LoginData {
@@ -113,6 +134,13 @@ class AuthService {
 			throw new UnauthorizedError('Admin accounts must log in via OTP');
 		}
 
+		// NOTE: only ever ship this check after backfillEmailVerified.ts has been
+		// run and confirmed against the target database — see that script's
+		// header comment for why.
+		if (!user.emailVerified) {
+			throw new UnauthorizedError('Please verify your email before logging in');
+		}
+
 		return { ...issueTokens(user), user: toPublicUser(user) };
 	}
 
@@ -147,18 +175,26 @@ class AuthService {
 	}
 
 	async forgotPassword(email: string): Promise<void> {
-		const user = await AccountDB.findOne({ email: email.toLowerCase() });
+		const normalized = email.toLowerCase();
+		const user = await AccountDB.findOne({ email: normalized });
 		if (!user) {
 			// Don't reveal existence
 			return;
 		}
 
-		const resetToken = randomBytes(32).toString('hex');
-		await StorageDB.setString('pwreset:' + resetToken, user._id.toString());
+		const otp = randomInt(0, 1_000_000).toString().padStart(6, '0');
+		const otpHash = await bcrypt.hash(otp, 10);
 
-		const resetBaseUrl =
-			process.env.PASSWORD_RESET_BASE_URL ?? 'http://localhost:5173/reset-password';
-		const emailSent = await sendPasswordResetEmail(user.email, resetToken, resetBaseUrl);
+		const key = 'pwreset-otp:' + normalized;
+		// Overwrite any previous OTP with a fresh expiry — old codes become invalid.
+		await StorageDB.deleteOne({ key });
+		await StorageDB.create({
+			key,
+			object: { userId: user._id.toString(), hash: otpHash, attempts: 0 },
+			expireAt: new Date(Date.now() + PASSWORD_RESET_OTP_TTL_SECONDS * 1000),
+		});
+
+		const emailSent = await sendPasswordResetOtpEmail(user.email, otp);
 		if (!emailSent) {
 			throw new ServerError('Failed to send password reset email');
 		}
@@ -224,26 +260,154 @@ class AuthService {
 		return { ...issueTokens(user), user: toPublicUser(user) };
 	}
 
-	async resetPassword(token: string, newPassword: string): Promise<AuthResponse> {
-		const storageKey = 'pwreset:' + token;
-		const userId = await StorageDB.getString(storageKey);
-		if (!userId) {
-			throw new UnauthorizedError('Invalid or expired reset token');
+	async resetPassword(email: string, otp: string, newPassword: string): Promise<AuthResponse> {
+		const normalized = email.toLowerCase();
+		const key = 'pwreset-otp:' + normalized;
+		const record = await StorageDB.findOne({ key });
+		if (!record || !record.object) {
+			throw new UnauthorizedError('Invalid or expired code');
 		}
 
-		const user = await AccountDB.findById(userId).select('+password');
+		const stored = record.object as { userId: string; hash: string; attempts: number };
+
+		if (stored.attempts >= OTP_MAX_VERIFY_ATTEMPTS) {
+			await StorageDB.deleteOne({ key });
+			throw new UnauthorizedError('Too many incorrect attempts; request a new code');
+		}
+
+		const valid = await bcrypt.compare(otp, stored.hash);
+		if (!valid) {
+			record.object = { ...stored, attempts: stored.attempts + 1 };
+			record.markModified('object');
+			await record.save();
+			throw new UnauthorizedError('Invalid or expired code');
+		}
+
+		const user = await AccountDB.findById(stored.userId).select('+password');
 		if (!user) {
 			throw new NotFoundError('User not found');
 		}
 
 		user.password = newPassword;
+		// Receiving and typing back a 6-digit code sent to this address is the
+		// same proof-of-inbox-ownership as registration OTP — this is also the
+		// de facto first-login remediation path for legacy guide accounts whose
+		// auto-generated password was never emailed to them.
+		user.emailVerified = true;
 		// Invalidate every previously-issued token on password change
 		user.tokenVersion = (user.tokenVersion ?? 0) + 1;
 		await user.save();
 
-		await StorageDB.deleteOne({ key: storageKey });
+		await StorageDB.deleteOne({ key });
 
 		return { ...issueTokens(user), user: toPublicUser(user) };
+	}
+
+	async sendRegistrationOtp(data: RegisterSendOtpData): Promise<void> {
+		const email = data.email.toLowerCase();
+
+		const existingAccount = await AccountDB.findOne({
+			$or: [{ email }, { phone: data.phone }],
+		});
+		if (existingAccount) {
+			throw new ConflictError('An account with this email or phone already exists');
+		}
+
+		const existingPending = await PendingRegistrationDB.findOne({ email });
+		if (existingPending) {
+			const secondsSinceLastSend =
+				(Date.now() - existingPending.lastSentAt.getTime()) / 1000;
+			if (secondsSinceLastSend < REGISTRATION_OTP_RESEND_COOLDOWN_SECONDS) {
+				const wait = Math.ceil(REGISTRATION_OTP_RESEND_COOLDOWN_SECONDS - secondsSinceLastSend);
+				throw new TooManyRequestsError(`Please wait ${wait}s before requesting another code`);
+			}
+		}
+
+		const otp = randomInt(0, 1_000_000).toString().padStart(6, '0');
+		const otpHash = await bcrypt.hash(otp, 10);
+		const passwordHash = await bcrypt.hash(data.password, 10);
+		const now = new Date();
+
+		// Upsert — this IS the resend mechanism: a fresh send always overwrites
+		// the previous OTP/expiry/attempts, invalidating any prior code.
+		await PendingRegistrationDB.findOneAndUpdate(
+			{ email },
+			{
+				name: data.name,
+				email,
+				phone: data.phone,
+				countryCode: data.countryCode,
+				passwordHash,
+				accountType: data.accountType,
+				otpHash,
+				otpExpiresAt: new Date(now.getTime() + REGISTRATION_OTP_TTL_SECONDS * 1000),
+				attempts: 0,
+				lastSentAt: now,
+				expireAt: new Date(now.getTime() + PENDING_REGISTRATION_TTL_SECONDS * 1000),
+			},
+			{ upsert: true, setDefaultsOnInsert: true }
+		);
+
+		const emailSent = await sendRegistrationOtpEmail(email, otp);
+		if (!emailSent) {
+			throw new ServerError('Failed to send verification email');
+		}
+	}
+
+	async verifyRegistrationOtp(email: string, otp: string): Promise<AuthResponse> {
+		const normalized = email.toLowerCase();
+		const pending = await PendingRegistrationDB.findOne({ email: normalized }).select(
+			'+passwordHash +otpHash'
+		);
+		if (!pending) {
+			throw new UnauthorizedError('Invalid or expired code');
+		}
+
+		if (pending.otpExpiresAt.getTime() < Date.now()) {
+			throw new UnauthorizedError('Code has expired; request a new one');
+		}
+
+		if (pending.attempts >= OTP_MAX_VERIFY_ATTEMPTS) {
+			await PendingRegistrationDB.deleteOne({ _id: pending._id });
+			throw new UnauthorizedError('Too many incorrect attempts; request a new code');
+		}
+
+		const valid = await bcrypt.compare(otp, pending.otpHash);
+		if (!valid) {
+			pending.attempts += 1;
+			await pending.save();
+			throw new UnauthorizedError('Invalid code');
+		}
+
+		// Race guard: someone may have registered with this email/phone in the
+		// window between send-otp and verify-otp.
+		const existingAccount = await AccountDB.findOne({
+			$or: [{ email: normalized }, { phone: pending.phone }],
+		});
+		if (existingAccount) {
+			await PendingRegistrationDB.deleteOne({ _id: pending._id });
+			throw new ConflictError('An account with this email or phone already exists');
+		}
+
+		const account = new AccountDB({
+			name: pending.name,
+			email: pending.email,
+			phone: pending.phone,
+			countryCode: pending.countryCode,
+			password: pending.passwordHash,
+			role: pending.accountType,
+			status: 'verified',
+			emailVerified: true,
+			isActive: true,
+		});
+		// passwordHash is already bcrypt-hashed at rest — skip the pre-save
+		// re-hash or login will never work again (see Account.ts's pre('save')).
+		account.$locals.skipPasswordHash = true;
+		await account.save();
+
+		await PendingRegistrationDB.deleteOne({ _id: pending._id });
+
+		return { ...issueTokens(account), user: toPublicUser(account) };
 	}
 
 	/**
@@ -266,6 +430,7 @@ class AuthService {
 			password: data.password,
 			role: 'admin',
 			status: 'verified',
+			emailVerified: true,
 			isActive: true,
 		});
 		return toPublicUser(user);

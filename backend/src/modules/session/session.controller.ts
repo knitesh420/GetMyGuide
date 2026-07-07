@@ -11,6 +11,8 @@ import {
 	ForgotPasswordValidationResult,
 	LoginValidationResult,
 	OtpLoginValidationResult,
+	RegisterSendOtpValidationResult,
+	RegisterVerifyOtpValidationResult,
 	ResetPasswordValidationResult,
 	SendOtpValidationResult,
 	SignupValidationResult,
@@ -89,7 +91,7 @@ async function forgotPassword(req: Request, res: Response, next: NextFunction) {
 			res,
 			status: 200,
 			data: {
-				message: 'If an account with that email exists, a password reset link has been sent.',
+				message: 'If an account with that email exists, a password reset code has been sent.',
 			},
 		});
 	} catch (error) {
@@ -100,9 +102,34 @@ async function forgotPassword(req: Request, res: Response, next: NextFunction) {
 async function resetPassword(req: Request, res: Response, next: NextFunction) {
 	try {
 		const data = req.locals.data as ResetPasswordValidationResult;
-		const result = await AuthService.resetPassword(data.token, data.password);
+		const result = await AuthService.resetPassword(data.email, data.otp, data.newPassword);
 		setAuthCookies(res, result.accessToken, result.refreshToken);
 		return Respond({ res, status: 200, data: { user: result.user } });
+	} catch (error) {
+		return next(error);
+	}
+}
+
+async function sendRegistrationOtp(req: Request, res: Response, next: NextFunction) {
+	try {
+		const data = req.locals.data as RegisterSendOtpValidationResult;
+		await AuthService.sendRegistrationOtp(data);
+		return Respond({
+			res,
+			status: 200,
+			data: { message: 'A verification code has been sent to your email.' },
+		});
+	} catch (error) {
+		return next(error);
+	}
+}
+
+async function verifyRegistrationOtp(req: Request, res: Response, next: NextFunction) {
+	try {
+		const data = req.locals.data as RegisterVerifyOtpValidationResult;
+		const result = await AuthService.verifyRegistrationOtp(data.email, data.otp);
+		setAuthCookies(res, result.accessToken, result.refreshToken);
+		return Respond({ res, status: 201, data: { user: result.user } });
 	} catch (error) {
 		return next(error);
 	}
@@ -171,6 +198,8 @@ const Controller = {
 	logout,
 	sendLoginOtp,
 	loginWithOtp,
+	sendRegistrationOtp,
+	verifyRegistrationOtp,
 };
 
 export default Controller;

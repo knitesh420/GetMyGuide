@@ -126,7 +126,7 @@ export default function FindGuidesPage() {
         badgeText={t("find_guides_badge")}
         title={t("find_guides_title")}
         description={t("find_guides_desc")}
-        backgroundImage={IMAGES.scene3}
+        backgroundImage={IMAGES.scene2}
       />
 
       <section

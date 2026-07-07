@@ -2,14 +2,22 @@ import AuthService from '@services/auth';
 import { AccountDB, StorageDB } from '@mongo';
 import { ConflictError, UnauthorizedError, NotFoundError } from 'node-be-utilities';
 import mongoose from 'mongoose';
-import { sendPasswordResetEmail } from '@provider/email';
+import bcrypt from 'bcrypt';
+import { sendPasswordResetOtpEmail } from '@provider/email';
 import { connectTestDB, disconnectTestDB, clearDatabase } from '../../setup/db.setup';
 import { testUser, testSignupData, testLoginData } from '../../helpers/fixtures';
 
 // Mock email provider
 jest.mock('@provider/email', () => ({
-	sendPasswordResetEmail: jest.fn().mockResolvedValue(true),
+	sendPasswordResetOtpEmail: jest.fn().mockResolvedValue(true),
+	sendRegistrationOtpEmail: jest.fn().mockResolvedValue(true),
+	sendAdminOtpEmail: jest.fn().mockResolvedValue(true),
 }));
+
+function differentOtp(otp: string): string {
+	const next = (parseInt(otp, 10) + 1) % 1_000_000;
+	return next.toString().padStart(6, '0');
+}
 
 describe('AuthService', () => {
 	beforeAll(async () => {
@@ -23,8 +31,7 @@ describe('AuthService', () => {
 	beforeEach(async () => {
 		await clearDatabase();
 		jest.clearAllMocks();
-		// Ensure email mock returns true
-		(sendPasswordResetEmail as jest.Mock).mockResolvedValue(true);
+		(sendPasswordResetOtpEmail as jest.Mock).mockResolvedValue(true);
 	});
 
 	describe('signup', () => {
@@ -46,13 +53,6 @@ describe('AuthService', () => {
 			await expect(AuthService.signup(testSignupData)).rejects.toThrow(ConflictError);
 		});
 
-		it('should create user with admin role when specified', async () => {
-			const adminData = { ...testSignupData, email: 'admin@example.com', role: 'admin' as const };
-			const result = await AuthService.signup(adminData);
-
-			expect(result.user.role).toBe('admin');
-		});
-
 		it('should lowercase email addresses', async () => {
 			const dataWithUppercase = { ...testSignupData, email: 'TEST@EXAMPLE.COM' };
 			const result = await AuthService.signup(dataWithUppercase);
@@ -72,6 +72,10 @@ describe('AuthService', () => {
 	describe('login', () => {
 		beforeEach(async () => {
 			await AuthService.signup(testUser);
+			// Legacy `signup` deliberately leaves emailVerified:false (see
+			// AuthService.signup's doc comment) — simulate an already-verified
+			// pre-existing account, same as what backfillEmailVerified.ts does.
+			await AccountDB.findOneAndUpdate({ email: testUser.email }, { emailVerified: true });
 		});
 
 		it('should successfully login with valid credentials', async () => {
@@ -105,6 +109,12 @@ describe('AuthService', () => {
 			await expect(AuthService.login(testLoginData)).rejects.toThrow(UnauthorizedError);
 		});
 
+		it('should throw UnauthorizedError when email is not verified', async () => {
+			await AccountDB.findOneAndUpdate({ email: testUser.email }, { emailVerified: false });
+
+			await expect(AuthService.login(testLoginData)).rejects.toThrow(UnauthorizedError);
+		});
+
 		it('should lowercase email during login', async () => {
 			const uppercaseData = { ...testLoginData, email: 'TEST@EXAMPLE.COM' };
 			const result = await AuthService.login(uppercaseData);
@@ -118,10 +128,13 @@ describe('AuthService', () => {
 			await AuthService.signup(testUser);
 		});
 
-		it('should generate reset token and send email for existing user', async () => {
+		it('should generate a reset OTP and send email for existing user', async () => {
 			await AuthService.forgotPassword(testUser.email);
 
-			expect(sendPasswordResetEmail).toHaveBeenCalledWith(expect.any(String), expect.any(String));
+			expect(sendPasswordResetOtpEmail).toHaveBeenCalledWith(
+				testUser.email,
+				expect.stringMatching(/^\d{6}$/)
+			);
 
 			const storageKeys = await (StorageDB as unknown as mongoose.Model<unknown>).find({});
 			expect(storageKeys.length).toBeGreaterThan(0);
@@ -130,31 +143,30 @@ describe('AuthService', () => {
 		it('should not throw error for non-existent user (security)', async () => {
 			await expect(AuthService.forgotPassword('nonexistent@example.com')).resolves.not.toThrow();
 
-			expect(sendPasswordResetEmail).not.toHaveBeenCalled();
+			expect(sendPasswordResetOtpEmail).not.toHaveBeenCalled();
 		});
 
 		it('should throw ServerError if email sending fails', async () => {
-			(sendPasswordResetEmail as jest.Mock).mockResolvedValueOnce(false);
+			(sendPasswordResetOtpEmail as jest.Mock).mockResolvedValueOnce(false);
 
 			await expect(AuthService.forgotPassword(testUser.email)).rejects.toThrow();
 		});
 	});
 
 	describe('resetPassword', () => {
-		let resetToken: string;
+		let capturedOtp: string;
 
 		beforeEach(async () => {
 			await AuthService.signup(testUser);
-			await AuthService.forgotPassword(testUser.email);
+			await AccountDB.findOneAndUpdate({ email: testUser.email }, { emailVerified: false });
 
-			// Get the reset token from storage
-			const storage = await (StorageDB as unknown as mongoose.Model<{ key: string }>).findOne({});
-			resetToken = storage?.key || '';
+			await AuthService.forgotPassword(testUser.email);
+			capturedOtp = (sendPasswordResetOtpEmail as jest.Mock).mock.calls[0][1];
 		});
 
-		it('should successfully reset password with valid token', async () => {
+		it('should successfully reset password with a valid OTP', async () => {
 			const newPassword = 'newpassword123';
-			const result = await AuthService.resetPassword(resetToken, newPassword);
+			const result = await AuthService.resetPassword(testUser.email, capturedOtp, newPassword);
 
 			expect(result).toHaveProperty('accessToken');
 			expect(result).toHaveProperty('user');
@@ -167,40 +179,45 @@ describe('AuthService', () => {
 			expect(loginResult).toBeDefined();
 		});
 
-		it('should throw UnauthorizedError for invalid token', async () => {
-			await expect(AuthService.resetPassword('invalid-token', 'newpassword123')).rejects.toThrow(
-				UnauthorizedError
-			);
+		it('should mark the account emailVerified after a successful reset', async () => {
+			await AuthService.resetPassword(testUser.email, capturedOtp, 'newpassword123');
+
+			const user = await AccountDB.findOne({ email: testUser.email });
+			expect(user?.emailVerified).toBe(true);
 		});
 
-		it('should throw UnauthorizedError for expired token', async () => {
-			// Delete the token to simulate expiration
-			await StorageDB.deleteOne({ key: resetToken });
-
-			await expect(AuthService.resetPassword(resetToken, 'newpassword123')).rejects.toThrow(
-				UnauthorizedError
-			);
+		it('should throw UnauthorizedError for an incorrect OTP', async () => {
+			await expect(
+				AuthService.resetPassword(testUser.email, differentOtp(capturedOtp), 'newpassword123')
+			).rejects.toThrow(UnauthorizedError);
 		});
 
-		it('should delete reset token after successful reset', async () => {
-			const newPassword = 'newpassword123';
-			await AuthService.resetPassword(resetToken, newPassword);
+		it('should throw UnauthorizedError for an expired/missing OTP record', async () => {
+			await StorageDB.deleteOne({ key: 'pwreset-otp:' + testUser.email });
 
-			const tokenExists = await (StorageDB as unknown as mongoose.Model<unknown>).findOne({
-				key: resetToken,
+			await expect(
+				AuthService.resetPassword(testUser.email, capturedOtp, 'newpassword123')
+			).rejects.toThrow(UnauthorizedError);
+		});
+
+		it('should delete the reset OTP record after a successful reset', async () => {
+			await AuthService.resetPassword(testUser.email, capturedOtp, 'newpassword123');
+
+			const record = await StorageDB.findOne({ key: 'pwreset-otp:' + testUser.email });
+			expect(record).toBeNull();
+		});
+
+		it('should throw NotFoundError if the user no longer exists', async () => {
+			const fakeEmail = 'ghost@example.com';
+			const otp = '654321';
+			const otpHash = await bcrypt.hash(otp, 10);
+			await StorageDB.create({
+				key: 'pwreset-otp:' + fakeEmail,
+				object: { userId: '507f1f77bcf86cd799439999', hash: otpHash, attempts: 0 },
+				expireAt: new Date(Date.now() + 10 * 60 * 1000),
 			});
-			expect(tokenExists).toBeNull();
-		});
 
-		it('should throw NotFoundError if user not found', async () => {
-			// Create a token with invalid user ID
-			const fakeUserId = '507f1f77bcf86cd799439999';
-			await (StorageDB as unknown as mongoose.Model<unknown>).create({
-				key: 'fake-token',
-				value: fakeUserId,
-			});
-
-			await expect(AuthService.resetPassword('fake-token', 'newpassword123')).rejects.toThrow(
+			await expect(AuthService.resetPassword(fakeEmail, otp, 'newpassword123')).rejects.toThrow(
 				NotFoundError
 			);
 		});

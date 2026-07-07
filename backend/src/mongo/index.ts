@@ -1,14 +1,23 @@
 import mongoose from 'mongoose';
 export {
 	AccountDB,
+	ActivityLogDB,
 	AdvertisementDB,
+	AssignmentDB,
 	BlogDB,
 	BookingDB,
 	ContactInquiryDB,
+	GuideDB,
 	GuideEnrollmentDB,
+	GuideLeaveDB,
+	NotificationDB,
 	PackageDB,
+	PendingRegistrationDB,
+	ReviewDB,
 	StorageDB,
+	TouristDB,
 	TransactionDB,
+	TripDB,
 } from './repo';
 
 export default function connectDB(database_url: string) {

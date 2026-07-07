@@ -280,18 +280,28 @@ export interface GuideProfile {
   name: string;
   email: string;
   mobile?: string;
+  countryCode?: string;
   dob?: string;
+  city?: string;
   state?: string;
   country?: string;
   age?: number;
   languages?: string[];
   serviceLocations?: string[];
   experience?: string;
+  specialization?: string[];
   specializations?: string[];
   availability?: string[];
+  availableDays?: string[];
+  availableTime?: string;
+  price?: number;
   description?: string;
+  about?: string;
   license?: string;
   photo?: string;
+  profileImage?: string;
+  identityProofs?: string[];
+  galleryImages?: string[];
   isApproved: boolean;
   profileComplete: boolean;
   createdAt: string;
@@ -305,6 +315,40 @@ export interface GuideProfile {
   subscriptionExpiresAt?: Date;
   availabilityPeriods: AvailabilityPeriod[];
   unavailableDates: Date[];
+  // Membership (30-day recurring, replaces the old one-time enrollment fee)
+  registrationCompleted?: boolean;
+  paymentStatus?: "pending" | "success" | "failed";
+  isVisible?: boolean;
+  membershipStartDate?: string | null;
+  membershipExpiryDate?: string | null;
+  membershipExpired?: boolean;
+}
+
+export interface TouristProfile {
+  _id: string;
+  user: string;
+  name: string;
+  email: string;
+  mobile?: string;
+  countryCode?: string;
+  nationality: string;
+  preferredLanguages: string[];
+  travelInterests: string[];
+  budget: string;
+  travelDates: {
+    startDate: string | null;
+    endDate: string | null;
+  };
+  numberOfTravelers: number;
+  about: string;
+  paymentStatus: "pending" | "success" | "failed" | "na";
+  registrationCompleted: boolean;
+}
+
+export interface TouristState {
+  myProfile: TouristProfile | null;
+  loading: boolean;
+  error: string | null;
 }
 
 export interface GuideState {
@@ -324,6 +368,8 @@ export interface GuideState {
     page: number;
     totalPages: number;
   };
+  myLeaves: GuideLeave[];
+  myCalendar: GuideCalendar | null;
 }
 
 export interface tourGuideBooking {
@@ -392,6 +438,246 @@ export interface BlogListResponse {
   data: Blog[];
   totalPages?: number;
   currentPage?: number;
+}
+
+// --- Phase 2: Travel Operations (Assignment / Trip / Notification / Review / Reports) ---
+
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  totalPages: number;
+}
+
+export interface PopulatedAccountSummary {
+  _id: string;
+  name: string;
+  email: string;
+  phone?: string;
+}
+
+export interface PopulatedBookingSummary {
+  _id: string;
+  tourist_info: {
+    name: string;
+    phone: string;
+    email: string;
+    country: string;
+    gender: string;
+  };
+  travel_details: {
+    city: string;
+    places: string[];
+    date: string;
+    no_of_person: number;
+  };
+  linked_to?: string;
+  status: string;
+}
+
+export type AssignmentStatus = "pending" | "accepted" | "declined" | "reassigned";
+
+export interface Assignment {
+  _id: string;
+  booking: string | PopulatedBookingSummary;
+  guide: string | PopulatedAccountSummary;
+  assignedBy: string | PopulatedAccountSummary;
+  status: AssignmentStatus;
+  adminNotes?: string;
+  declineReason?: string;
+  respondedAt?: string;
+  previousAssignment?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Shape actually returned by GET /booking (BookingService.transformBooking) —
+// distinct from the legacy, mismatched `Booking` type above (which targets a
+// different, unused API shape). Used only by the new Assignment admin page.
+export interface AdminBookingSummary {
+  id: string;
+  tourist_info: {
+    name: string;
+    gender: string;
+    phone: string;
+    email: string;
+    country: string;
+  };
+  travel_details: {
+    places: string[];
+    city: string;
+    date: string;
+    no_of_person: number;
+  };
+  linked_to?: string;
+  transaction_id: string;
+  allocated_guide?: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AssignableGuide {
+  accountId: string;
+  name: string;
+  email: string;
+  phone?: string;
+  city: string;
+  languages: string[];
+  isVisible: boolean;
+  membershipExpiryDate: string | null;
+}
+
+export type TripStatus = "not-started" | "in-progress" | "completed" | "cancelled";
+
+export interface Trip {
+  _id: string;
+  booking: string | PopulatedBookingSummary;
+  assignment: string;
+  guide: string | PopulatedAccountSummary;
+  status: TripStatus;
+  startedAt?: string;
+  completedAt?: string;
+  startNotes?: string;
+  completionNotes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- Guide Availability & Booking Conflict System ---
+
+export type GuideLeaveType = "vacation" | "emergency";
+export type GuideLeaveStatus = "active" | "cancelled";
+
+export interface GuideLeave {
+  _id: string;
+  guide: string;
+  type: GuideLeaveType;
+  startDate: string;
+  endDate: string;
+  reason?: string;
+  status: GuideLeaveStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GuideBookedRange {
+  start: string;
+  end: string;
+  bookingId: string;
+  city: string;
+  status: string;
+}
+
+export interface GuideCalendar {
+  unavailableDates: string[];
+  leaves: GuideLeave[];
+  bookedRanges: GuideBookedRange[];
+}
+
+export interface GuideAvailabilityConflict {
+  type: "assignment" | "leave" | "unavailable_date";
+  start: string;
+  end: string;
+  reason?: string;
+  bookingId?: string;
+  city?: string;
+}
+
+export interface GuideAvailabilityInfo {
+  accountId: string;
+  name: string;
+  email: string;
+  phone?: string;
+  city: string;
+  languages: string[];
+  isVisible: boolean;
+  membershipExpiryDate: string | null;
+  isAvailable: boolean;
+  conflicts: GuideAvailabilityConflict[];
+}
+
+export type NotificationType =
+  | "guide_assigned"
+  | "guide_accepted"
+  | "guide_declined"
+  | "trip_started"
+  | "trip_completed"
+  | "membership_expiring"
+  | "payment_successful"
+  | "booking_updated"
+  | "review_received";
+
+export interface NotificationItem {
+  _id: string;
+  recipient: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  relatedEntity?: { kind: string; id: string };
+  isRead: boolean;
+  readAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GuideReview {
+  _id: string;
+  booking: string;
+  guide: string | PopulatedAccountSummary;
+  tourist: string | PopulatedAccountSummary;
+  rating: number;
+  comment?: string;
+  isHidden: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GuideRatingSummary {
+  average: number;
+  total: number;
+}
+
+export interface ReportOverview {
+  totalBookings: number;
+  totalRevenue: number;
+  activeGuides: number;
+  activeTourists: number;
+  pendingAssignments: number;
+  totalTrips: number;
+  completedTrips: number;
+  cancelledTrips: number;
+  membershipRenewals: number;
+  avgRating: number;
+  totalReviews: number;
+}
+
+export interface BookingsTrendPoint {
+  date: string;
+  bookings: number;
+  revenue: number;
+}
+
+export interface GuidePerformanceRow {
+  guideId: string;
+  name: string;
+  email: string;
+  assignmentsCount: number;
+  tripsCompleted: number;
+  avgRating: number;
+  totalReviews: number;
+}
+
+export interface ActivityLogEntry {
+  _id: string;
+  actor?: string | PopulatedAccountSummary;
+  actorType: "user" | "system";
+  action: string;
+  targetType: string;
+  targetId: string;
+  description: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
 }
 
 // Sample data for development

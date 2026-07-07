@@ -5,10 +5,12 @@ export default interface IAccount extends Document {
 	name: string;
 	email: string;
 	phone: string;
+	countryCode?: string;
 	password: string;
 	role: 'tourist' | 'guide' | 'admin';
 	isActive: boolean;
 	status: 'non_verified' | 'verified';
+	emailVerified: boolean;
 	paymentStatus: 'pending' | 'success' | 'failed' | 'na';
 	unavailableDates: Date[];
 	tokenVersion: number;
