@@ -16,11 +16,20 @@ const itemVariants = {
 
 interface HeroSectionProps {
   badgeText?: string;
-  title: React.ReactNode;
-  description: string;
+  title?: React.ReactNode;
+  description?: string;
   backgroundImage: string;
   overlayOpacity?: number;
+  /** Override the default fixed-height image band, e.g. "w-full aspect-[2/1]"
+   * to match a specific image's native ratio so nothing gets cropped. */
+  imageContainerClassName?: string;
+  /** Darkens the image so overlaid text stays readable. Set false when the
+   * hero has no badge/title/description on top of the image. */
+  dimImage?: boolean;
 }
+
+const DEFAULT_IMAGE_CONTAINER_CLASSNAME =
+  "h-[280px] w-full sm:h-[340px] md:h-[400px] lg:h-[460px] xl:h-[500px]";
 
 export default function HeroSection({
   badgeText,
@@ -28,6 +37,8 @@ export default function HeroSection({
   description,
   backgroundImage,
   overlayOpacity = 0.3,
+  imageContainerClassName = DEFAULT_IMAGE_CONTAINER_CLASSNAME,
+  dimImage = true,
 }: HeroSectionProps) {
   return (
     <section className="relative w-full bg-black py-10 md:py-16">
@@ -35,16 +46,19 @@ export default function HeroSection({
           two, so the badge/title/description are never clipped, but in the normal
           case it simply matches the (compact, fixed) image height below. */}
       <div className="relative mx-auto grid w-[90%] place-items-center">
-        {/* Image band: fixed, professional height per breakpoint. object-cover
-            fills the rectangle edge-to-edge, cropping overflow as needed. */}
-        <div className="relative col-start-1 row-start-1 h-[280px] w-full overflow-hidden sm:h-[340px] md:h-[400px] lg:h-[460px] xl:h-[500px]">
+        {/* Image band: fixed, professional height per breakpoint by default. object-cover
+            fills the rectangle edge-to-edge, cropping overflow as needed. Pass
+            imageContainerClassName to match a specific image's aspect ratio instead. */}
+        <div
+          className={`relative col-start-1 row-start-1 overflow-hidden ${imageContainerClassName}`}
+        >
           <Image
             src={backgroundImage}
             alt="Hero Background"
             fill
             priority
             sizes="90vw"
-            className="object-cover brightness-50"
+            className={`object-cover ${dimImage ? "brightness-50" : ""}`}
           />
 
           {/* Overlay */}
@@ -69,19 +83,23 @@ export default function HeroSection({
             </motion.div>
           )}
 
-          <motion.h1
-            className="text-4xl md:text-6xl font-extrabold text-primary-foreground mb-6 text-balance"
-            variants={itemVariants}
-          >
-            {title}
-          </motion.h1>
+          {title && (
+            <motion.h1
+              className="text-4xl md:text-6xl font-extrabold text-primary-foreground mb-6 text-balance"
+              variants={itemVariants}
+            >
+              {title}
+            </motion.h1>
+          )}
 
-          <motion.p
-            className="text-xl text-primary-foreground mb-8 max-w-3xl mx-auto text-pretty"
-            variants={itemVariants}
-          >
-            {description}
-          </motion.p>
+          {description && (
+            <motion.p
+              className="text-xl text-primary-foreground mb-8 max-w-3xl mx-auto text-pretty"
+              variants={itemVariants}
+            >
+              {description}
+            </motion.p>
+          )}
         </motion.div>
       </div>
     </section>
