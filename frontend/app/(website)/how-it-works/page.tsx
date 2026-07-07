@@ -28,6 +28,15 @@ import HeroSection from "@/components/all/CommonHeroSection";
 import Link from "next/link";
 import { useLanguage } from "@/contexts/LanguageContext";
 
+// Native pixel dimensions of each step image, used so its container matches
+// the image's real aspect ratio instead of letterboxing inside a shared one.
+const STEP_IMAGE_DIMENSIONS: Record<number, { width: number; height: number }> = {
+  1: { width: 1535, height: 1024 },
+  2: { width: 1024, height: 559 },
+  3: { width: 1402, height: 1122 },
+  4: { width: 1402, height: 1122 },
+};
+
 export default function HowItWorksPage() {
   const { t } = useLanguage();
 
@@ -162,13 +171,23 @@ export default function HowItWorksPage() {
   return (
     <div className="min-h-screen bg-background">
       <main>
-        <HeroSection
-          backgroundImage={IMAGES.howItWorkHero}
-          imageContainerClassName="w-full aspect-[4/3] sm:aspect-[2/1]"
-          imageClassName="object-[95%_35%] sm:object-center"
-          overlayOpacity={0}
-          dimImage={false}
-        />
+        <div className="relative">
+          <HeroSection
+            backgroundImage={IMAGES.howItWorkHero}
+            imageContainerClassName="w-full aspect-[2/1]"
+            imageFit="contain"
+            overlayOpacity={0}
+            dimImage={false}
+          />
+          <div className="absolute top-[12%] left-[36%] right-[6%] z-20 sm:left-[46%] md:left-auto md:max-w-xs">
+            <div className="flex items-center gap-1.5 sm:gap-2 rounded-2xl bg-white/90 backdrop-blur px-2.5 py-1.5 sm:px-4 sm:py-2 shadow-md">
+              <Users className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-primary shrink-0" />
+              <p className="min-w-0 flex-1 wrap-break-word text-[10px] sm:text-sm md:text-base font-medium text-foreground text-right">
+                {t("how_tagline")}
+              </p>
+            </div>
+          </div>
+        </div>
 
         <section className="py-16 md:py-24">
           <div className="container max-w-7xl mx-auto px-4">
@@ -186,12 +205,14 @@ export default function HowItWorksPage() {
                     className="flex-1 w-full animate-fade-in-up"
                     style={{ animationDelay: `${index * 0.2}s` }}
                   >
-                    <div className="relative h-64 md:h-80 rounded-lg overflow-hidden shadow-lg bg-muted">
+                    <div className="w-full rounded-lg overflow-hidden shadow-lg bg-muted">
                       <Image
                         src={IMAGES[`scene${step.step}` as keyof typeof IMAGES] as string}
                         alt={t(step.titleKey)}
-                        fill
-                        className="object-cover"
+                        width={STEP_IMAGE_DIMENSIONS[step.step].width}
+                        height={STEP_IMAGE_DIMENSIONS[step.step].height}
+                        sizes="(min-width: 1024px) 50vw, 100vw"
+                        className="w-full h-auto object-contain"
                       />
                     </div>
                   </div>

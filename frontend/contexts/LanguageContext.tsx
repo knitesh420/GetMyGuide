@@ -400,6 +400,8 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           how_title: "Simple Steps to Plan Your Perfect Trip",
           how_desc:
             "From choosing a guide to booking your next adventure — discover how easy it is to travel with GetMyGuide.",
+          how_tagline:
+            "Connect with verified local guides, enjoy secure bookings, and create unforgettable memories.",
           how_section_1_title: "Book Your Perfect Tour in 4 Easy Steps",
           how_step_1_title: "Search & Browse",
           how_step_1_desc:
@@ -898,6 +900,8 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           how_title: "Pasos Sencillos para Planificar tu Viaje Perfecto",
           how_desc:
             "Desde elegir un guía hasta reservar tu próxima aventura — descubre lo fácil que es viajar con GetMyGuide.",
+          how_tagline:
+            "Conéctate con guías locales verificados, disfruta de reservas seguras y crea recuerdos inolvidables.",
           how_section_1_title: "Reserva tu Tour Perfecto en 4 Sencillos Pasos",
           how_step_1_title: "Busca y Explora",
           how_step_1_desc:
@@ -1369,6 +1373,8 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           how_title: "Étapes Simples pour Planifier Votre Voyage Parfait",
           how_desc:
             "Du choix d'un guide à la réservation de votre prochaine aventure — découvrez à quel point il est facile de voyager avec GetMyGuide.",
+          how_tagline:
+            "Connectez-vous avec des guides locaux vérifiés, profitez de réservations sécurisées et créez des souvenirs inoubliables.",
           how_section_1_title:
             "Réservez Votre Circuit Parfait en 4 Étapes Faciles",
           how_step_1_title: "Rechercher et Parcourir",
@@ -1828,6 +1834,8 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
             "Простые Шаги для Планирования Вашего Идеального Путешествия",
           how_desc:
             "От выбора гида до бронирования вашего следующего приключения — узнайте, как легко путешествовать с GetMyGuide.",
+          how_tagline:
+            "Общайтесь с проверенными местными гидами, наслаждайтесь безопасным бронированием и создавайте незабываемые воспоминания.",
           how_section_1_title:
             "Забронируйте Свой Идеальный Тур за 4 Простых Шага",
           how_step_1_title: "Поиск и Просмотр",
@@ -2283,6 +2291,8 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           how_title: "Einfache Schritte zur Planung Ihrer Perfekten Reise",
           how_desc:
             "Von der Auswahl eines Guides bis zur Buchung Ihres nächsten Abenteuers – entdecken Sie, wie einfach es ist, mit GetMyGuide zu reisen.",
+          how_tagline:
+            "Verbinden Sie sich mit verifizierten lokalen Guides, genießen Sie sichere Buchungen und schaffen Sie unvergessliche Erinnerungen.",
           how_section_1_title:
             "Buchen Sie Ihre Perfekte Tour in 4 Einfachen Schritten",
           how_step_1_title: "Suchen & Stöbern",

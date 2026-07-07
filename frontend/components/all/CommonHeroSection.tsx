@@ -26,10 +26,10 @@ interface HeroSectionProps {
   /** Darkens the image so overlaid text stays readable. Set false when the
    * hero has no badge/title/description on top of the image. */
   dimImage?: boolean;
-  /** Extra classes on the <Image> itself, e.g. responsive object-position
-   * ("object-[72%_40%] sm:object-center") when imageContainerClassName crops
-   * to a different ratio per breakpoint and the focal point needs to shift. */
-  imageClassName?: string;
+  /** "cover" crops to fill the frame (default, fine for ordinary photos).
+   * "contain" letterboxes instead, so the entire image stays visible and
+   * uncropped — use for banners/flyers where no content can be cut off. */
+  imageFit?: "cover" | "contain";
 }
 
 const DEFAULT_IMAGE_CONTAINER_CLASSNAME =
@@ -43,7 +43,7 @@ export default function HeroSection({
   overlayOpacity = 0.3,
   imageContainerClassName = DEFAULT_IMAGE_CONTAINER_CLASSNAME,
   dimImage = true,
-  imageClassName = "",
+  imageFit = "cover",
 }: HeroSectionProps) {
   return (
     <section className="relative w-full bg-black py-10 md:py-16">
@@ -63,7 +63,7 @@ export default function HeroSection({
             fill
             priority
             sizes="90vw"
-            className={`object-cover ${dimImage ? "brightness-50" : ""} ${imageClassName}`}
+            className={`${imageFit === "contain" ? "object-contain" : "object-cover"} object-center ${dimImage ? "brightness-50" : ""}`}
           />
 
           {/* Overlay */}
