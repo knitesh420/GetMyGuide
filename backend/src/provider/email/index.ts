@@ -17,6 +17,7 @@ import {
 	GuideAcceptedTemplate,
 	TripStartedTemplate,
 	TripCompletedTemplate,
+	InvoiceEmailTemplate,
 } from './templates';
 
 const resend = new Resend(RESEND_API_KEY);
@@ -366,6 +367,49 @@ export async function sendGuidePaymentConfirmationEmail(
 		return true;
 	} catch (error) {
 		logError('Exception in sendGuidePaymentConfirmationEmail', error);
+		return false;
+	}
+}
+
+export async function sendInvoiceEmail(
+	to: string,
+	details: {
+		customerName: string;
+		invoiceNumber: string;
+		invoiceTypeLabel: string;
+		invoiceDate: string;
+		grandTotal: number;
+		currency: string;
+		companyName: string;
+		supportEmail: string;
+	},
+	pdfBuffer: Buffer,
+	filename: string
+) {
+	try {
+		const htmlContent = InvoiceEmailTemplate(details);
+
+		const { error } = await resend.emails.send({
+			from: `${details.companyName} <support@getmyguide.in>`,
+			to: [to],
+			subject: `Invoice ${details.invoiceNumber} - ${details.companyName}`,
+			html: htmlContent,
+			attachments: [
+				{
+					filename,
+					content: pdfBuffer,
+				},
+			],
+		});
+
+		if (error) {
+			logError('Resend Error: Error Sending invoice email', error);
+			return false;
+		}
+
+		return true;
+	} catch (error) {
+		logError('Exception in sendInvoiceEmail', error);
 		return false;
 	}
 }

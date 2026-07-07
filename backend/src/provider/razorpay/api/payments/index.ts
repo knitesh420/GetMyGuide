@@ -17,6 +17,7 @@ async function getPayment(payment_id: string) {
 			currency: payment.currency,
 			order_id: payment.order_id,
 			status: payment.status,
+			method: payment.method,
 		};
 
 		info('Razorpay: Payment fetched successfully', {

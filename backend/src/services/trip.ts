@@ -5,6 +5,7 @@ import { sendTripCompletedEmail, sendTripStartedEmail } from '@provider/email';
 import { Types } from 'mongoose';
 import { ConflictError, ForbiddenError, NotFoundError } from 'node-be-utilities';
 import ActivityLogService from './activityLog';
+import InvoiceService from './invoice';
 import NotificationService from './notification';
 
 interface PageParams {
@@ -133,6 +134,12 @@ class TripService {
 			} catch {
 				// non-blocking — trip already completed successfully
 			}
+		}
+
+		try {
+			await InvoiceService.createTripCompletionInvoice(trip);
+		} catch {
+			// non-blocking — trip already completed successfully
 		}
 
 		return trip;

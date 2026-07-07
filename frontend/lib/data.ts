@@ -680,6 +680,80 @@ export interface ActivityLogEntry {
   createdAt: string;
 }
 
+// --- Invoice & Billing ---
+
+export type InvoiceType = "booking" | "guide_membership" | "trip_completion";
+export type InvoiceStatus = "paid" | "refunded" | "cancelled";
+export type InvoiceEmailStatus = "pending" | "sent" | "failed";
+
+export interface InvoiceCustomerSnapshot {
+  name: string;
+  email: string;
+  phone: string;
+  country: string;
+  billingAddress?: string;
+}
+
+export interface InvoiceGuideSnapshot {
+  name: string;
+  email: string;
+  phone: string;
+  membershipPlan?: string;
+  membershipDurationDays?: number;
+}
+
+export interface InvoiceBookingSnapshot {
+  destination: string;
+  travelDate?: string;
+  touristsCount?: number;
+  assignedGuideName?: string;
+}
+
+export interface InvoicePaymentInfo {
+  method?: string;
+  amount: number;
+  tax: number;
+  discount: number;
+  grandTotal: number;
+  status: InvoiceStatus;
+  currency: string;
+}
+
+export interface InvoiceCompanyInfo {
+  name: string;
+  supportEmail: string;
+  supportPhone: string;
+  website: string;
+  address: string;
+  logoUrl: string;
+}
+
+export interface Invoice {
+  _id: string;
+  invoiceNumber: string;
+  invoiceType: InvoiceType;
+  invoiceDate: string;
+  paymentDate: string;
+  transaction: string;
+  razorpayPaymentId?: string;
+  razorpayOrderId?: string;
+  booking?: string;
+  trip?: string;
+  guideAccount?: string;
+  touristAccount?: string;
+  customerSnapshot: InvoiceCustomerSnapshot;
+  guideSnapshot?: InvoiceGuideSnapshot;
+  bookingSnapshot?: InvoiceBookingSnapshot;
+  paymentInfo: InvoicePaymentInfo;
+  companyInfo: InvoiceCompanyInfo;
+  pdfUrl?: string;
+  emailStatus: InvoiceEmailStatus;
+  status: InvoiceStatus;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Sample data for development
 export const tours: Tour[] = [];
 export const guides: Guide[] = [];

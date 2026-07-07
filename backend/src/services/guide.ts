@@ -6,6 +6,7 @@ import { verifyRazorpaySignature } from '@utils/paymentVerify';
 import { randomBytes } from 'crypto';
 import { Types } from 'mongoose';
 import { BadRequestError, NotFoundError, ServerError, error as logError } from 'node-be-utilities';
+import InvoiceService from './invoice';
 import TransactionService from './transaction';
 
 interface GuideProfileData {
@@ -650,6 +651,15 @@ class GuideService {
 		}
 		guide.membershipExpiryDate = newExpiry;
 		await guide.save();
+
+		// Generate the membership invoice (non-blocking) — this single hook
+		// covers both the sync confirm-payment call and the webhook path, since
+		// both converge here.
+		try {
+			await InvoiceService.createMembershipInvoice(guide);
+		} catch (invoiceError) {
+			logError('Guide membership finalize: invoice generation failed', { guideId, error: invoiceError });
+		}
 
 		return guide;
 	}

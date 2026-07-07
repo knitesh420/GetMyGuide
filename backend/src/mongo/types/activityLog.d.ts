@@ -8,7 +8,8 @@ export type ActivityLogTargetType =
 	| 'Review'
 	| 'Guide'
 	| 'GuideLeave'
-	| 'Transaction';
+	| 'Transaction'
+	| 'Invoice';
 
 export default interface IActivityLog extends Document {
 	_id: Types.ObjectId;

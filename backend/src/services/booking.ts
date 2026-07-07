@@ -10,6 +10,7 @@ import { calculateBookingPrice } from '@utils/priceCalculator';
 import { randomBytes } from 'crypto';
 import { Types } from 'mongoose';
 import { NotFoundError, ServerError } from 'node-be-utilities';
+import InvoiceService from './invoice';
 import TransactionService from './transaction';
 
 interface CreateBookingData {
@@ -310,6 +311,13 @@ class BookingService {
 			});
 		} catch (emailError) {
 			// Non-blocking - don't fail the booking if email fails
+		}
+
+		// Step 7: Generate the booking invoice (non-blocking)
+		try {
+			await InvoiceService.createBookingInvoice(transaction, booking);
+		} catch (invoiceError) {
+			// Non-blocking - don't fail the booking if invoice generation fails
 		}
 
 		return transformBooking(booking);
