@@ -190,7 +190,7 @@ export default function HowItWorksPage() {
                         src={IMAGES[`scene${step.step}` as keyof typeof IMAGES] as string}
                         alt={t(step.titleKey)}
                         fill
-                        className="object-contain"
+                        className="object-cover"
                       />
                     </div>
                   </div>

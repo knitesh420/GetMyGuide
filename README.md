@@ -33,7 +33,8 @@ email.
 15. [Migration Scripts](#migration-scripts)
 16. [Known Legacy / Dead Code](#known-legacy--dead-code)
 17. [Travel Operations — Assignment, Trip, Notification, Review, Reports (Phase 2)](#travel-operations--assignment-trip-notification-review-reports-phase-2)
-18. [Testing](#testing)
+18. [Guide Availability & Booking Conflict System (Phase 3)](#guide-availability--booking-conflict-system-phase-3)
+19. [Testing](#testing)
 
 ---
 
@@ -481,6 +482,7 @@ random token). That change was intentional and confirmed — see the note in
 | `Review` | Phase 2 — tourist rating/feedback for a guide, allowed only after the `Trip` is `completed`. |
 | `Notification` | Phase 2 — in-app notification inbox; idempotent via a unique `dedupeKey` index. |
 | `ActivityLog` | Phase 2 — shared audit trail written by Assignment/Trip/Review actions and the notification watcher. |
+| `GuideLeave` | Phase 3 — a guide's self-declared vacation/emergency leave period (date range + reason). |
 
 ---
 
@@ -541,13 +543,13 @@ bookings), dispatched internally by `reference_type`.
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| POST | `/assignment` | VerifyMinLevel('admin') | Propose a guide for a booking — reuses `BookingService.allocateGuide` |
+| POST | `/assignment` | VerifyMinLevel('admin') | Propose a guide for a booking — reuses `BookingService.allocateGuide`. Blocked by a Phase 3 availability conflict unless `{ override: true, overrideReason }` is sent (see [Phase 3](#guide-availability--booking-conflict-system-phase-3)) |
 | GET | `/assignment` | VerifyMinLevel('admin') | Paginated list, filter by `status`/`guideId`/`bookingId` |
 | GET | `/assignment/guides` | VerifyMinLevel('admin') | Assignable-guide picker (Account + Guide profile merged) |
 | GET | `/assignment/my` | VerifyMinLevel('guide') | The calling guide's own assignments |
 | GET | `/assignment/:id` | VerifyMinLevel('guide') | Admin or the assigned guide only (service-layer check) |
 | PATCH | `/assignment/:id/respond` | VerifyMinLevel('guide') | `{ action: 'accept'\|'decline', declineReason? }` — accept auto-creates a `Trip` |
-| POST | `/assignment/:id/reassign` | VerifyMinLevel('admin') | Swap to a new guide; blocked once the current assignment is `accepted` |
+| POST | `/assignment/:id/reassign` | VerifyMinLevel('admin') | Swap to a new guide; blocked once the current assignment is `accepted`. Same Phase 3 override gate as create |
 
 ### `/trip` — Phase 2
 
@@ -592,6 +594,17 @@ bookings), dispatched internally by `reference_type`.
 | GET | `/report/guide-performance` | Per-guide assignments/trips-completed/rating, ranked |
 | GET | `/report/activity-log` | Wraps `ActivityLogService.getAll` |
 
+### `/guide-availability` — Phase 3
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| POST | `/guide-availability/leave` | VerifyMinLevel('guide') | Create a vacation/emergency leave period |
+| GET | `/guide-availability/leave/my` | VerifyMinLevel('guide') | The calling guide's own leave history |
+| DELETE | `/guide-availability/leave/:id` | VerifyMinLevel('guide') | Cancel a leave (flips `status` to `cancelled`; not deleted) |
+| GET | `/guide-availability/calendar/me` | VerifyMinLevel('guide') | Own merged calendar: unavailable dates + active leaves + booked ranges |
+| GET | `/guide-availability/guides?startDate&endDate?` | VerifyMinLevel('admin') | Assignable guides annotated `isAvailable` + conflict reasons for a date (range) |
+| GET | `/guide-availability/calendar/:id` | VerifyMinLevel('admin') | Merged calendar for any guide |
+
 ---
 
 ## Frontend Route Map
@@ -618,7 +631,8 @@ bookings), dispatched internally by `reference_type`.
       page.tsx              guide dashboard — profile-completion + membership status
       profile/              guide profile form (post-signup, or ongoing edits)
       buy-subscription/     membership payment / renewal
-      availability/, all-bookings/, tourguide-booking/, upcomming-tours/   (booking-related, unrelated to auth)
+      availability/          Blocked Dates (unchanged) + Phase 3 tabs: Vacation & Emergency Leave, Working Schedule
+      all-bookings/, tourguide-booking/, upcomming-tours/   (booking-related, unrelated to auth)
       assignments/           Phase 2 — accept/decline proposed bookings
       trips/, trips/[tripId]/  Phase 2 — start/complete trips
       reviews/               Phase 2 — reviews received + rating
@@ -627,6 +641,7 @@ bookings), dispatched internally by `reference_type`.
                              app/(website)/admin/page.tsx monolith below, which is untouched.
       page.tsx               KPI overview + booking/revenue trend chart
       assignments/, trips/, reviews/, reports/, activity-log/
+      guide-calendar/        Phase 3 — available/unavailable guides today, conflict alerts, per-guide merged calendar
   admin/                    LEGACY standalone admin dashboard (raw fetch, tab-based) — pre-dates
                             the cookie-auth migration, left running as-is; not to be confused with
                             dashboard/admin/ above
@@ -830,6 +845,88 @@ checks *authentication*, not role — see [Frontend Route Map](#frontend-route-m
 The pre-existing `Sidebar.tsx` nav arrays gained new entries for all of the above (Assignments,
 Trips, Reviews, Reports, Activity Log, Notifications) — additive only; no existing entry was
 changed, including the legacy `Dashboard → /admin` link.
+
+---
+
+## Guide Availability & Booking Conflict System (Phase 3)
+
+**Objective**: stop a guide from being assigned to two overlapping trips, and give admins
+visibility into a guide's calendar (bookings, leave, blocked dates) before they assign one.
+
+**Hard constraint this phase was built under**, same discipline as Phase 2: Auth, RBAC, OTP,
+Payment, Membership, Guide Profile, Booking, and Trip were **not rewritten**. Exactly one existing
+collection's shape changed (`ActivityLogTargetType` gained a `'GuideLeave'` member, additive), and
+the only behavioral change to existing code is that `AssignmentService.createAssignment` /
+`reassignGuide` now run a conflict check before assigning — everything else is new, additive
+code that only *reads* from `Booking`/`Assignment`/`Trip`.
+
+### The data-model reality that shapes this feature
+
+`Booking.travel_details` carries a single `date` — there is no time-of-day field anywhere in
+Booking or Trip. So conflict detection here is necessarily **day-level, not hour-level**: a
+booking's occupied range is computed as `date` → `date + booking_configuration.outstation
+.over_night_stay` nights (same single day for ordinary half/full-day bookings). `Guide.availableDays`
+/ `availableTime` (the pre-existing weekly-schedule fields) are surfaced read-only in the new UI but
+are not part of the conflict check — building true hour-level slot conflicts would require adding
+time fields to `Booking`, which is out of scope here.
+
+### GuideLeave (`backend/src/mongo/repo/GuideLeave.ts`)
+
+```
+GuideLeave { guide (ref Account), type: 'vacation'|'emergency', startDate, endDate,
+             reason?, status: 'active'|'cancelled' }
+```
+
+A guide's existing single-day `Account.unavailableDates` (pre-existing, unchanged — still edited
+from the "Blocked Dates" tab) continues to cover ad-hoc individual days. `GuideLeave` is new and
+covers multi-day **periods** with a type and reason — vacation or emergency leave. Cancelling a
+leave flips `status` to `cancelled` rather than deleting the row, so it stays visible in history.
+
+### Conflict detection (`backend/src/services/guideAvailability.ts`)
+
+`GuideAvailabilityService.checkGuideConflict(guideId, range)` checks a candidate date range against
+three sources for that guide:
+
+1. **Other active assignments** (`status in [pending, accepted]`), excluding any whose `Trip` has
+   since been cancelled — `Trip.cancel()` doesn't revert the assignment's status, so the `Trip` is
+   the source of truth for "does this still hold the guide's calendar."
+2. **Active `GuideLeave` periods.**
+3. **`Account.unavailableDates`** (the pre-existing field, read as-is).
+
+`getGuidesAvailability(range)` runs the same check across every guide, annotating each with
+`isAvailable` + a list of conflict reasons — this is what feeds the admin "Available/Unavailable
+Guides" panel and the Assign-Guide modal's per-guide conflict badges.
+
+### Admin override
+
+`AssignmentService.createAssignment` / `reassignGuide` both call the conflict check before
+assigning. If there's a conflict and the caller didn't pass `{ override: true, overrideReason }`,
+the request is rejected with a `ConflictError` listing the reasons. If the admin *does* override, the
+assignment proceeds and an `assignment.conflict_overridden` entry is written to the existing
+`ActivityLog` (actor, conflicts, and the reason), so every forced double-booking is auditable.
+
+### API surface
+
+New module mounted at `/guide-availability` — see the [API Reference](#guide-availability--phase-3)
+table above. Nothing was added to `/guide`, `/booking`, or `/trip`; `/assignment`'s create/reassign
+bodies gained two optional fields (`override`, `overrideReason`), additive and backward-compatible
+(omitting them behaves exactly as it did before this phase, as long as there's no conflict).
+
+### Frontend surface
+
+- The guide's existing **"My Schedule"** page (`dashboard/guide/availability`) gained tabs: the
+  original Blocked Dates calendar is untouched; **Vacation & Emergency Leave** is a new date-range
+  form + list (`GuideLeaveForm`, `GuideLeaveList`); **Working Schedule** is a read-only view of
+  `availableDays`/`availableTime` linking to the existing Edit Profile page rather than duplicating
+  that form.
+- `AssignGuideModal` (used by `dashboard/admin/assignments`) now accepts an optional `availability`
+  prop — when present, it flags conflicted guides in the picker and reveals an Override checkbox +
+  required reason field before allowing submission through a conflict.
+- New page `dashboard/admin/guide-calendar` — available/unavailable guides today, conflict alerts,
+  and a per-guide merged calendar (`GuideCalendarView`, shared with the guide's own calendar
+  rendering), added to the admin sidebar nav.
+- New thunks/state were added to the **existing** `guideSlice`/`assignmentSlice` — no new Redux
+  slices were introduced.
 
 ---
 
