@@ -127,6 +127,7 @@ export default function FindGuidesPage() {
         title={t("find_guides_title")}
         description={t("find_guides_desc")}
         backgroundImage={IMAGES.scene2}
+        imageAlt="Travelers searching for a certified local guide on GetMyGuide"
       />
 
       <section

@@ -69,6 +69,11 @@ export default function GuideBookingDetailPage() {
     return null;
   }
 
+  // `user` may be populated (object) or a raw id (string) depending on the
+  // endpoint — guard before reading fields.
+  const touristUser =
+    typeof booking.user === "object" && booking.user !== null ? booking.user : null;
+
   return (
     <div className="container mx-auto py-8 px-4">
       <Button variant="ghost" onClick={() => router.back()} className="mb-4">
@@ -91,8 +96,8 @@ export default function GuideBookingDetailPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-4">
               <h3 className="font-semibold flex items-center text-lg"><User className="w-5 h-5 mr-3 text-primary" />Tourist Information</h3>
-              <p><strong>Name:</strong> {booking.user?.name || 'N/A'}</p>
-              <p><strong>Email:</strong> {booking.user?.email || 'No email'}</p>
+              <p><strong>Name:</strong> {touristUser?.name || 'N/A'}</p>
+              <p><strong>Email:</strong> {touristUser?.email || 'No email'}</p>
               <p><strong>Contact Name (on form):</strong> {booking.contactInfo.fullName}</p>
             </div>
             <div className="space-y-4">

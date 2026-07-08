@@ -84,6 +84,7 @@ export default function ContactPage() {
         title={t("contact_title")}
         description={t("contact_desc")}
         backgroundImage={IMAGES.scene5}
+        imageAlt="Contact the GetMyGuide team"
       />
 
       {/* Contact info cards */}

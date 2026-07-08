@@ -316,7 +316,7 @@ const VideoSlide = memo(function VideoSlide({
               {/* Flag Display */}
               {testimonial.country && (
                 <img
-                  src={getFlagUrl(testimonial.country)}
+                  src={getFlagUrl(testimonial.country) ?? undefined}
                   alt={testimonial.country}
                   className="w-6 h-auto rounded-sm shadow-sm"
                   loading="lazy"
@@ -384,7 +384,7 @@ const TextSlide = memo(function TextSlide({ testimonial }: { testimonial: any })
             {/* Flag Display */}
             {testimonial.country && (
               <img
-                src={getFlagUrl(testimonial.country)}
+                src={getFlagUrl(testimonial.country) ?? undefined}
                 alt={testimonial.country}
                 className="w-10 h-auto rounded-sm shadow-sm"
                 loading="lazy"

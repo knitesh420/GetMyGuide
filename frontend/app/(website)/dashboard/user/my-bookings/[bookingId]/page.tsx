@@ -129,7 +129,11 @@ export default function BookingDetailPage() {
     );
   }
   if (!booking) {
-    return <div>hey booking is not here {booking}</div>;
+    return (
+      <div className="container max-w-4xl mx-auto px-4 py-12 text-center text-muted-foreground">
+        Booking not found.
+      </div>
+    );
   }
 
   const tour = typeof booking.tour === "object" ? booking.tour : null;

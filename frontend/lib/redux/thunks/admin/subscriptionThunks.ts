@@ -50,7 +50,7 @@ export const fetchSubscriptions = createAsyncThunk<SubscriptionPlan[]>(
   'subscriptions/fetchAll', // Renamed for clarity
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiService.get<SubscriptionListResponse>(API_BASE_URL);
+      const response = await apiService.get<SubscriptionPlan[]>(API_BASE_URL);
       return response.data || [];
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch subscription plans';
@@ -66,7 +66,7 @@ export const addSubscription = createAsyncThunk<SubscriptionPlan, CreateSubscrip
   'subscriptions/add', // Renamed for clarity
   async (planData, { rejectWithValue }) => {
     try {
-      const response = await apiService.post<SubscriptionSingleResponse>(API_BASE_URL, planData);
+      const response = await apiService.post<SubscriptionPlan>(API_BASE_URL, planData);
       const newPlan = response.data;
       if (newPlan) {
         return newPlan;
@@ -88,7 +88,7 @@ export const updateSubscription = createAsyncThunk<SubscriptionPlan, Subscriptio
   async (planData, { rejectWithValue }) => {
     try {
       const { _id, ...updateData } = planData;
-      const response = await apiService.put<SubscriptionSingleResponse>(`${API_BASE_URL}/${_id}`, updateData);
+      const response = await apiService.put<SubscriptionPlan>(`${API_BASE_URL}/${_id}`, updateData);
       const updatedPlan = response.data;
       if (updatedPlan) {
         return updatedPlan;

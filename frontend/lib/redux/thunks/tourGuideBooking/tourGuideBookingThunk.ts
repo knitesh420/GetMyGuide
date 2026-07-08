@@ -3,6 +3,12 @@ import { createAsyncThunk } from "@reduxjs/toolkit";
 import { apiService } from "@/lib/service/api";
 import { tourGuideBooking as Booking } from "@/lib/data"; // Assuming Booking type is defined in data.ts
 
+const handleThunkError = (error: any, rejectWithValue: Function) => {
+  const message = error.response?.data?.message || error.message || "An unknown error occurred";
+  console.error("Thunk Error:", message, error);
+  return rejectWithValue(message);
+};
+
 // Define the shape of the data needed to create a booking
 export interface BookingCreationData {
   guideId: string;

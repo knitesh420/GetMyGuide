@@ -40,7 +40,7 @@ export const fetchUserBookings = createAsyncThunk<
     );
     // ✅ CORRECTION: Return the entire response object, not just the .data property.
     // The slice needs the whole object to get both .data and .pagination.
-    return response;
+    return response as unknown as FetchResponse;
   } catch (error: any) {
     return rejectWithValue(error.message || "Failed to fetch bookings.");
   }
@@ -58,7 +58,7 @@ export const cancelBooking = createAsyncThunk<
       `/tourguide/${bookingId}/cancel`,
       { reason }
     );
-    return response.data!;
+    return response.data as unknown as Booking;
   } catch (error: any) {
     return rejectWithValue(error.message || "Failed to cancel booking.");
   }
@@ -73,7 +73,7 @@ export const fetchAllBookingsAdmin = createAsyncThunk<
     const response = await apiService.get<FetchResponse>(
       `/tourguide/all?page=${page}&limit=${limit}`
     );
-    return response;
+    return response as unknown as FetchResponse;
   } catch (error: any) {
     return rejectWithValue(error.message || "Failed to fetch all bookings for admin.");
   }
@@ -90,7 +90,7 @@ export const cancelBookingByAdmin = createAsyncThunk<
       `/tourguide/${bookingId}/cancel`,
       { reason }
     );
-    return response.data!;
+    return response.data as unknown as Booking;
   } catch (error: any) {
     return rejectWithValue(error.message || "Failed to cancel booking as admin.");
   }
@@ -106,7 +106,7 @@ export const reassignGuideThunk = createAsyncThunk<
       `/tourguide/${bookingId}/reassign-guide`,
       { newGuideId }
     );
-    return response.data!;
+    return response.data as unknown as Booking;
   } catch (error: any) {
     return rejectWithValue(error.message || "Failed to reassign guide.");
   }
@@ -127,7 +127,7 @@ export const updateBookingStatusThunk = createAsyncThunk<
       `/tourguide/${bookingId}/status`,
       { status } // The body just needs the new status
     );
-    return response.data!;
+    return response.data as unknown as Booking;
   } catch (error: any) {
     return rejectWithValue(error.message || "Failed to update booking status.");
   }
@@ -147,7 +147,7 @@ export const fetchMyGuideBookingsThunk = createAsyncThunk<
     const response = await apiService.get<Booking[]>(
       '/guides/my-bookings'
     );
-    return response;
+    return response as unknown as Booking[];
   } catch (error: any) {
     return rejectWithValue(error.message || "Failed to fetch guide's bookings.");
   }
@@ -162,7 +162,7 @@ export const fetchMyGuideBookingByIdThunk = createAsyncThunk<
     const response = await apiService.get<Booking>(
       `/guides/my-bookings/${bookingId}`
     );
-    return response;
+    return response as unknown as Booking;
   } catch (error: any) {
     return rejectWithValue(error.message || "Failed to fetch booking details.");
   }

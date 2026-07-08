@@ -4,7 +4,7 @@ import express, { Express, NextFunction, Request, Response } from 'express';
 import fs from 'fs';
 import routes from './modules';
 
-import { createLoggerContext, errorHandler, NotFoundError } from 'node-be-utilities';
+import { createLoggerContext, errorHandler } from 'node-be-utilities';
 import { IS_WINDOWS, Path } from './config/const';
 
 const allowlist = [
@@ -48,12 +48,32 @@ export default function (app: Express) {
 	}
 	global.__basedir = basedir;
 
+	// Don't advertise the framework.
+	app.disable('x-powered-by');
+
+	// Baseline security headers (kept dependency-free; no CSP to avoid breaking
+	// existing pages/embeds). HSTS is only meaningful over HTTPS, so it's gated
+	// to production.
+	app.use((_req: Request, res: Response, next: NextFunction) => {
+		res.setHeader('X-Content-Type-Options', 'nosniff');
+		res.setHeader('X-Frame-Options', 'DENY');
+		res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+		res.setHeader('X-DNS-Prefetch-Control', 'off');
+		if (process.env.NODE_ENV === 'production') {
+			res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+		}
+		next();
+	});
+
 	//Initialize all the middleware
 	app.use(cookieParser());
-	app.use(express.urlencoded({ extended: true, limit: '2048mb' }));
+	// Body-size limits: file/media uploads go through multer (multipart), not
+	// these parsers, so a generous-but-bounded JSON/urlencoded limit is safe and
+	// removes the previous 2GB DoS surface.
+	app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 	app.use(
 		express.json({
-			limit: '2048mb',
+			limit: '25mb',
 			verify: (req: any, _res, buf) => {
 				// Capture raw body for webhook signature verification
 				req.rawBody = buf;
@@ -88,63 +108,9 @@ export default function (app: Express) {
 
 	app.use('/', routes);
 
-	app.route('/media/:path/:filename').get((req, res, next) => {
-		try {
-			const filePath = __basedir + '/static/' + req.params.path + '/' + req.params.filename;
-
-			if (!fs.existsSync(filePath)) {
-				return next(new NotFoundError('File not found'));
-			}
-
-			const stat = fs.statSync(filePath);
-			const fileSize = stat.size;
-			const range = req.headers.range;
-
-			// Determine content type
-			const ext = req.params.filename.split('.').pop()?.toLowerCase();
-			const mimeTypes: Record<string, string> = {
-				mp4: 'video/mp4',
-				webm: 'video/webm',
-				ogg: 'video/ogg',
-				mov: 'video/quicktime',
-				jpg: 'image/jpeg',
-				jpeg: 'image/jpeg',
-				png: 'image/png',
-				gif: 'image/gif',
-				webp: 'image/webp',
-				svg: 'image/svg+xml',
-			};
-			const contentType = mimeTypes[ext || ''] || 'application/octet-stream';
-
-			if (range) {
-				// Handle range request for video streaming
-				const parts = range.replace(/bytes=/, '').split('-');
-				const start = parseInt(parts[0], 10);
-				const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-				const chunkSize = end - start + 1;
-
-				const stream = fs.createReadStream(filePath, { start, end });
-				res.writeHead(206, {
-					'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-					'Accept-Ranges': 'bytes',
-					'Content-Length': chunkSize,
-					'Content-Type': contentType,
-					'Content-Disposition': 'inline',
-				});
-				stream.pipe(res);
-			} else {
-				res.writeHead(200, {
-					'Content-Length': fileSize,
-					'Content-Type': contentType,
-					'Accept-Ranges': 'bytes',
-					'Content-Disposition': 'inline',
-				});
-				fs.createReadStream(filePath).pipe(res);
-			}
-		} catch {
-			return next(new NotFoundError('File not found'));
-		}
-	});
+	// NOTE: the /media/:path/:filename streaming route is defined once, inside
+	// modules/index.ts (mounted above at '/'). It used to be duplicated here as
+	// well, but that copy was shadowed by the router and has been removed.
 
 	// Use node-be-utilities error handler
 	app.use(errorHandler);

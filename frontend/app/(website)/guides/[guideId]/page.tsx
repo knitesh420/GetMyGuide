@@ -30,7 +30,7 @@ export default function GuideProfilePage({ params }: { params: { guideId: string
             <section className="flex flex-col sm:flex-row items-start gap-8 mb-10 animate-fade-in-up">
               <div className="relative h-48 w-48 flex-shrink-0">
                 <Image
-                  src={guide.photo}
+                  src={guide.photo || "/placeholder.svg"}
                   alt={guide.name}
                   fill
                   className="object-cover rounded-full shadow-lg border-4 border-card"
@@ -74,7 +74,7 @@ export default function GuideProfilePage({ params }: { params: { guideId: string
                     <h2 className="text-3xl font-bold">Specializations</h2>
                 </div>
                 <div className="flex flex-wrap gap-3">
-                    {guide.specializations.map(spec => (
+                    {(guide.specializations ?? []).map(spec => (
                         <Badge key={spec} className="text-base px-4 py-2">{spec}</Badge>
                     ))}
                 </div>
@@ -101,7 +101,7 @@ export default function GuideProfilePage({ params }: { params: { guideId: string
                     <Languages className="w-6 h-6 text-primary flex-shrink-0 mt-1"/>
                     <div>
                         <span className="font-semibold text-foreground">Languages</span>
-                        <p className="text-muted-foreground">{guide.languages.join(', ')}</p>
+                        <p className="text-muted-foreground">{(guide.languages ?? []).join(', ')}</p>
                     </div>
                   </div>
                    <div className="flex items-start gap-4">

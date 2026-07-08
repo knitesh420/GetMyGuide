@@ -24,7 +24,6 @@ import {
   ArrowRight,
 } from "lucide-react";
 import Image from "next/image";
-import HeroSection from "@/components/all/CommonHeroSection";
 import Link from "next/link";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -171,23 +170,33 @@ export default function HowItWorksPage() {
   return (
     <div className="min-h-screen bg-background">
       <main>
-        <div className="relative">
-          <HeroSection
-            backgroundImage={IMAGES.howItWorkHero}
-            imageContainerClassName="w-full aspect-[2/1]"
-            imageFit="contain"
-            overlayOpacity={0}
-            dimImage={false}
-          />
-          <div className="absolute top-[12%] left-[36%] right-[6%] z-20 sm:left-[46%] md:left-auto md:max-w-xs">
-            <div className="flex items-center gap-1.5 sm:gap-2 rounded-2xl bg-white/90 backdrop-blur px-2.5 py-1.5 sm:px-4 sm:py-2 shadow-md">
-              <Users className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-primary shrink-0" />
-              <p className="min-w-0 flex-1 wrap-break-word text-[10px] sm:text-sm md:text-base font-medium text-foreground text-right">
-                {t("how_tagline")}
-              </p>
+        <section className="w-full">
+          {/* Tagline headline, moved above the banner */}
+          <div className="container mx-auto max-w-4xl px-4 pt-8 pb-6 text-center sm:pt-10 md:pt-14 md:pb-10">
+            <span className="mb-3 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-primary sm:mb-4 sm:px-4 sm:py-1.5 sm:text-sm">
+              <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              {t("how_badge")}
+            </span>
+            <h1 className="bg-gradient-to-r from-primary via-red-500 to-rose-600 bg-clip-text text-2xl font-extrabold leading-tight tracking-tight text-transparent text-balance sm:text-3xl md:text-4xl lg:text-5xl">
+              {t("how_tagline")}
+            </h1>
+            <div className="mx-auto mt-4 h-1 w-20 rounded-full bg-gradient-to-r from-primary to-rose-500 sm:mt-5 sm:w-28" />
+          </div>
+
+          {/* Banner image, full and uncropped with no black frame around it */}
+          <div className="container mx-auto max-w-7xl px-4">
+            <div className="relative w-full aspect-[2/1] overflow-hidden rounded-2xl shadow-lg md:rounded-3xl">
+              <Image
+                src={IMAGES.howItWorkHero}
+                alt="How GetMyGuide works — booking a certified local guide step by step"
+                fill
+                priority
+                sizes="(min-width: 1280px) 1248px, 100vw"
+                className="object-contain object-center"
+              />
             </div>
           </div>
-        </div>
+        </section>
 
         <section className="py-16 md:py-24">
           <div className="container max-w-7xl mx-auto px-4">

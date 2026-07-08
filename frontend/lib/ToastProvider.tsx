@@ -24,7 +24,6 @@ export default function ToastProvider({ children }: ToastProviderProps) {
         pauseOnHover
         theme="light"
         toastClassName="relative flex p-1 min-h-[2.5rem] rounded-md justify-between overflow-hidden cursor-pointer"
-        bodyClassName={`text-sm font-medium block p-3`}
       />
     </>
   );

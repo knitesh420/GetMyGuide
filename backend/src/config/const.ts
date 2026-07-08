@@ -27,7 +27,7 @@ export const REGISTRATION_OTP_RESEND_COOLDOWN_SECONDS = 60;
 export const PASSWORD_RESET_OTP_TTL_SECONDS = 10 * 60; // 10 minutes
 export const PENDING_REGISTRATION_TTL_SECONDS = 30 * 60; // 30 minutes
 
-export const ACCESS_COOKIE_MAX_AGE_MS = 1 * 24 * 60 * 60 * 1000; // 15 minutes
+export const ACCESS_COOKIE_MAX_AGE_MS = 1 * 24 * 60 * 60 * 1000; // 1 day
 export const REFRESH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 export const RESEND_API_KEY = process.env.RESEND_API_KEY ?? 'RESEND_API_KEY';
@@ -65,3 +65,33 @@ export enum Path {
 
 export const CACHE_TIMEOUT = 60 * 60; //seconds
 export const REFRESH_CACHE_TIMEOUT = 30 * 24 * 60 * 60; //seconds
+
+/**
+ * Fail fast in production if any critical secret is missing or still using its
+ * insecure development fallback. No-op outside production, so local dev keeps
+ * working with the defaults above.
+ */
+export function assertProductionEnv(): void {
+	if (!IS_PRODUCTION) return;
+
+	const problems: string[] = [];
+
+	if (!process.env.DATABASE_URL) problems.push('DATABASE_URL is not set');
+	if (JWT_ACCESS_SECRET === 'dev-access-secret-change-me')
+		problems.push('JWT_ACCESS_SECRET is using the insecure development default');
+	if (JWT_REFRESH_SECRET === 'dev-refresh-secret-change-me')
+		problems.push('JWT_REFRESH_SECRET is using the insecure development default');
+	if (RESEND_API_KEY === 'RESEND_API_KEY') problems.push('RESEND_API_KEY is not set');
+	if (RAZORPAY_API_KEY === 'RAZORPAY_API_KEY') problems.push('RAZORPAY_API_KEY is not set');
+	if (RAZORPAY_API_SECRET === 'RAZORPAY_API_SECRET')
+		problems.push('RAZORPAY_API_SECRET is not set');
+	if (RAZORPAY_WEBHOOK_SECRET === 'RAZORPAY_WEBHOOK_SECRET')
+		problems.push('RAZORPAY_WEBHOOK_SECRET is not set');
+
+	if (problems.length > 0) {
+		throw new Error(
+			'Refusing to start in production with insecure/missing configuration:\n' +
+				problems.map((p) => `  - ${p}`).join('\n')
+		);
+	}
+}

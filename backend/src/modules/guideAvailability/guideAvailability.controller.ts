@@ -28,7 +28,11 @@ async function getMyLeaves(req: Request, res: Response, next: NextFunction) {
 		}
 
 		const leaves = await GuideAvailabilityService.getMyLeaves(user.userId);
-		return Respond({ res, status: 200, data: leaves });
+		// Wrap the array under `data`: Respond() spreads its `data` onto the top
+		// level of the body, which would destroy a bare array (turning it into an
+		// object with numeric keys). Nesting keeps it a real array on the client
+		// as response.data.
+		return Respond({ res, status: 200, data: { data: leaves } });
 	} catch (error) {
 		return next(error);
 	}
@@ -82,7 +86,9 @@ async function getGuidesAvailability(req: Request, res: Response, next: NextFunc
 		};
 
 		const guides = await GuideAvailabilityService.getGuidesAvailability(range);
-		return Respond({ res, status: 200, data: guides });
+		// Wrap the array under `data` — see getMyLeaves above for why a bare
+		// array must not be passed straight to Respond().
+		return Respond({ res, status: 200, data: { data: guides } });
 	} catch (error) {
 		return next(error);
 	}

@@ -82,6 +82,7 @@ export interface Booking {
   tour: string | PopulatedTour;
   guide: string | PopulatedGuide;
   user: string | PopulatedUser;
+  originalGuide?: string | PopulatedGuide;
   startDate: string;
   endDate: string;
   numberOfTourists: number;

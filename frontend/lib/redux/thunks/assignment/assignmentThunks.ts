@@ -143,8 +143,9 @@ export const fetchGuideCalendar = createAsyncThunk<GuideCalendar, string>(
   "assignment/fetchGuideCalendar",
   async (guideId, { rejectWithValue }) => {
     try {
+      // Respond() spreads the calendar object onto the top level of the body.
       const response = await apiService.get<GuideCalendar>(`/guide-availability/calendar/${guideId}`);
-      return response.data!;
+      return response as unknown as GuideCalendar;
     } catch (err: any) {
       return rejectWithValue(handleError(err));
     }

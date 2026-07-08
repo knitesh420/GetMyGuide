@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import Image from "next/image";
 import { IMAGES } from "@/lib/images";
 
 const images = IMAGES.heroCarousel;
@@ -56,10 +57,13 @@ export default function HeroCarousel() {
             transition={{ duration: 0.6, ease: "easeInOut" }}
             className="absolute inset-0"
           >
-            <img
+            <Image
               src={images[currentSlide]}
-              alt={`Tour photo ${currentSlide + 1}`}
-              className="w-full h-full object-cover object-center"
+              alt={`Certified GetMyGuide local guide leading an authentic tour experience — photo ${currentSlide + 1}`}
+              fill
+              priority={currentSlide === 0}
+              sizes="100vw"
+              className="object-cover object-center"
             />
           </motion.div>
         </AnimatePresence>

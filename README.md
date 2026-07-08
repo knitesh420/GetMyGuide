@@ -35,6 +35,7 @@ email.
 17. [Travel Operations — Assignment, Trip, Notification, Review, Reports (Phase 2)](#travel-operations--assignment-trip-notification-review-reports-phase-2)
 18. [Guide Availability & Booking Conflict System (Phase 3)](#guide-availability--booking-conflict-system-phase-3)
 19. [Testing](#testing)
+20. [Production Readiness Hardening (July 2026)](#production-readiness-hardening-july-2026)
 
 ---
 
@@ -97,6 +98,9 @@ Backend (`backend/.env`):
 | `RESEND_API_KEY` | Transactional email |
 | `RAZORPAY_API_KEY` / `RAZORPAY_API_SECRET` / `RAZORPAY_WEBHOOK_SECRET` | Payments |
 | `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Media hosting |
+| `COMPANY_*` (`NAME`/`ADDRESS`/`LOGO_URL`/`SUPPORT_EMAIL`/`SUPPORT_PHONE`/`WEBSITE`) | Branding shown in emails/invoices |
+| `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PHONE` / `ADMIN_PASSWORD` | Used only by `scripts/seedAdmin.ts` (password ≥ 12 chars) |
+| `NOTIFICATION_WATCHER_INTERVAL_MS` | Phase 2 notification-watcher poll interval (default 5 min) |
 | `GUIDE_PAYMENT_LINK_BASE_URL` | Legacy, unused email template reference |
 
 Frontend (`frontend/.env`):
@@ -104,6 +108,13 @@ Frontend (`frontend/.env`):
 | Variable | Purpose |
 |---|---|
 | `NEXT_PUBLIC_API_URL` | Backend base URL (`http://localhost:8000` in dev) |
+| `NEXT_PUBLIC_RAZORPAY_KEY_ID` | Razorpay public key for the checkout widget |
+| `NEXT_PUBLIC_SITE_URL` | Canonical site URL (metadata, sitemap, OG tags) |
+
+Both apps ship a committed **`.env.example`** template (`backend/.env.example`, `frontend/.env.example`)
+— copy it to `.env` and fill in real values. In production the backend runs `assertProductionEnv()`
+(`config/const.ts`) at boot and **refuses to start** if `DATABASE_URL`, the JWT secrets, or the
+Razorpay secrets are missing or still set to their insecure development defaults.
 
 **⚠️ Production note**: as configured on this machine, `backend/.env` points at the **live
 production** MongoDB Atlas cluster (`NODE_ENV=production`). There is no separate staging database.
@@ -710,10 +721,16 @@ Documented here so it isn't mistaken for something broken or in-scope for future
 - `POST /session/signup` (plain, non-OTP signup) still exists and works, but no frontend page
   calls it — superseded by the OTP-registration flow. Left mounted rather than deleted, in case
   anything external still depends on it.
-- The frontend's `dashboard`/`subscriptions` Redux slices and several `guideThunk.ts` endpoints
-  (`/guides/all-guides`, `/guides/:id/approve`, `/guides/:id/pricing-details`,
-  `/guides/my-bookings`, `/guides/for-tour`, `/subscriptions/*`) call backend routes that don't
-  exist — pre-existing dead code, unrelated to the auth/registration system, not in scope here.
+- Several frontend thunks call backend routes that **don't exist** — whole unimplemented domains,
+  not just stray endpoints: `/tourguide/*` (direct guide-booking + final-payment flow),
+  `/languages` + `/locations` (admin-managed location/language group-pricing the find-guides →
+  book → checkout flow depends on), `/subscriptions/*` (subscription-plan CRUD), and
+  `/guides/:id/pricing-details`, `/guides/all-guides`, `/guides/:id/approve`, `/guides/my-bookings`.
+  Building these out is feature work, out of scope for a bug-fix pass. As of the July 2026 hardening
+  pass, `fetchGuidesForTour` was repointed from the non-existent `/guides/for-tour` to the real
+  `/guides/all` (no server-side date-range availability filtering), and `upcomming-tours` still
+  renders local mock data rather than the API. See the [Production Readiness Hardening](#production-readiness-hardening-july-2026)
+  section for the full list.
 - Forgot-password was **changed** from an emailed reset-link+token to OTP-based (confirmed correct
   by the project owner) — if you see references to a `pwreset:<token>` `Storage` key pattern in
   old notes/history, that's the retired mechanism; the current one uses `pwreset-otp:<email>`.
@@ -960,3 +977,59 @@ Mongoose models, `jest.mock('@provider/email', ...)` to stub outgoing email, and
 both the returned value and the resulting DB state. `notification.test.ts` specifically exercises
 the `dedupeKey` idempotency guarantee (a duplicate `create()` call returns `null` and does not
 insert a second row) since that's the correctness property the notification watcher depends on.
+
+---
+
+## Production Readiness Hardening (July 2026)
+
+A bug-fix-and-stabilization pass focused on making the app production-ready **without** adding
+features, redesigning architecture, or touching the auth/RBAC/payment/membership business logic.
+Both codebases now typecheck clean (`tsc --noEmit` → 0 errors on each) and a full
+`next build` succeeds with type-checking **enabled**.
+
+### Correctness fixes
+
+- **Booking-verification crash** — `tourGuideBookingSlice` wrote to a non-existent `state.bookings`,
+  throwing in the reducer on every successful final-payment verification. Removed.
+- **API response-envelope mismatch** — the backend's `Respond({ data: X })` (node-be-utilities)
+  **spreads** `X` onto the top level of the body (`{ ...X, success }`), so it is **not** nested under
+  `data`. Thunks that read `response.data` against these endpoints got `undefined`. Fixed the guide
+  dashboard / guide-detail / membership / availability / admin-availability thunks to read the
+  spread payload correctly. Bare arrays passed to `Respond({ data: arr })` are destroyed by the
+  spread (numeric-keyed object) — the guide-availability list endpoints (`getMyLeaves`,
+  `getGuidesAvailability`) now wrap them as `Respond({ data: { data: arr } })`. Modules that build
+  their response with raw `res.json({ data: X })` (package, blog) were already correct.
+- **Unguarded union access** — pages read `.title` / `.name` / `.photo` on `string | Populated…`
+  unions without a populated-check (booking-success, tour-guide booking pages, guide detail); these
+  could crash on unpopulated bookings and are now guarded.
+- **Type errors were being shipped** — `next.config.mjs` had `typescript.ignoreBuildErrors: true`,
+  masking ~45 real type errors. All fixed; the flag is now `false` so type regressions fail the
+  build.
+
+### Stability & UX
+
+- Added the missing `public/placeholder.svg` (referenced as the image fallback across the app).
+- Added `app/not-found.tsx`, `app/error.tsx`, and `app/global-error.tsx` (there were no custom
+  error/404 pages).
+- `dashboard/layout.tsx` now enforces a **role guard** per section (admin/guide/user) in addition to
+  the existing authentication check — the backend already enforced RBAC; this stops users landing on
+  a shell they can't use.
+
+### Backend hardening
+
+- Baseline security headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
+  `X-DNS-Prefetch-Control`, plus HSTS in production), `x-powered-by` disabled, and the JSON/urlencoded
+  body limit reduced from **2 GB → 25 MB** (file uploads use multer/multipart, unaffected).
+- `assertProductionEnv()` fails fast at boot if production secrets are missing/insecure.
+- Committed `backend/.env.example` (previously absent).
+- Removed the duplicate `/media/:path/:filename` route from `server-config.ts` (it was shadowed by
+  the one in `modules/index.ts`).
+
+### Known limitations left in place (deliberately, as out-of-scope for a bug-fix pass)
+
+- The `/tourguide/*`, `/languages`, `/locations`, `/subscriptions`, and `/guides/:id/pricing-details`
+  domains have **no backend implementation** — the find-guides → book → checkout and direct
+  tour-guide-booking flows depend on them. Building them out is feature work.
+- `dashboard/guide/upcomming-tours` renders local mock data, not the API.
+- A possible pricing double-count in `utils/priceCalculator.ts` (excursion allowance added to two
+  buckets) is flagged but untouched pending product confirmation.

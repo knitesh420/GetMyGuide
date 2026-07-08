@@ -89,8 +89,8 @@ export default function GuideBookingsPage() {
           {bookings.map((booking) => (
             <TableRow key={booking._id}>
               <TableCell>
-                <div className="font-medium">{booking.user?.name || 'N/A'}</div>
-                <div className="text-sm text-muted-foreground">{booking.user?.email || 'No email'}</div>
+                <div className="font-medium">{(typeof booking.user === "object" && booking.user ? booking.user.name : undefined) || 'N/A'}</div>
+                <div className="text-sm text-muted-foreground">{(typeof booking.user === "object" && booking.user ? booking.user.email : undefined) || 'No email'}</div>
               </TableCell>
               <TableCell>
                 {format(new Date(booking.startDate), 'LLL dd, yyyy')} - {format(new Date(booking.endDate), 'LLL dd, yyyy')}

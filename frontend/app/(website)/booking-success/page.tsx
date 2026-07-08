@@ -60,7 +60,14 @@ function SuccessContent() {
     }
 
     // 4. Success State (using live data from currentBooking)
+    // `tour` and `guide` may come back either populated (object) or as a raw
+    // id (string) depending on the endpoint, so guard before reading fields.
     const { tour, guide, startDate, _id } = currentBooking;
+    const tourObj = typeof tour === "object" && tour !== null ? tour : null;
+    const guideObj = typeof guide === "object" && guide !== null ? guide : null;
+    const tourTitle = tourObj?.title ?? "Your Tour";
+    const guideName = guideObj?.name ?? "Your Guide";
+    const guidePhoto = guideObj?.photo || "/placeholder.svg";
 
     return (
         <div className="max-w-3xl mx-auto">
@@ -72,7 +79,7 @@ function SuccessContent() {
 
             <Card className="overflow-hidden shadow-lg">
                 <CardContent className="p-6 space-y-4">
-                    <h3 className="text-2xl font-bold">{tour.title}</h3>
+                    <h3 className="text-2xl font-bold">{tourTitle}</h3>
                     <div className="flex flex-col sm:flex-row items-start gap-6">
                         <div className="flex-1 space-y-3">
                             <div className="flex items-center gap-3">
@@ -86,12 +93,12 @@ function SuccessContent() {
                                 <User className="w-5 h-5 text-primary" />
                                 <div>
                                     <p className="font-semibold">Your Assigned Guide</p>
-                                    <p className="text-muted-foreground">{guide.name}</p>
+                                    <p className="text-muted-foreground">{guideName}</p>
                                 </div>
                             </div>
                         </div>
                         <div className="flex-shrink-0 text-center">
-                            <Image src={guide.photo} alt={guide.name} width={80} height={80} className="rounded-full mx-auto shadow-md" />
+                            <Image src={guidePhoto} alt={guideName} width={80} height={80} className="rounded-full mx-auto shadow-md" />
                         </div>
                     </div>
                 </CardContent>

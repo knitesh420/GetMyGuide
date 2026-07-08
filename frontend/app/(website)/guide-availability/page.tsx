@@ -153,14 +153,8 @@ interface Guide {
   email: string;
   phone: string;
   city: string;
-  type: "normal" | "escort";
-  pan?: string;
-  licence: string;
-  aadhar: string;
   languages: string[];
   photo: string;
-  createdAt: Date;
-  updatedAt: Date;
 }
 
 // Helper function to get image URL
@@ -196,7 +190,10 @@ export default function GuideAvailabilityPage() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`${API_BASE_URL}/guide/list-all`);
+      // Public endpoint: approved, currently-visible guides. (The old
+      // `/guide/list-all` is admin-only and returns KYC enrollment data, so it
+      // 401s for anonymous visitors — which left this page permanently empty.)
+      const response = await fetch(`${API_BASE_URL}/guide/all?limit=1000`);
 
       if (!response.ok) {
         throw new Error(
@@ -214,10 +211,21 @@ export default function GuideAvailabilityPage() {
       const data = await response.json();
 
       if (data.success || data.data) {
-        const enrollments: Guide[] =
-          data.data?.enrollments || data.enrollments || [];
+        // Shape: { data: { data: GuideProfile[], total, page, totalPages } }
+        const list: any[] = data.data?.data ?? [];
+        const normalized: Guide[] = list.map((g) => ({
+          id: g._id ?? g.id ?? "",
+          name: g.name ?? "",
+          email: g.email ?? "",
+          phone: g.mobile ?? g.phone ?? "",
+          city: Array.isArray(g.serviceLocations)
+            ? g.serviceLocations[0] ?? ""
+            : g.city ?? "",
+          languages: Array.isArray(g.languages) ? g.languages : [],
+          photo: g.photo ?? "",
+        }));
 
-        setGuides(enrollments);
+        setGuides(normalized);
       } else {
         setError(data.message || "Failed to fetch guides");
       }

@@ -5,7 +5,7 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { bookings as initialBookings, tours, guides } from '@/lib/data';
-import type { Booking, Tour, Guide, BookingStatus } from '@/lib/data';
+import type { Tour, Guide } from '@/lib/data';
 import { toast } from 'react-toastify';
 import { 
   Search, 
@@ -41,11 +41,11 @@ function TourDetailSheet({
     guide, 
     isOpen, 
     onOpenChange 
-}: { 
-    booking: Booking; 
-    tour: Tour; 
-    guide: Guide; 
-    isOpen: boolean; 
+}: {
+    booking: any; // mock/prototype booking shape — see note in the page component
+    tour: Tour;
+    guide: Guide;
+    isOpen: boolean;
     onOpenChange: (isOpen: boolean) => void;
 }) {
     const advancePaid = booking.totalPrice * 0.20;
@@ -126,9 +126,14 @@ function TourDetailSheet({
 export default function GuideUpcomingToursPage() {
   const loggedInGuideId = "guide_prof_02"; // Mock: Assuming Anjali Sharma is logged in
 
-  const [allBookings, setAllBookings] = useState<Booking[]>(initialBookings);
+  // NOTE: this page renders local mock data (initialBookings/tours/guides) and
+  // is not yet wired to the backend. The rows use fields (guideId, tourId,
+  // userName, advancePaid, …) that only exist on the mock shape, so the mock
+  // collections are treated as loosely typed here until the page is connected
+  // to the real bookings API.
+  const [allBookings, setAllBookings] = useState<any[]>(initialBookings as any[]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [selectedBooking, setSelectedBooking] = useState<any | null>(null);
 
   const populatedBookings = useMemo(() => {
     return allBookings

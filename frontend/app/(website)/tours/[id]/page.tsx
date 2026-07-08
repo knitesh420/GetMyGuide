@@ -81,7 +81,7 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
   const dispatch = useDispatch<AppDispatch>();
 
   // ── All hooks at the top — before any conditional returns ──
-  const { items: packages, recommended } = useSelector(
+  const { items: packages, recommended, loading } = useSelector(
     (state: RootState) => state.packages,
   );
 

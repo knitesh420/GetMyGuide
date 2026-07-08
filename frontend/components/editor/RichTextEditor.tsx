@@ -28,7 +28,7 @@ export function RichTextEditor({
 }: RichTextEditorProps) {
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ history: true }),
+      StarterKit,
       Underline,
       TextStyle,
       Color,
@@ -52,7 +52,7 @@ export function RichTextEditor({
     if (!editor) return;
     const current = editor.getHTML();
     if (content !== current && content !== "") {
-      editor.commands.setContent(content, false);
+      editor.commands.setContent(content, { emitUpdate: false });
     }
   }, [content, editor]);
 

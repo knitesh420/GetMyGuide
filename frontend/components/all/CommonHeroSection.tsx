@@ -30,6 +30,8 @@ interface HeroSectionProps {
    * "contain" letterboxes instead, so the entire image stays visible and
    * uncropped — use for banners/flyers where no content can be cut off. */
   imageFit?: "cover" | "contain";
+  /** Descriptive alt text for the hero image, for accessibility/image SEO. */
+  imageAlt?: string;
 }
 
 const DEFAULT_IMAGE_CONTAINER_CLASSNAME =
@@ -44,6 +46,7 @@ export default function HeroSection({
   imageContainerClassName = DEFAULT_IMAGE_CONTAINER_CLASSNAME,
   dimImage = true,
   imageFit = "cover",
+  imageAlt = "Hero Background",
 }: HeroSectionProps) {
   return (
     <section className="relative w-full bg-black py-10 md:py-16">
@@ -59,7 +62,7 @@ export default function HeroSection({
         >
           <Image
             src={backgroundImage}
-            alt="Hero Background"
+            alt={imageAlt}
             fill
             priority
             sizes="90vw"

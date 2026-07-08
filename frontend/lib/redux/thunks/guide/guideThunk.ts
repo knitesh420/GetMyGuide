@@ -14,13 +14,28 @@ export const fetchGuidesForTour = createAsyncThunk<
   { tourId: string; startDate: string; endDate: string; language?: string; page?: number; limit?: number }
 >("guide/fetchGuidesForTour", async (params, { rejectWithValue }) => {
   try {
+    // The backend has no dedicated /guides/for-tour endpoint. Approved,
+    // currently-visible guides are served by /guides/all. Date-range
+    // availability filtering is not implemented server-side, so we list the
+    // approved guides and let the traveller pick. The "all" language sentinel
+    // must be omitted, otherwise the backend regex-matches a literal "all".
+    const query: Record<string, string | number> = {};
+    if (params.language && params.language !== "all") query.language = params.language;
+    if (params.page) query.page = params.page;
+    if (params.limit) query.limit = params.limit;
+
     const response = await apiService.get<{
       data: GuideProfile[];
       total: number;
       page: number;
       totalPages: number;
-    }>("/guides/for-tour", { params });
-    return response;
+    }>("/guides/all", { params: query });
+    return response as unknown as {
+      data: GuideProfile[];
+      total: number;
+      page: number;
+      totalPages: number;
+    };
   } catch (err: any) {
     return rejectWithValue(handleError(err));
   }
@@ -33,8 +48,11 @@ export const getMyGuideProfile = createAsyncThunk<GuideProfile, void>(
   "guide/getMyProfile",
   async (_, { rejectWithValue }) => {
     try {
+      // The backend's Respond() spreads the payload onto the top level of the
+      // body ({ ...profile, success }), so the profile fields are on `response`
+      // itself, not `response.data`.
       const response = await apiService.get<GuideProfile>("/guides/profile");
-      return response.data!;
+      return response as unknown as GuideProfile;
     } catch (err: any) {
       return rejectWithValue(handleError(err));
     }
@@ -55,7 +73,7 @@ export const updateMyGuideProfile = createAsyncThunk<GuideProfile, FormData>(
           },
         }
       );
-      return response.data!;
+      return response as unknown as GuideProfile;
     } catch (err: any) {
       return rejectWithValue(handleError(err));
     }
@@ -84,7 +102,19 @@ export const createGuideMembershipOrder = createAsyncThunk<
       undefined,
       { headers: { "x-idempotency-key": crypto.randomUUID() } },
     );
-    return response.data;
+    // Respond() spreads { transaction_id, razorpay_options } onto the top level.
+    return response as unknown as {
+      transaction_id: string;
+      razorpay_options: {
+        description: string;
+        currency: string;
+        amount: number;
+        name: string;
+        order_id: string;
+        prefill: { name: string; contact: string; email: string };
+        key: string;
+      };
+    };
   } catch (err: any) {
     return rejectWithValue(handleError(err));
   }
@@ -106,7 +136,8 @@ export const confirmGuideMembershipPayment = createAsyncThunk<
       "/guides/membership/confirm-payment",
       payload,
     );
-    return response.data?.guide;
+    // Respond() spreads { message, guide } onto the top level.
+    return (response as unknown as { guide: GuideProfile }).guide;
   } catch (err: any) {
     return rejectWithValue(handleError(err));
   }
@@ -125,7 +156,12 @@ export const adminGetAllGuides = createAsyncThunk<
       totalPages: number;
     }>("/guides/all-guides", { params });
 
-    return response;
+    return response as unknown as {
+      data: GuideProfile[];
+      total: number;
+      page: number;
+      totalPages: number;
+    };
   } catch (err: any) {
     return rejectWithValue(handleError(err));
   }
@@ -143,7 +179,12 @@ export const getAllGuides = createAsyncThunk<
       totalPages: number;
     }>("/guides/all", { params });
 
-    return response;
+    return response as unknown as {
+      data: GuideProfile[];
+      total: number;
+      page: number;
+      totalPages: number;
+    };
   } catch (err: any) {
     return rejectWithValue(handleError(err));
   }
@@ -155,7 +196,7 @@ export const getGuideById = createAsyncThunk<GuideProfile, string>(
   async (id, { rejectWithValue }) => {
     try {
       const response = await apiService.get<GuideProfile>(`/guides/${id}`);
-      return response.data!;
+      return response as unknown as GuideProfile;
     } catch (err: any) {
       return rejectWithValue(handleError(err));
     }
@@ -201,43 +242,33 @@ export const updateMyAvailability = createAsyncThunk<
       "/guides/availability",
       { unavailableDates }
     );
-    return response.data!;
+    return response as unknown as GuideProfile;
   } catch (err: any) {
     return rejectWithValue(handleError(err));
   }
 });
 
-// ✅ FIXED: Fetch guide pricing details
+// Fetch guide pricing details (structured per-guide location/language pricing).
+// NOTE: /guides/:id/pricing-details is NOT implemented on the backend yet — the
+// structured pricing domain (admin-managed locations/languages with group
+// pricing) does not exist server-side. This thunk will reject until that
+// backend work lands; guideSlice handles the rejection by clearing
+// pricingDetails, and the booking page degrades to an "Invalid Booking Request"
+// state rather than crashing.
 export const fetchGuidePricingDetails = createAsyncThunk<
   { locations: AdminLocation[]; languages: LanguageOption[] },
   string
 >("guide/fetchPricingDetails", async (guideId, { rejectWithValue }) => {
   try {
-    console.log("🔍 Fetching pricing details for guide:", guideId);
-    
-    // The API interceptor returns response.data from axios
-    // which gives us: { success: true, data: { locations: [...], languages: [...] } }
     const response = await apiService.get<{
-      data: { locations: AdminLocation[]; languages: LanguageOption[] } 
+      locations: AdminLocation[];
+      languages: LanguageOption[];
     }>(`/guides/${guideId}/pricing-details`);
-    
-    console.log("📦 Full response from API:", response);
-    console.log("📊 response.data (the nested data):", response.data);
-    
-    // Access the nested 'data' property which contains locations and languages
-    if (!response.data) {
-      throw new Error("No data received from API");
-    }
-    
-    const pricingData = response.data;
-    
-    console.log("✅ Extracted pricing data:", pricingData);
-    console.log("📍 Locations count:", pricingData.locations?.length || 0);
-    console.log("🗣️ Languages count:", pricingData.languages?.length || 0);
-    
-    return pricingData;
+    return response as unknown as {
+      locations: AdminLocation[];
+      languages: LanguageOption[];
+    };
   } catch (err: any) {
-    console.error("❌ Error fetching pricing details:", err);
     return rejectWithValue(handleError(err));
   }
 });
@@ -263,7 +294,7 @@ export const createMyLeave = createAsyncThunk<
 >("guide/createMyLeave", async (payload, { rejectWithValue }) => {
   try {
     const response = await apiService.post<GuideLeave>("/guide-availability/leave", payload);
-    return response.data!;
+    return response as unknown as GuideLeave;
   } catch (err: any) {
     return rejectWithValue(handleError(err));
   }
@@ -290,7 +321,7 @@ export const cancelMyLeave = createAsyncThunk<GuideLeave, string>(
   async (leaveId, { rejectWithValue }) => {
     try {
       const response = await apiService.delete<GuideLeave>(`/guide-availability/leave/${leaveId}`);
-      return response.data!;
+      return response as unknown as GuideLeave;
     } catch (err: any) {
       return rejectWithValue(handleError(err));
     }
@@ -303,7 +334,7 @@ export const fetchMyGuideCalendar = createAsyncThunk<GuideCalendar, void>(
   async (_, { rejectWithValue }) => {
     try {
       const response = await apiService.get<GuideCalendar>("/guide-availability/calendar/me");
-      return response.data!;
+      return response as unknown as GuideCalendar;
     } catch (err: any) {
       return rejectWithValue(handleError(err));
     }

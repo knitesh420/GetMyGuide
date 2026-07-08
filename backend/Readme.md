@@ -80,23 +80,33 @@ The API will be available at `http://localhost:<PORT>` once running.
 
 ## Environment Variables
 
-Create a `.env` file in the `backend/` root with the following keys:
+Copy the committed template and fill in real values:
+
+```bash
+cp .env.example .env
+```
+
+Required keys (see `.env.example` for the full annotated list):
 
 | Variable | Description |
 | --- | --- |
 | `NODE_ENV` | Runtime environment: `development`, `production`, or `test` |
 | `PORT` | Port the server listens on |
-| `OS` | OS flag used by platform-specific logic |
+| `OS` | Set to `WINDOWS` on Windows (affects path handling) |
 | `DATABASE_URL` | MongoDB connection string |
-| `JWT_SECRET` | Secret key used to sign JSON Web Tokens |
-| `JWT_EXPIRE` | JWT expiry duration |
+| `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | Access/refresh token signing secrets (falls back to legacy `JWT_SECRET`) |
+| `JWT_ACCESS_EXPIRE` / `JWT_REFRESH_EXPIRE` | Token lifetimes (default `1d` / `3d`) |
 | `RESEND_API_KEY` | API key for the Resend transactional email service |
-| `RAZORPAY_API_KEY` | Razorpay key ID |
-| `RAZORPAY_API_SECRET` | Razorpay key secret |
-| `GUIDE_PAYMENT_LINK_BASE_URL` | Base URL used to construct guide payment links |
-| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name |
-| `CLOUDINARY_API_KEY` | Cloudinary API key |
-| `CLOUDINARY_API_SECRET` | Cloudinary API secret |
+| `RAZORPAY_API_KEY` / `RAZORPAY_API_SECRET` / `RAZORPAY_WEBHOOK_SECRET` | Razorpay key ID, secret, and webhook secret |
+| `GUIDE_PAYMENT_LINK_BASE_URL` | Base URL used to construct guide payment links (legacy) |
+| `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Cloudinary media credentials |
+| `COMPANY_*` | Branding shown in emails/invoices (`NAME`, `ADDRESS`, `LOGO_URL`, `SUPPORT_EMAIL`, `SUPPORT_PHONE`, `WEBSITE`) |
+| `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PHONE` / `ADMIN_PASSWORD` | Used only by `scripts/seedAdmin.ts` (password ≥ 12 chars) |
+| `NOTIFICATION_WATCHER_INTERVAL_MS` | Notification-watcher poll interval (optional, default 5 min) |
+
+> **Fail-fast in production:** on boot the server calls `assertProductionEnv()`, which **refuses to
+> start** when `NODE_ENV=production` and `DATABASE_URL`, the JWT secrets, or the Razorpay secrets are
+> missing or still set to their insecure development defaults.
 
 > ⚠️ **Never commit `.env` to version control.** Double-check which database `DATABASE_URL` points to before running scripts, tests, or migrations — running against the wrong environment can cause irreversible data loss.
 

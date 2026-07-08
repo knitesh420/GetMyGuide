@@ -64,6 +64,7 @@ export default function BecomeAGuidePage() {
           title={t("guide_page_title")}
           description={t("guide_page_desc")}
           backgroundImage={IMAGES.scene1}
+          imageAlt="A local tour guide leading travelers on GetMyGuide"
         />
 
         <section className="py-16 md:py-24">

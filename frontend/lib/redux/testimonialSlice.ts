@@ -61,7 +61,7 @@ const initialState: TestimonialsState = {
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // Helper function to get auth token
-const getAuthHeaders = () => {
+const getAuthHeaders = (): Record<string, string> => {
   const token = localStorage.getItem('token');
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
@@ -112,16 +112,6 @@ export const createTestimonial = createAsyncThunk(
   "testimonials/createTestimonial",
   async (testimonialData: FormData, { rejectWithValue }) => {
     try {
-      console.log("📤 Creating testimonial with FormData");
-      console.log("FormData entries:");
-      for (let pair of testimonialData.entries()) {
-        if (pair[1] instanceof File) {
-          console.log(`  ${pair[0]}: [File] ${pair[1].name} (${pair[1].size} bytes)`);
-        } else {
-          console.log(`  ${pair[0]}: ${pair[1]}`);
-        }
-      }
-
       const response = await fetch(`${API_BASE_URL}/testimonials`, {
         method: 'POST',
         credentials: 'include',

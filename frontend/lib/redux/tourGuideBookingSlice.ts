@@ -49,12 +49,10 @@ const bookingSlice = createSlice({
       .addCase(verifyFinalPayment.fulfilled, (state, action: PayloadAction<Booking>) => {
         state.loading = false;
         const updatedBooking = action.payload;
-        // Update the current booking being viewed
+        // Update the current booking being viewed. This slice only tracks a
+        // single booking (currentBooking / latestBooking) — there is no list
+        // here, so we must not touch a non-existent state.bookings.
         state.currentBooking = updatedBooking;
-        // Also update the booking in the main list for consistency
-        state.bookings = state.bookings.map((b) =>
-          b._id === updatedBooking._id ? updatedBooking : b
-        );
       })
       .addCase(verifyFinalPayment.rejected, (state, action) => {
         state.loading = false;

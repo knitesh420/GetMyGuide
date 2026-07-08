@@ -62,20 +62,6 @@ export default function BookGuidePage() {
     ) || null;
   }, [pricingDetails, languageName]);
 
-  // ✅ ADDED: Enhanced logging to debug data objects
-  useEffect(() => {
-    if(!pricingLoading) {
-        console.log("--- DEBUGGING PRICING ---");
-        console.log("URL Location Name:", locationName);
-        console.log("URL Language Name:", languageName);
-        console.log("Fetched Pricing Details:", pricingDetails);
-        console.log("FOUND Selected Location Object:", selectedLocation);
-        console.log("FOUND Selected Language Object:", selectedLanguage);
-        console.log("--------------------------");
-    }
-  }, [pricingLoading, pricingDetails, selectedLocation, selectedLanguage, locationName, languageName]);
-
-
   const totalPrice = useMemo(() => {
     if (!selectedLocation || !date?.from || !date?.to || numTravelers <= 0) {
       return 0;
@@ -103,10 +89,7 @@ export default function BookGuidePage() {
     }
 
     const total = (locationPricePerDay + languageChargePerDay) * numberOfDays;
-    
-    // ✅ ADDED: Log the final calculation steps
-    console.log(`CALCULATION: (Location: ₹${locationPricePerDay} + Language: ₹${languageChargePerDay}) * ${numberOfDays} days = ₹${total}`);
-    
+
     return total;
 
   }, [selectedLocation, selectedLanguage, numTravelers, date]);

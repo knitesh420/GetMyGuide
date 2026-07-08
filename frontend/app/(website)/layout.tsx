@@ -1,7 +1,5 @@
 import type React from "react";
 import type { Metadata } from "next";
-import { GeistSans } from "geist/font/sans";
-import { GeistMono } from "geist/font/mono";
 import { Analytics } from "@vercel/analytics/next";
 import { Suspense } from "react";
 import { Header } from "@/components/layout/website/header";
@@ -9,13 +7,43 @@ import { Footer } from "@/components/layout/website/footer";
 import Script from "next/script";
 import { WhatsAppFloatingButton } from "@/components/WhatsAppFloatingButton";
 import FloatingVideoAd from "@/components/FloatingVideoAd";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { organizationSchema, websiteSchema } from "@/lib/seo/jsonld";
+import { DEFAULT_OG_IMAGE, SITE_NAME, SITE_URL } from "@/lib/seo/config";
 // import { CartProvider } from "@/contexts/CardContext";
 
+// This is also, in effect, the Home page's own metadata: home's page.tsx
+// (app/(website)/page.tsx) has no metadata/layout of its own, and every
+// other page under (website) overrides this via its own layout.tsx.
 export const metadata: Metadata = {
-  title: "GetMyGuide",
+  // Setting `title` here (rather than leaving it to the root layout) resets
+  // template inheritance for every nested page unless we redefine `template`
+  // too. `absolute` gives the home page itself the complete, un-suffixed
+  // title; `template` re-establishes "%s | GetMyGuide" for every other page
+  // under (website) (about, contact, blogs/[id], tours/[id], etc.).
+  title: {
+    template: "%s | GetMyGuide",
+    absolute: "GetMyGuide — Certified Local Guides & Authentic Tours in India",
+  },
   description:
-    "Connect with certified local guides for authentic eco tours, heritage walks, cooking classes, and cultural experiences worldwide.",
-  generator: "v0.app",
+    "Connect with certified local guides for authentic eco tours, heritage walks, cooking classes, and cultural experiences across India. Search guides, browse tour packages, and book with confidence.",
+  alternates: {
+    canonical: SITE_URL,
+  },
+  openGraph: {
+    title: "GetMyGuide — Certified Local Guides & Authentic Tours in India",
+    description:
+      "Connect with certified local guides for authentic eco tours, heritage walks, cooking classes, and cultural experiences across India.",
+    url: SITE_URL,
+    images: [DEFAULT_OG_IMAGE],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "GetMyGuide — Certified Local Guides & Authentic Tours in India",
+    description:
+      "Connect with certified local guides for authentic eco tours, heritage walks, cooking classes, and cultural experiences across India.",
+    images: [DEFAULT_OG_IMAGE.url],
+  },
 };
 
 export default function RootLayout({
@@ -25,6 +53,8 @@ export default function RootLayout({
 }>) {
   return (
     <>
+      <JsonLd data={organizationSchema()} />
+      <JsonLd data={websiteSchema()} />
       <Header />
       <div className="pt-14 lg:pt-16">
         <Suspense fallback={null}>{children}</Suspense>

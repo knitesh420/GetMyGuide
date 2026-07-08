@@ -5,10 +5,13 @@ dotenv.config();
 import express from 'express';
 import configServer from './server-config';
 
-import { DATABASE_URL, PORT } from '@config/const';
+import { assertProductionEnv, DATABASE_URL, PORT } from '@config/const';
 import connectDB from '@mongo';
 import { startNotificationWatcher } from '@services/notificationWatcher';
 import { error, info } from 'node-be-utilities';
+
+// Fail fast before doing anything if production is misconfigured.
+assertProductionEnv();
 
 //  ------------------------- Setup Variables
 const app = express();
