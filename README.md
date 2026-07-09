@@ -544,7 +544,34 @@ admin).
 | GET | `/tourist/profile` | VerifyMinLevel('tourist') | Own profile |
 | PUT | `/tourist/profile` | VerifyMinLevel('tourist') | Create/update (free, no payment) |
 
-### `/booking`, `/payment`, `/package`, `/blog`, `/advertisement`, `/lead`, `/user`
+### `/booking`
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| GET | `/booking/key` | public | Get Razorpay public key for checkout widget |
+| POST | `/booking/guest-booking` | public, rate-limited, idempotency | Guest booking creation (step 1) |
+| POST | `/booking/verify-guest-booking` | public, rate-limited | Verify Razorpay payment and finalize guest booking (step 2) |
+| POST | `/booking/customised-booking` | VerifyMinLevel('tourist'), idempotency | Authenticated tourist booking creation (step 1) |
+| POST | `/booking/verify-booking` | VerifyMinLevel('tourist') | Verify Razorpay payment and finalize tourist booking (step 2) |
+| GET | `/booking/my-bookings` | VerifyMinLevel('tourist') | Get own bookings (logged-in tourist) |
+| GET | `/booking/my-reservations` | VerifyMinLevel('guide') | Get own assigned reservations (logged-in guide) |
+| GET | `/booking/:id` | VerifySession | Get booking detail by ID (tourist owns booking, guide owns reservation, admin any) |
+| GET | `/booking/:id/transaction-status` | VerifySession | Get transaction status for a booking |
+| GET | `/booking` | VerifyMinLevel('admin') | Get all bookings (admin only) |
+| POST | `/booking/:id/allocate-guide` | VerifyMinLevel('admin') | Allocate a guide to a booking |
+| DELETE | `/booking/:id` | VerifyMinLevel('admin') | Delete a booking |
+
+### `/lead`
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| POST | `/lead/contact` | public | Create a contact inquiry / custom tour request |
+| GET | `/lead/contact` | VerifyMinLevel('admin') | Get all contact inquiries / custom tour requests |
+| GET | `/lead/contact/:id` | VerifyMinLevel('admin') | Get details of a specific contact inquiry by ID |
+| PATCH | `/lead/contact/:id/status` | VerifyMinLevel('admin') | Update status, quote amount, or add admin comment for an inquiry |
+| DELETE | `/lead/contact/:id` | VerifyMinLevel('admin') | Delete a contact inquiry |
+
+### `/payment`, `/package`, `/blog`, `/advertisement`, `/user`
 
 Unrelated to this document's focus — see their respective `*.route.ts` files. `/payment/webhook`
 is the single Razorpay webhook receiver for **all** payment types (enrollment, membership,

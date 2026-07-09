@@ -15,7 +15,6 @@ import {
 	RegisterVerifyOtpValidationResult,
 	ResetPasswordValidationResult,
 	SendOtpValidationResult,
-	SignupValidationResult,
 } from './session.validator';
 
 function baseCookie(): CookieOptions {
@@ -45,16 +44,6 @@ function clearAuthCookies(res: Response) {
 	res.clearCookie(Cookie.Refresh, opts);
 }
 
-async function signup(req: Request, res: Response, next: NextFunction) {
-	try {
-		const data = req.locals.data as SignupValidationResult;
-		const result = await AuthService.signup(data);
-		setAuthCookies(res, result.accessToken, result.refreshToken);
-		return Respond({ res, status: 201, data: { user: result.user } });
-	} catch (error) {
-		return next(error);
-	}
-}
 
 async function login(req: Request, res: Response, next: NextFunction) {
 	try {
@@ -189,7 +178,6 @@ async function loginWithOtp(req: Request, res: Response, next: NextFunction) {
 }
 
 const Controller = {
-	signup,
 	login,
 	refresh,
 	forgotPassword,

@@ -7,7 +7,6 @@ import testimonialsReducer from "@/lib/redux/testimonialSlice";
 import packageReducer from "@/lib/redux/packageSlice";
 import adminReducer from "@/lib/redux/adminSlice";
 import languageReducer from "@/lib/redux/languageSlice";
-import subscriptionReducer from "@/lib/redux/subscriptionSlice";
 import contactReducer from "@/lib/redux/contactSlice";
 import bookingReducer from "@/lib/redux/bookingSlice";
 import tourGuideBookingReducer from "@/lib/redux/tourGuideBookingSlice";
@@ -31,7 +30,6 @@ export const store = configureStore({
     packages: packageReducer,
     admin: adminReducer,
     languages: languageReducer,
-    subscriptions: subscriptionReducer,
     contacts: contactReducer,
     bookings: bookingReducer,
     tourGuideBooking: tourGuideBookingReducer,

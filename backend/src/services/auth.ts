@@ -92,8 +92,9 @@ function issueTokens(user: any): TokenPair {
 
 class AuthService {
 	/**
-	 * Public signup — always creates a tourist account.
-	 * Admin and guide accounts must be created via seed / internal flows.
+	 * Internal signup — used by integration test helpers to seed fixture accounts.
+	 * The public HTTP endpoint POST /session/signup has been removed; new user
+	 * registrations go through the OTP-verified flow (POST /session/register/*).
 	 */
 	async signup(data: SignupData): Promise<AuthResponse> {
 		const existingUser = await AccountDB.findOne({ email: data.email.toLowerCase() });

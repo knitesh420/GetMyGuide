@@ -9,12 +9,6 @@ const strongPassword = z
 	.regex(/[A-Z]/, 'Password must contain an uppercase letter')
 	.regex(/[0-9]/, 'Password must contain a number');
 
-export type SignupValidationResult = {
-	name: string;
-	email: string;
-	phone: string;
-	password: string;
-};
 
 export type LoginValidationResult = {
 	email: string;
@@ -45,30 +39,6 @@ export type RegisterVerifyOtpValidationResult = {
 	otp: string;
 };
 
-export async function SignupValidator(req: Request, res: Response, next: NextFunction) {
-	// Note: `role` is intentionally NOT accepted here. Public signup always
-	// creates a tourist; admin/guide accounts are provisioned by seed scripts
-	// or protected internal endpoints.
-	const reqValidator = z.object({
-		name: z.string().min(1, 'Name is required').trim(),
-		email: z.string().email('Invalid email address').toLowerCase(),
-		phone: z.string().min(1, 'Phone is required').trim(),
-		password: z.string().min(8, 'Password must be at least 8 characters'),
-	});
-
-	const reqValidatorResult = reqValidator.safeParse(req.body);
-
-	if (reqValidatorResult.success) {
-		req.locals.data = reqValidatorResult.data;
-		return next();
-	}
-
-	const message = reqValidatorResult.error.issues
-		.map((err) => `${err.path.join('.')}: ${err.message}`)
-		.join(', ');
-
-	return next(new BadRequestError(message));
-}
 
 export async function LoginValidator(req: Request, res: Response, next: NextFunction) {
 	const reqValidator = z.object({

@@ -48,25 +48,6 @@ export const loginUser = createAsyncThunk<AuthResponse, LoginRequest>(
   },
 );
 
-// Register/Signup
-export const registerUser = createAsyncThunk<AuthResponse, any>(
-  "auth/registerUser",
-  async (data, { rejectWithValue }) => {
-    try {
-      const payload = {
-        name: data.name,
-        email: data.email,
-        phone: data.mobile || data.phone,
-        password: data.password,
-      };
-      const result = await apiService.post("/session/signup", payload);
-      if (!result.success) return rejectWithValue(result.message);
-      return result as unknown as AuthResponse;
-    } catch (err: any) {
-      return rejectWithValue(handleError(err));
-    }
-  },
-);
 
 // Send OTP for admin login
 export const sendLoginOtp = createAsyncThunk<any, { email: string }>(

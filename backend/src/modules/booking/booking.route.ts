@@ -54,6 +54,9 @@ router
 	.route('/my-reservations')
 	.get(VerifySession, VerifyMinLevel('guide'), Controller.getMyReservations);
 
+// Tourist detail route
+router.route('/:id').get(VerifySession, IDValidator, Controller.getBookingById);
+
 // Private route (authenticated users)
 router
 	.route('/:id/transaction-status')

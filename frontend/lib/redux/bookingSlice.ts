@@ -1,23 +1,20 @@
 // File: lib/redux/slices/bookingSlice.ts
 
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import { Booking } from "@/lib/data";
+import { AdminBookingSummary } from "@/lib/data";
 import {
   // Thunks from your file
   createRazorpayOrder,
   verifyPaymentAndCreateBooking,
-  createRemainingPaymentOrder,
-  verifyRemainingPayment,
   fetchMyBookings,
   fetchBookingById,
-  cancelAndRefundBooking,
   fetchGuideBookings,
   fetchAllBookings, // ✅ Isse import karein
   deleteBooking, // ✅ Isse bhi import kar lein, component mein use ho raha hai
 } from "./thunks/booking/bookingThunks";
 interface BookingState {
-  bookings: Booking[];
-  currentBooking: Booking | null;
+  bookings: AdminBookingSummary[];
+  currentBooking: AdminBookingSummary | null;
   loading: boolean;
   error: string | null;
 }
@@ -49,10 +46,10 @@ const bookingSlice = createSlice({
       })
       .addCase(
         verifyPaymentAndCreateBooking.fulfilled,
-        (state, action: PayloadAction<Booking>) => {
+        (state, action: PayloadAction<AdminBookingSummary>) => {
           state.loading = false;
           state.currentBooking = action.payload;
-        }
+        },
       )
       .addCase(verifyPaymentAndCreateBooking.rejected, (state, action) => {
         state.loading = false;
@@ -66,10 +63,10 @@ const bookingSlice = createSlice({
       })
       .addCase(
         fetchMyBookings.fulfilled,
-        (state, action: PayloadAction<Booking[]>) => {
+        (state, action: PayloadAction<AdminBookingSummary[]>) => {
           state.loading = false;
           state.bookings = action.payload;
-        }
+        },
       )
       .addCase(fetchMyBookings.rejected, (state, action) => {
         state.loading = false;
@@ -84,10 +81,10 @@ const bookingSlice = createSlice({
       })
       .addCase(
         fetchAllBookings.fulfilled,
-        (state, action: PayloadAction<Booking[]>) => {
+        (state, action: PayloadAction<AdminBookingSummary[]>) => {
           state.loading = false;
           state.bookings = action.payload;
-        }
+        },
       )
       .addCase(fetchAllBookings.rejected, (state, action) => {
         state.loading = false;
@@ -102,10 +99,10 @@ const bookingSlice = createSlice({
       })
       .addCase(
         fetchGuideBookings.fulfilled,
-        (state, action: PayloadAction<Booking[]>) => {
+        (state, action: PayloadAction<AdminBookingSummary[]>) => {
           state.loading = false;
           state.bookings = action.payload;
-        }
+        },
       )
       .addCase(fetchGuideBookings.rejected, (state, action) => {
         state.loading = false;
@@ -119,33 +116,12 @@ const bookingSlice = createSlice({
       })
       .addCase(
         fetchBookingById.fulfilled,
-        (state, action: PayloadAction<Booking>) => {
+        (state, action: PayloadAction<AdminBookingSummary>) => {
           state.loading = false;
           state.currentBooking = action.payload;
-        }
+        },
       )
       .addCase(fetchBookingById.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload as string;
-      })
-
-      .addCase(cancelAndRefundBooking.pending, (state) => {
-        // Aap loading state manage kar sakte hain, maybe a specific one
-      })
-      .addCase(
-        cancelAndRefundBooking.fulfilled,
-        (state, action: PayloadAction<Booking>) => {
-          state.loading = false;
-          const updatedBooking = action.payload;
-          state.bookings = state.bookings.map((b) =>
-            b._id === updatedBooking._id ? updatedBooking : b
-          );
-          if (state.currentBooking?._id === updatedBooking._id) {
-            state.currentBooking = updatedBooking;
-          }
-        }
-      )
-      .addCase(cancelAndRefundBooking.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       })
@@ -158,40 +134,11 @@ const bookingSlice = createSlice({
         deleteBooking.fulfilled,
         (state, action: PayloadAction<string>) => {
           state.bookings = state.bookings.filter(
-            (b) => b._id !== action.payload
+            (b) => b._id !== action.payload,
           );
-        }
+        },
       )
       .addCase(deleteBooking.rejected, (state, action) => {
-        state.error = action.payload as string;
-      })
-      // --- YAHAN TAK DELETE KA CODE HAI ---
-
-      .addCase(createRemainingPaymentOrder.pending, (state) => {
-        state.loading = true;
-      })
-      .addCase(createRemainingPaymentOrder.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload as string;
-      })
-      .addCase(verifyRemainingPayment.pending, (state) => {
-        state.loading = true;
-      })
-      .addCase(
-        verifyRemainingPayment.fulfilled,
-        (state, action: PayloadAction<Booking>) => {
-          state.loading = false;
-          const updatedBooking = action.payload;
-          state.bookings = state.bookings.map((b) =>
-            b._id === updatedBooking._id ? updatedBooking : b
-          );
-          if (state.currentBooking?._id === updatedBooking._id) {
-            state.currentBooking = updatedBooking;
-          }
-        }
-      )
-      .addCase(verifyRemainingPayment.rejected, (state, action) => {
-        state.loading = false;
         state.error = action.payload as string;
       });
   },

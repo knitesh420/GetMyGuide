@@ -3,13 +3,9 @@
 
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Image from "next/image";
 import { toast } from "react-toastify";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
-import {
-  fetchBookingById,
-  cancelAndRefundBooking,
-} from "@/lib/redux/thunks/booking/bookingThunks";
+import { fetchBookingById } from "@/lib/redux/thunks/booking/bookingThunks";
 import type { BookingStatus } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +22,6 @@ import {
   Phone,
   ArrowLeft,
   IndianRupee,
-  Undo2,
 } from "lucide-react";
 import { resolvePackageImageUrl } from "@/lib/utils/utils";
 

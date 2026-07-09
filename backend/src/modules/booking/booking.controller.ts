@@ -57,6 +57,27 @@ async function getMyBookings(req: Request, res: Response, next: NextFunction) {
 	}
 }
 
+async function getBookingById(req: Request, res: Response, next: NextFunction) {
+	try {
+		const user = req.locals.user as JWTPayload;
+		const bookingId = req.locals.id!;
+
+		const booking = await BookingService.getBookingById(
+			bookingId,
+			new Types.ObjectId(user.userId),
+			user.role
+		);
+
+		return Respond({
+			res,
+			status: 200,
+			data: booking,
+		});
+	} catch (error) {
+		return next(error);
+	}
+}
+
 async function getAllBookings(req: Request, res: Response, next: NextFunction) {
 	try {
 		const bookings = await BookingService.getAllBookings();
@@ -223,6 +244,7 @@ const Controller = {
 	verifyAndCreateGuestBooking,
 	verifyAndCreateBooking,
 	getMyBookings,
+	getBookingById,
 	getAllBookings,
 	allocateGuide,
 	getMyReservations,

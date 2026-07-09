@@ -30,7 +30,8 @@ const loadRazorpayScript = (): Promise<boolean> => {
 const fetchRazorpayKey = async (): Promise<string> => {
   try {
     const res = await fetch(`${API_BASE_URL}/booking/key`);
-    const data = await res.json();
+    const response = await res.json();
+    const data = response?.data || response;
     return data?.key || "";
   } catch (error) {
     return "";
@@ -674,10 +675,14 @@ export default function CombinedGuideBookingForm() {
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      const responseBody = await res.json();
+      const data = responseBody?.data || responseBody;
 
       if (!res.ok || !data?.razorpay_options?.order_id) {
-        const msg = data?.message || "Failed to initiate payment.";
+        const msg =
+          responseBody?.message ||
+          data?.message ||
+          "Failed to initiate payment.";
         throw new Error(msg);
       }
 

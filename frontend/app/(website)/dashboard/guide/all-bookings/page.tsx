@@ -3,94 +3,91 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import { fetchGuideBookings } from "@/lib/redux/thunks/booking/bookingThunks";
 import { Button } from "@/components/ui/button";
-import { Ticket, Calendar, MapPin, User as UserIcon, Loader2, AlertCircle } from "lucide-react";
-import type { Booking, BookingStatus } from "@/lib/data";
+import {
+  Ticket,
+  Calendar,
+  MapPin,
+  User as UserIcon,
+  Loader2,
+  AlertCircle,
+} from "lucide-react";
+import type { AdminBookingSummary } from "@/lib/data";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { resolvePackageImageUrl } from "@/lib/utils/utils";
 
-function GuideBookingCard({ booking }: { booking: Booking }) {
-  const tour = typeof booking.tour === "object" ? booking.tour : null;
-  const user = typeof booking.user === "object" ? booking.user : null;
-
-  if (!tour || !user) {
-    console.log("❌ Missing tour or user data:", { tour, user, booking });
-    return null;
-  }
-
-  const getStatusVariant = (status: BookingStatus) => {
+function GuideBookingCard({ booking }: { booking: AdminBookingSummary }) {
+  const getStatusVariant = (status: string) => {
     switch (status) {
-      case "Upcoming":
-        return "default";
-      case "Completed":
+      case "completed":
         return "secondary";
-      case "Cancelled":
+      case "cancelled":
+        return "destructive";
+      case "allocated":
+      case "confirmed":
+      case "successful":
+        return "default";
+      case "payment-pending":
         return "destructive";
       default:
         return "outline";
     }
   };
 
+  const customerName = booking.tourist_info.name;
+  const bookingDate = booking.travel_details.date;
+  const bookingLocation = booking.travel_details.city;
+  const bookingPlaces = booking.travel_details.places?.join(", ") || "N/A";
+  const travelCount = booking.travel_details.no_of_person;
+
   return (
     <Card className="overflow-hidden hover:shadow-xl transition-shadow duration-300">
-      <div className="flex flex-col md:flex-row">
-        <div className="md:w-1/3 relative h-60 md:h-auto flex-shrink-0">
-          <Image
-            src={resolvePackageImageUrl(tour.images?.[0])}
-            alt={tour.title}
-            fill
-            className="object-cover"
-          />
+      <div className="flex flex-col p-6">
+        <div className="flex flex-col md:flex-row justify-between gap-4 mb-4">
+          <div>
+            <p className="text-sm text-muted-foreground">
+              Customer: <span className="font-semibold">{customerName}</span>
+            </p>
+            <h3 className="font-bold text-2xl mt-1 text-foreground">
+              {bookingLocation}
+            </h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {bookingPlaces}
+            </p>
+          </div>
+          <Badge
+            variant={getStatusVariant(booking.status)}
+            className="text-sm px-4 py-1"
+          >
+            {booking.status}
+          </Badge>
         </div>
-        <div className="flex flex-1 flex-col p-6">
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <p className="text-sm text-muted-foreground">
-                Client: <span className="font-semibold">{user.name}</span>
-              </p>
-              <h3 className="font-bold text-2xl mt-1 text-foreground">
-                {tour.title}
-              </h3>
-            </div>
-            <Badge
-              variant={getStatusVariant(booking.status)}
-              className="text-sm px-4 py-1"
-            >
-              {booking.status}
-            </Badge>
+
+        <div className="grid gap-3 text-muted-foreground sm:grid-cols-3">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-primary" />
+            <span>{new Date(bookingDate).toLocaleDateString()}</span>
           </div>
-          <div className="border-t my-4 pt-4 space-y-3 text-muted-foreground">
-            <div className="flex items-center gap-3">
-              <Calendar className="w-5 h-5 text-primary" />
-              <span className="font-medium">
-                {new Date(booking.startDate).toLocaleDateString()} -{" "}
-                {new Date(booking.endDate).toLocaleDateString()}
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <MapPin className="w-5 h-5 text-primary" />
-              <span className="font-medium">
-                {tour.locations?.join(", ") || "N/A"}
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <UserIcon className="w-5 h-5 text-primary" />
-              <span className="font-medium">
-                {booking.numberOfTourists} Tourists
-              </span>
-            </div>
+          <div className="flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-primary" />
+            <span>{bookingLocation}</span>
           </div>
-          <div className="mt-auto flex justify-end">
-            <Button asChild variant="outline">
-              <Link href={`/dashboard/guide/all-bookings/${booking._id}`}>
-                View Details
-              </Link>
-            </Button>
+          <div className="flex items-center gap-2">
+            <UserIcon className="w-4 h-4 text-primary" />
+            <span>
+              {travelCount} Traveler{travelCount === 1 ? "" : "s"}
+            </span>
           </div>
+        </div>
+
+        <div className="mt-6 flex justify-end">
+          <Button asChild variant="outline">
+            <Link href={`/dashboard/guide/all-bookings/${booking._id}`}>
+              View Details
+            </Link>
+          </Button>
         </div>
       </div>
     </Card>
@@ -100,29 +97,11 @@ function GuideBookingCard({ booking }: { booking: Booking }) {
 export default function AllGuideBookingsPage() {
   const dispatch = useAppDispatch();
   const { bookings, loading, error } = useAppSelector(
-    (state) => state.bookings
+    (state) => state.bookings,
   );
 
-  // 🔍 DEBUG: Log the entire state
-  console.log("📊 Redux State:", { bookings, loading, error });
-  console.log("📊 Bookings Array:", bookings);
-  console.log("📊 Bookings Length:", bookings?.length);
-  console.log("📊 Bookings type:", typeof bookings);
-  console.log("📊 Is Array:", Array.isArray(bookings));
-  console.log("📊 Loading:", loading);
-  console.log("📊 Error:", error);
-
   useEffect(() => {
-    console.log("🚀 Dispatching fetchGuideBookings...");
-    const resultAction = dispatch(fetchGuideBookings());
-    resultAction.then((result: any) => {
-      console.log("🔥 Thunk result:", result);
-      if (result.type.includes("fulfilled")) {
-        console.log("✅ Thunk fulfilled with payload:", result.payload);
-      } else if (result.type.includes("rejected")) {
-        console.log("❌ Thunk rejected:", result.payload || result.error);
-      }
-    });
+    dispatch(fetchGuideBookings());
   }, [dispatch]);
 
   const renderContent = () => {
@@ -153,16 +132,11 @@ export default function AllGuideBookingsPage() {
     }
 
     if (bookings && bookings.length > 0) {
-      console.log("✅ Showing bookings:", bookings.length);
-      const validBookings = bookings.filter(Boolean);
-      console.log("✅ Valid bookings after filter:", validBookings.length);
-
       return (
         <div className="space-y-8">
-          {validBookings.map((booking) => {
-            console.log("🎫 Rendering booking:", booking._id);
-            return <GuideBookingCard key={booking._id} booking={booking} />;
-          })}
+          {bookings.map((booking) => (
+            <GuideBookingCard key={booking._id} booking={booking} />
+          ))}
         </div>
       );
     }

@@ -496,6 +496,7 @@ export interface Assignment {
 // distinct from the legacy, mismatched `Booking` type above (which targets a
 // different, unused API shape). Used only by the new Assignment admin page.
 export interface AdminBookingSummary {
+  _id: string;
   id: string;
   tourist_info: {
     name: string;
@@ -509,6 +510,28 @@ export interface AdminBookingSummary {
     city: string;
     date: string;
     no_of_person: number;
+    preferences: {
+      hotel: boolean;
+      taxi: boolean;
+    };
+  };
+  guide_preferences: {
+    guide_language: string[];
+    gender: string;
+  };
+  booking_configuration: {
+    duration: string;
+    foreign_language_required: boolean;
+    outstation?: {
+      distance: number;
+      over_night_stay: number;
+      accomodation_meals: boolean;
+      special_excursion: string[];
+    };
+    early_late_hours: boolean;
+    extra_city_allowances: boolean;
+    special_event_allowances: string[];
+    price: number;
   };
   linked_to?: string;
   transaction_id: string;

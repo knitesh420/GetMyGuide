@@ -13,7 +13,6 @@ import {
 	RegisterVerifyOtpValidator,
 	ResetPasswordValidator,
 	SendOtpValidator,
-	SignupValidator,
 } from './session.validator';
 
 const router = express.Router();
@@ -71,7 +70,6 @@ const registerOtpVerifyLimiter = rateLimit({
 });
 
 // ---- Public -----------------------------------------------------------------
-router.route('/signup').post(SignupValidator, Controller.signup);
 router.route('/login').post(loginLimiter, LoginValidator, Controller.login);
 router.route('/login/send-otp').post(otpSendLimiter, SendOtpValidator, Controller.sendLoginOtp);
 router

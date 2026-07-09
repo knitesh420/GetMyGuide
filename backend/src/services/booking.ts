@@ -52,6 +52,7 @@ interface CreateBookingData {
 }
 
 interface TransformedBooking {
+	_id: string;
 	id: string;
 	tourist_info: {
 		name: string;
@@ -98,6 +99,7 @@ interface TransformedBooking {
 
 function transformBooking(booking: IBooking): TransformedBooking {
 	return {
+		_id: booking._id.toString(),
 		id: booking._id.toString(),
 		tourist_info: booking.tourist_info,
 		travel_details: booking.travel_details,
@@ -251,13 +253,8 @@ class BookingService {
 		booking_data: string;
 		user_id?: string;
 	}): Promise<TransformedBooking> {
-		const {
-			razorpay_order_id,
-			razorpay_payment_id,
-			razorpay_signature,
-			booking_data,
-			user_id,
-		} = params;
+		const { razorpay_order_id, razorpay_payment_id, razorpay_signature, booking_data, user_id } =
+			params;
 
 		// Step 1: Verify Razorpay signature (HMAC SHA256)
 		const isValid = verifyRazorpaySignature(
@@ -333,6 +330,39 @@ class BookingService {
 	}
 
 	/**
+	 * Get a booking by ID for the authenticated user.
+	 * Tourists can read their own bookings, guides can read assigned reservations,
+	 * and admins can read any booking.
+	 */
+	async getBookingById(
+		bookingId: Types.ObjectId,
+		userId: Types.ObjectId,
+		userRole: string
+	): Promise<TransformedBooking> {
+		let booking: IBooking | null = null;
+
+		if (userRole === 'admin') {
+			booking = await BookingDB.findById(bookingId).lean();
+		} else if (userRole === 'guide') {
+			booking = await BookingDB.findOne({
+				_id: bookingId,
+				allocated_guide: userId,
+			}).lean();
+		} else {
+			booking = await BookingDB.findOne({
+				_id: bookingId,
+				linked_to: userId,
+			}).lean();
+		}
+
+		if (!booking) {
+			throw new NotFoundError('Booking not found');
+		}
+
+		return transformBooking(booking as IBooking);
+	}
+
+	/**
 	 * Get all bookings (admin only)
 	 */
 	async getAllBookings(): Promise<TransformedBooking[]> {
@@ -354,10 +384,7 @@ class BookingService {
 			throw new NotFoundError('Booking not found');
 		}
 
-		if (
-			booking.status !== 'successful' &&
-			booking.status !== 'confirmed'
-		) {
+		if (booking.status !== 'successful' && booking.status !== 'confirmed') {
 			throw new ServerError('Booking is not in a valid state for guide allocation');
 		}
 

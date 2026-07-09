@@ -120,6 +120,10 @@ export default function CustomTourPage() {
       toast.error("Please fill in your Full Name and Email.");
       return;
     }
+    if (!phone) {
+      toast.error("Please enter your phone number.");
+      return;
+    }
     if (!acknowledged) {
       toast.error("Please acknowledge the terms before submitting.");
       return;
@@ -243,7 +247,7 @@ export default function CustomTourPage() {
                 {/* Phone */}
                 <div>
                   <Label htmlFor="phone" className="text-lg font-semibold">
-                    Phone Number (Optional)
+                    Phone Number
                   </Label>
                   <Input
                     id="phone"
@@ -251,6 +255,7 @@ export default function CustomTourPage() {
                     placeholder="+91 9876543210"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
+                    required
                     className="h-12 mt-2"
                   />
                 </div>

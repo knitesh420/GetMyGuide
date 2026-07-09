@@ -2,147 +2,113 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
-import { toast } from "sonner";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
-import {
-  fetchMyBookings,
-  cancelAndRefundBooking,
-} from "@/lib/redux/thunks/booking/bookingThunks";
+import { fetchMyBookings } from "@/lib/redux/thunks/booking/bookingThunks";
 import { Button } from "@/components/ui/button";
 import {
-  Ticket,
-  Calendar,
-  MapPin,
-  User as UserIcon,
-  Undo2,
-  Loader2,
   AlertCircle,
-  Bell,
+  Calendar,
+  Languages,
+  Loader2,
+  MapPin,
+  ReceiptText,
+  Ticket,
+  User as UserIcon,
 } from "lucide-react";
-import type { Booking, BookingStatus } from "@/lib/data";
+import type { AdminBookingSummary } from "@/lib/data";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { resolvePackageImageUrl } from "@/lib/utils/utils";
 
-function MyBookingCard({
-  booking,
-  onCancel,
-}: {
-  booking: Booking;
-  onCancel: (bookingId: string, tourTitle: string) => void;
-}) {
-  const tour =
-    booking.tour && typeof booking.tour === "object" ? booking.tour : null;
-  const guide =
-    booking.guide && typeof booking.guide === "object" ? booking.guide : null;
+const statusLabel: Record<string, string> = {
+  "payment-pending": "Payment Pending",
+  successful: "Booked",
+  confirmed: "Confirmed",
+  allocated: "Guide Allocated",
+  completed: "Completed",
+};
 
-  if (!tour || !guide) return null;
+function getStatusVariant(status: string) {
+  switch (status) {
+    case "successful":
+    case "confirmed":
+    case "allocated":
+      return "default";
+    case "completed":
+      return "secondary";
+    case "payment-pending":
+      return "destructive";
+    default:
+      return "outline";
+  }
+}
 
-  const getStatusVariant = (status: BookingStatus) => {
-    switch (status) {
-      case "Upcoming":
-        return "default";
-      case "Completed":
-        return "secondary";
-      case "Cancelled":
-        return "destructive";
-      default:
-        return "outline";
-    }
-  };
-
-  const isPaymentDue =
-    booking.status === "Upcoming" && booking.paymentStatus === "Advance Paid";
-
+function MyBookingCard({ booking }: { booking: AdminBookingSummary }) {
   return (
     <Card className="overflow-hidden hover:shadow-xl transition-shadow duration-300">
-      {isPaymentDue && (
-        <Alert className="border-t-0 border-l-0 border-r-0 rounded-none bg-amber-50 border-amber-200">
-          <Bell className="h-4 w-4 text-amber-600" />
-          <AlertTitle className="text-amber-800 font-bold">
-            Action Required
-          </AlertTitle>
-          <AlertDescription className="text-amber-700">
-            Your remaining payment of{" "}
-            <strong>₹{(booking.remainingAmount ?? 0).toLocaleString()}</strong>{" "}
-            is due. Please complete the payment to start your tour.
-          </AlertDescription>
-        </Alert>
-      )}
-      <div className="flex flex-col md:flex-row">
-        <div className="md:w-1/3 relative h-60 md:h-auto flex-shrink-0">
-          <Image
-            src={resolvePackageImageUrl(tour.images?.[0])}
-            alt={tour.title}
-            fill
-            className="object-cover"
-          />
-        </div>
-        <div className="flex flex-1 flex-col p-6">
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <p className="text-sm text-muted-foreground">
-                Booked on {new Date(booking.createdAt).toLocaleDateString()}
-              </p>
-              <h3 className="font-bold text-2xl mt-1 text-foreground">
-                {tour.title}
-              </h3>
-            </div>
-            <Badge
-              variant={getStatusVariant(booking.status)}
-              className="text-sm px-4 py-1"
-            >
-              {booking.status}
-            </Badge>
-          </div>
-          <div className="border-t my-4 pt-4 space-y-3 text-muted-foreground">
-            <div className="flex items-center gap-3">
-              <Calendar className="w-5 h-5 text-primary" />
-              <span className="font-medium">
-                {new Date(booking.startDate).toLocaleDateString()} -{" "}
-                {new Date(booking.endDate).toLocaleDateString()}
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <MapPin className="w-5 h-5 text-primary" />
-              <span className="font-medium">{tour.locations?.join(", ")}</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <UserIcon className="w-5 h-5 text-primary" />
-              <span className="font-medium">
-                Guide:{" "}
-                <span className="font-bold text-foreground">{guide.name}</span>
-              </span>
-            </div>
-          </div>
-          <div className="mt-auto flex justify-between items-end">
-            <p className="text-3xl font-extrabold text-primary">
-              ₹{booking.totalPrice.toLocaleString()}
+      <div className="flex flex-col p-6">
+        <div className="flex justify-between items-start gap-4 mb-2">
+          <div>
+            <p className="text-sm text-muted-foreground">
+              Booked on {new Date(booking.createdAt).toLocaleDateString()}
             </p>
-            <div className="flex items-center gap-2">
-              {booking.status === "Upcoming" && (
-                <Button
-                  variant="destructive"
-                  onClick={() => onCancel(booking._id, tour.title)}
-                >
-                  <Undo2 className="w-4 h-4 mr-2" />
-                  Cancel
-                </Button>
-              )}
-              <Button asChild variant="outline">
-                <Link href={`/dashboard/user/my-bookings/${booking._id}`}>
-                  View Details
-                </Link>
-              </Button>
-            </div>
+            <h3 className="font-bold text-2xl mt-1 text-foreground">
+              {booking.travel_details.city}
+            </h3>
           </div>
+          <Badge
+            variant={getStatusVariant(booking.status)}
+            className="text-sm px-4 py-1 whitespace-nowrap"
+          >
+            {statusLabel[booking.status] || booking.status}
+          </Badge>
+        </div>
+
+        <div className="border-t my-4 pt-4 space-y-3 text-muted-foreground">
+          <div className="flex items-center gap-3">
+            <Calendar className="w-5 h-5 text-primary" />
+            <span className="font-medium">
+              {new Date(booking.travel_details.date).toLocaleDateString()}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <MapPin className="w-5 h-5 text-primary" />
+            <span className="font-medium">
+              {booking.travel_details.places.join(", ")}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <UserIcon className="w-5 h-5 text-primary" />
+            <span className="font-medium">
+              {booking.travel_details.no_of_person} traveler
+              {booking.travel_details.no_of_person === 1 ? "" : "s"}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <Languages className="w-5 h-5 text-primary" />
+            <span className="font-medium">
+              {booking.guide_preferences.guide_language.length
+                ? booking.guide_preferences.guide_language.join(", ")
+                : "No language preference"}
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-auto flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <p className="text-3xl font-extrabold text-primary">
+            Rs. {booking.booking_configuration.price.toLocaleString()}
+          </p>
+          <Button asChild variant="outline">
+            <Link href={`/dashboard/user/my-bookings/${booking._id}`}>
+              <ReceiptText className="w-4 h-4 mr-2" />
+              View Details
+            </Link>
+          </Button>
         </div>
       </div>
     </Card>
   );
 }
+
 export default function MyBookingsPage() {
   const dispatch = useAppDispatch();
   const { bookings, loading, error } = useAppSelector(
@@ -153,21 +119,6 @@ export default function MyBookingsPage() {
     dispatch(fetchMyBookings());
   }, [dispatch]);
 
-  const handleCancel = (bookingId: string, tourTitle: string) => {
-    if (
-      confirm(
-        `Are you sure you want to cancel your booking for "${tourTitle}"? Your payment will be refunded.`,
-      )
-    ) {
-      dispatch(cancelAndRefundBooking(bookingId))
-        .unwrap()
-        .then(() =>
-          toast.success("Booking cancelled! Refund has been initiated."),
-        )
-        .catch((err) => toast.error(err || "Failed to cancel booking."));
-    }
-  };
-
   const renderContent = () => {
     if (loading) {
       return (
@@ -176,6 +127,7 @@ export default function MyBookingsPage() {
         </div>
       );
     }
+
     if (error) {
       return (
         <div className="text-center py-16">
@@ -185,19 +137,17 @@ export default function MyBookingsPage() {
         </div>
       );
     }
-    if (bookings && bookings.length > 0) {
+
+    if (bookings.length > 0) {
       return (
         <div className="space-y-8">
           {bookings.map((booking) => (
-            <MyBookingCard
-              key={booking._id}
-              booking={booking}
-              onCancel={handleCancel}
-            />
+            <MyBookingCard key={booking._id} booking={booking} />
           ))}
         </div>
       );
     }
+
     return (
       <div className="text-center py-16 px-6 bg-card rounded-xl border">
         <Ticket className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
