@@ -4,10 +4,16 @@ import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/store";
 import { fetchMineAsGuide } from "@/lib/redux/thunks/review/reviewThunks";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { RatingSummaryBadge } from "@/components/review/RatingSummaryBadge";
 import { ReviewCard } from "@/components/review/ReviewCard";
+import { MessageSquare, Star } from "lucide-react";
+import {
+  GuideEmptyState,
+  GuidePageHeader,
+  GuidePanel,
+  GuideStat,
+  GuideToolbar,
+} from "@/components/guide";
 
 export default function GuideReviewsPage() {
   const dispatch = useDispatch<AppDispatch>();
@@ -20,33 +26,56 @@ export default function GuideReviewsPage() {
   }, [dispatch]);
 
   return (
-    <div className="flex-1 space-y-6 p-4 sm:p-6 md:p-8 bg-muted/40">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">My Reviews</h2>
-          <p className="text-muted-foreground">Feedback from travelers you&apos;ve guided.</p>
-        </div>
-        <RatingSummaryBadge average={guideRatingSummary.average} total={guideRatingSummary.total} />
-      </div>
+    <div className="space-y-6">
+      <GuidePageHeader
+        title="My Reviews"
+        description="Feedback from travellers you've guided."
+      />
 
-      {loading && guideReviews.length === 0 ? (
-        <div className="space-y-3">
-          <Skeleton className="h-24" />
-          <Skeleton className="h-24" />
-        </div>
-      ) : guideReviews.length === 0 ? (
-        <Card>
-          <CardContent className="py-10 text-center text-muted-foreground">
-            No reviews yet — they&apos;ll show up here after your trips are completed.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {guideReviews.map((review) => (
-            <ReviewCard key={review._id} review={review} showTourist />
-          ))}
-        </div>
-      )}
+      <GuidePanel>
+        <GuideToolbar
+          stats={
+            <>
+              <GuideStat
+                icon={MessageSquare}
+                label="Total Reviews"
+                value={guideRatingSummary.total}
+              />
+              <GuideStat
+                icon={Star}
+                label="Average Rating"
+                value={
+                  guideRatingSummary.total > 0
+                    ? `${guideRatingSummary.average.toFixed(1)} / 5`
+                    : "—"
+                }
+                accent
+              />
+            </>
+          }
+        >
+          <h2 className="text-sm font-semibold text-slate-900">All feedback</h2>
+        </GuideToolbar>
+
+        {loading && guideReviews.length === 0 ? (
+          <div className="space-y-3 p-5">
+            <Skeleton className="h-24" />
+            <Skeleton className="h-24" />
+          </div>
+        ) : guideReviews.length === 0 ? (
+          <GuideEmptyState
+            icon={Star}
+            title="No reviews yet"
+            description="They'll show up here after your trips are completed."
+          />
+        ) : (
+          <div className="space-y-3 p-5">
+            {guideReviews.map((review) => (
+              <ReviewCard key={review._id} review={review} showTourist />
+            ))}
+          </div>
+        )}
+      </GuidePanel>
     </div>
   );
 }

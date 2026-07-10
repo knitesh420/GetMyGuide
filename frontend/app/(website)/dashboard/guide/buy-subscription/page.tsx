@@ -12,15 +12,22 @@ import {
   confirmGuideMembershipPayment,
 } from "@/lib/redux/thunks/guide/guideThunk";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { ShieldCheck, AlertTriangle } from "lucide-react";
+import { CalendarClock, ShieldCheck, AlertTriangle, Eye } from "lucide-react";
+import {
+  GuidePageHeader,
+  GuidePanel,
+  GuideStat,
+  GuideStatStrip,
+} from "@/components/guide";
 
 declare global {
   interface Window {
     Razorpay: any;
   }
 }
+
+/** Matches the guide panel's green accent rather than the app's red brand. */
+const RAZORPAY_THEME_COLOR = "#22C55E";
 
 export default function GuideMembershipPage() {
   const dispatch = useDispatch<AppDispatch>();
@@ -34,7 +41,7 @@ export default function GuideMembershipPage() {
   const isActive =
     profile?.isVisible && !profile?.membershipExpired && !!profile?.membershipExpiryDate;
   const expiryDate = profile?.membershipExpiryDate
-    ? new Date(profile.membershipExpiryDate).toLocaleDateString("en-US", {
+    ? new Date(profile.membershipExpiryDate).toLocaleDateString("en-IN", {
         year: "numeric",
         month: "long",
         day: "numeric",
@@ -65,7 +72,7 @@ export default function GuideMembershipPage() {
       description: razorpay_options.description,
       order_id: razorpay_options.order_id,
       prefill: razorpay_options.prefill,
-      theme: { color: "#F85E6A" },
+      theme: { color: RAZORPAY_THEME_COLOR },
       handler: async (response: any) => {
         const confirmResult = await dispatch(
           confirmGuideMembershipPayment({
@@ -97,80 +104,101 @@ export default function GuideMembershipPage() {
     rzp.open();
   };
 
+  const ctaLabel = processing
+    ? "Processing..."
+    : isActive
+      ? "Renew Early (+30 days)"
+      : profile?.membershipStartDate
+        ? "Renew Membership"
+        : "Pay Membership Fee";
+
   return (
     <>
       <Script id="razorpay-checkout-js" src="https://checkout.razorpay.com/v1/checkout.js" />
-      <div className="container mx-auto max-w-2xl p-4 md:p-8">
-        <div className="text-center mb-8">
-          <Badge variant="secondary" className="mb-4">
-            Guide Membership
-          </Badge>
-          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">
-            Stay Visible to Travelers
-          </h1>
-          <p className="mt-3 text-muted-foreground">
-            A 30-day membership keeps your profile listed and bookable on Get My Guide.
-          </p>
-        </div>
 
-        {isActive ? (
-          <Card className="bg-green-50 border-green-200">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <ShieldCheck className="w-8 h-8 text-green-600" />
-                <div>
-                  <CardTitle className="text-green-800">Membership Active</CardTitle>
-                  <CardDescription className="text-green-700">
-                    Your profile is currently visible to travelers.
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">Expires on: {expiryDate}</p>
-              <Button onClick={handlePay} disabled={processing || loading} className="w-full" size="lg">
-                {processing ? "Processing..." : "Renew Early (+30 days)"}
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card className="border-primary/50 bg-primary/5">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <AlertTriangle className="w-8 h-8 text-primary" />
-                <div>
-                  <CardTitle>
-                    {profile?.membershipStartDate ? "Membership Expired" : "No Active Membership"}
-                  </CardTitle>
-                  <CardDescription>
-                    {profile?.membershipStartDate
-                      ? "Your listing is currently hidden from travelers."
-                      : "Pay the membership fee to appear in public guide search."}
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Button
-                onClick={handlePay}
-                disabled={processing || loading || !profile?.registrationCompleted}
-                className="w-full red-gradient"
-                size="lg"
-              >
-                {processing
-                  ? "Processing..."
-                  : profile?.membershipStartDate
-                    ? "Renew Membership"
-                    : "Pay Membership Fee"}
-              </Button>
-              {!profile?.registrationCompleted && (
-                <p className="text-xs text-muted-foreground mt-2 text-center">
-                  Complete your guide profile first to pay for membership.
-                </p>
+      <div className="space-y-6">
+        <GuidePageHeader
+          title="Guide Membership"
+          description="A 30-day membership keeps your profile listed and bookable on Get My Guide."
+        />
+
+        <GuidePanel>
+          <div className="border-b border-slate-200 px-5 py-4">
+            <GuideStatStrip>
+              <GuideStat
+                icon={Eye}
+                label="Listing Status"
+                value={isActive ? "Visible" : "Hidden"}
+                accent={!!isActive}
+              />
+              <GuideStat
+                icon={CalendarClock}
+                label={isActive ? "Expires On" : "Expired On"}
+                value={expiryDate ?? "—"}
+              />
+              <GuideStat
+                icon={ShieldCheck}
+                label="Profile"
+                value={profile?.registrationCompleted ? "Complete" : "Incomplete"}
+              />
+            </GuideStatStrip>
+          </div>
+
+          <div className="p-5">
+            <div
+              className={`flex items-start gap-3 rounded-lg border p-4 ${
+                isActive
+                  ? "border-green-200 bg-green-50/60"
+                  : "border-amber-200 bg-amber-50/60"
+              }`}
+            >
+              {isActive ? (
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+              ) : (
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
               )}
-            </CardContent>
-          </Card>
-        )}
+              <div>
+                <p
+                  className={`font-semibold ${
+                    isActive ? "text-green-900" : "text-amber-900"
+                  }`}
+                >
+                  {isActive
+                    ? "Membership active"
+                    : profile?.membershipStartDate
+                      ? "Membership expired"
+                      : "No active membership"}
+                </p>
+                <p
+                  className={`mt-1 text-sm ${
+                    isActive ? "text-green-800/80" : "text-amber-800/80"
+                  }`}
+                >
+                  {isActive
+                    ? "Your profile is currently visible to travellers."
+                    : profile?.membershipStartDate
+                      ? "Your listing is currently hidden from travellers."
+                      : "Pay the membership fee to appear in public guide search."}
+                </p>
+              </div>
+            </div>
+
+            <Button
+              onClick={handlePay}
+              disabled={processing || loading || !profile?.registrationCompleted}
+              className="mt-5 w-full"
+              size="lg"
+            >
+              {ctaLabel}
+            </Button>
+
+            {!profile?.registrationCompleted && (
+              <p className="mt-2 text-center text-xs text-slate-500">
+                Complete your guide profile first to pay for membership.
+              </p>
+            )}
+          </div>
+        </GuidePanel>
       </div>
     </>
   );

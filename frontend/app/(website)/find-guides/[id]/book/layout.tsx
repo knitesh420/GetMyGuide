@@ -32,16 +32,13 @@ export async function generateMetadata({
     };
   }
 
-  const location = [guide.city, guide.state, guide.country].filter(Boolean).join(", ");
+  const location = guide.city || "";
   const title = `${guide.name}${location ? ` — Local Guide in ${location}` : " — Local Guide"}`;
-  const description = (
-    guide.description ||
-    guide.about ||
+  const description =
     `Book ${guide.name}, a certified local guide${location ? ` in ${location}` : ""}, on GetMyGuide.`
-  )
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 160);
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 160);
   const image = guide.photo || guide.profileImage || DEFAULT_OG_IMAGE.url;
 
   return {
@@ -73,7 +70,7 @@ export default async function GuideBookLayout({
 }) {
   const { id } = await params;
   const guide = await getGuide(id);
-  const region = guide?.state || guide?.city;
+  const region = guide?.city;
 
   return (
     <>

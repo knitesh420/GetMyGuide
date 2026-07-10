@@ -63,7 +63,7 @@ export default function DashboardLayout({
   // prematurely.
   if (isAuthenticated === null || loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center bg-background lg:h-[calc(100vh-4rem)]">
         <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
       </div>
     );
@@ -76,16 +76,46 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen bg-gray-50/50">
+    // Not `h-screen`: the website layout renders a fixed h-14/lg:h-16 header
+    // and offsets us by that much, so a full 100vh here overflows the viewport
+    // and makes the page scroll — which slides this shell's own sticky header
+    // up under that fixed navbar. Claim only the space actually left.
+    <div className="relative flex h-[calc(100vh-3.5rem)] bg-gray-50/50 lg:h-[calc(100vh-4rem)]">
       <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         userRole={user.role}
       />
-      <div className="flex flex-1 flex-col overflow-y-auto">
+      {/* The guide panel gets a wider, green scrollbar; the default one is
+          near-invisible. It must live on the scrolling element, which is why
+          it's keyed off role here rather than inside the guide subtree. */}
+      <div
+        className={`flex flex-1 flex-col overflow-y-auto ${
+          user.role === "guide" ? "guide-scrollbar" : ""
+        }`}
+      >
         <Header onMenuClick={() => setSidebarOpen(true)} user={user} />
-        <main className="flex-1 p-4 md:p-6 lg:p-8">{children}</main>
+        {/* `relative z-0` traps page content in its own stacking context, so a
+            child that raises its z-index can never paint over the sticky
+            header. The header stays at z-30 — below the mobile sidebar overlay
+            at z-40, which still needs to cover it. */}
+        <main className="relative z-0 flex-1 p-4 md:p-6 lg:p-8">{children}</main>
       </div>
+
+      {/* One accent rule spanning both columns, sitting on the shared h-18
+          (72px) baseline of the sidebar's brand block and the header — `top-18`
+          must track that height, or the rule cuts across the row instead of
+          underlining it. Drawn here as a single element rather than once per
+          column, so the two halves cannot drift out of alignment. It doubles as
+          the header's bottom border (which is why the header has none of its
+          own). z-40 clears the sidebar (lg:z-30) and the header (z-30). */}
+      <div
+        className={`pointer-events-none absolute inset-x-0 top-18 z-40 h-[3px] ${
+          user.role === "guide"
+            ? "bg-gradient-to-r from-green-400 to-emerald-500"
+            : "bg-gradient-to-r from-teal-400 to-cyan-500"
+        }`}
+      />
     </div>
   );
 }

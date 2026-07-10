@@ -1,228 +1,81 @@
-import { BadRequestError } from 'node-be-utilities';
-import {
-	ConfirmPaymentValidator,
-	EnrollValidator,
-} from '../../../../src/modules/guide/guide.validator';
+import { GuideProfileValidator } from '../../../../src/modules/guide/guide.validator';
 import {
 	createMockNext,
 	createMockRequest,
 	createMockResponse,
 } from '../../../helpers/testHelpers';
 
+const validBody = {
+	phone: '9876543210',
+	type: 'normal',
+	city: 'Mumbai',
+	languages: JSON.stringify(['English', 'Hindi']),
+};
+
+const run = async (body: Record<string, unknown>) => {
+	const req = createMockRequest({ body }) as any;
+	const next = createMockNext() as jest.Mock;
+	await GuideProfileValidator(req, createMockResponse() as any, next);
+	return { req, next };
+};
+
 describe('Guide Validators', () => {
-	describe('EnrollValidator', () => {
+	describe('GuideProfileValidator', () => {
 		it('should pass validation with valid data', async () => {
-			const mockRequest = createMockRequest({
-				body: {
-					name: 'John Doe',
-					email: 'john@example.com',
-					phone: '+1234567890',
-					city: 'Mumbai',
-					type: 'normal',
-					pan: 'ABCDE1234F',
-					languages: JSON.stringify(['English', 'Hindi']),
-				},
-			}) as any;
+			const { req, next } = await run(validBody);
 
-			const mockResponse = createMockResponse();
-			const mockNext = createMockNext();
-
-			await EnrollValidator(mockRequest, mockResponse as any, mockNext);
-
-			expect(mockNext).toHaveBeenCalledWith();
-			expect(mockRequest.locals.data).toBeDefined();
-			expect(mockRequest.locals.data.name).toBe('John Doe');
-			expect(mockRequest.locals.data.type).toBe('normal');
-			expect(mockRequest.locals.data.languages).toEqual(['English', 'Hindi']);
+			expect(next).toHaveBeenCalledWith();
+			expect(req.locals.data.city).toBe('Mumbai');
+			expect(req.locals.data.type).toBe('normal');
+			expect(req.locals.data.languages).toEqual(['English', 'Hindi']);
 		});
 
-		it('should pass validation with languages as comma-separated string', async () => {
-			const mockRequest = createMockRequest({
-				body: {
-					name: 'John Doe',
-					email: 'john@example.com',
-					phone: '+1234567890',
-					city: 'Mumbai',
-					type: 'normal',
-					pan: 'ABCDE1234F',
-					languages: 'English,Hindi,Marathi',
-				},
-			}) as any;
+		it('should accept languages as a comma-separated string', async () => {
+			const { req, next } = await run({ ...validBody, languages: 'English, Hindi' });
 
-			const mockResponse = createMockResponse();
-			const mockNext = createMockNext();
-
-			await EnrollValidator(mockRequest, mockResponse as any, mockNext);
-
-			expect(mockNext).toHaveBeenCalledWith();
-			expect(Array.isArray(mockRequest.locals.data.languages)).toBe(true);
+			expect(next).toHaveBeenCalledWith();
+			expect(req.locals.data.languages).toEqual(['English', 'Hindi']);
 		});
 
-		it('should fail validation if name is missing', async () => {
-			const mockRequest = createMockRequest({
-				body: {
-					email: 'john@example.com',
-					phone: '+1234567890',
-					city: 'Mumbai',
-					type: 'normal',
-					pan: 'ABCDE1234F',
-					languages: ['English'],
-				},
-			}) as any;
+		it('should reject a phone number that is not exactly 10 digits', async () => {
+			const { next } = await run({ ...validBody, phone: '12345' });
 
-			const mockResponse = createMockResponse();
-			const mockNext = createMockNext();
-
-			await EnrollValidator(mockRequest, mockResponse as any, mockNext);
-
-			expect(mockNext).toHaveBeenCalledWith(expect.any(BadRequestError));
+			expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: expect.any(String) }));
+			expect(next.mock.calls[0][0].message).toMatch(/10 digits/i);
 		});
 
-		it('should fail validation if email is invalid', async () => {
-			const mockRequest = createMockRequest({
-				body: {
-					name: 'John Doe',
-					email: 'invalid-email',
-					phone: '+1234567890',
-					city: 'Mumbai',
-					type: 'normal',
-					pan: 'ABCDE1234F',
-					languages: ['English'],
-				},
-			}) as any;
+		it('should reject an unknown guide type', async () => {
+			const { next } = await run({ ...validBody, type: 'freelance' });
 
-			const mockResponse = createMockResponse();
-			const mockNext = createMockNext();
-
-			await EnrollValidator(mockRequest, mockResponse as any, mockNext);
-
-			expect(mockNext).toHaveBeenCalledWith(expect.any(BadRequestError));
+			expect(next.mock.calls[0][0].message).toMatch(/type/i);
 		});
 
-		it('should fail validation if type is invalid', async () => {
-			const mockRequest = createMockRequest({
-				body: {
-					name: 'John Doe',
-					email: 'john@example.com',
-					phone: '+1234567890',
-					city: 'Mumbai',
-					type: 'invalid-type',
-					pan: 'ABCDE1234F',
-					languages: ['English'],
-				},
-			}) as any;
+		it('should require at least one language', async () => {
+			const { next } = await run({ ...validBody, languages: JSON.stringify([]) });
 
-			const mockResponse = createMockResponse();
-			const mockNext = createMockNext();
-
-			await EnrollValidator(mockRequest, mockResponse as any, mockNext);
-
-			expect(mockNext).toHaveBeenCalledWith(expect.any(BadRequestError));
+			expect(next.mock.calls[0][0].message).toMatch(/language/i);
 		});
 
-		it('should fail validation if languages array is empty', async () => {
-			const mockRequest = createMockRequest({
-				body: {
-					name: 'John Doe',
-					email: 'john@example.com',
-					phone: '+1234567890',
-					city: 'Mumbai',
-					type: 'normal',
-					pan: 'ABCDE1234F',
-					languages: [],
-				},
-			}) as any;
+		// PAN is what distinguishes an escort guide for tax purposes, so it is
+		// conditionally required rather than always optional.
+		it('should require a PAN when the guide type is escort', async () => {
+			const { next } = await run({ ...validBody, type: 'escort' });
 
-			const mockResponse = createMockResponse();
-			const mockNext = createMockNext();
-
-			await EnrollValidator(mockRequest, mockResponse as any, mockNext);
-
-			expect(mockNext).toHaveBeenCalledWith(expect.any(BadRequestError));
+			expect(next.mock.calls[0][0].message).toMatch(/pan/i);
 		});
 
-		it('should accept escort type', async () => {
-			const mockRequest = createMockRequest({
-				body: {
-					name: 'John Doe',
-					email: 'john@example.com',
-					phone: '+1234567890',
-					city: 'Mumbai',
-					type: 'escort',
-					pan: 'ABCDE1234F',
-					languages: ['English'],
-				},
-			}) as any;
+		it('should accept an escort guide that supplies a PAN', async () => {
+			const { req, next } = await run({ ...validBody, type: 'escort', pan: 'ABCDE1234F' });
 
-			const mockResponse = createMockResponse();
-			const mockNext = createMockNext();
-
-			await EnrollValidator(mockRequest, mockResponse as any, mockNext);
-
-			expect(mockNext).toHaveBeenCalledWith();
-			expect(mockRequest.locals.data.type).toBe('escort');
-		});
-	});
-
-	describe('ConfirmPaymentValidator', () => {
-		it('should pass validation with valid transaction_id', async () => {
-			const mockRequest = createMockRequest({
-				body: {
-					transaction_id: 'trans_1234567890',
-				},
-			}) as any;
-
-			const mockResponse = createMockResponse();
-			const mockNext = createMockNext();
-
-			await ConfirmPaymentValidator(mockRequest, mockResponse as any, mockNext);
-
-			expect(mockNext).toHaveBeenCalledWith();
-			expect(mockRequest.locals.data.transaction_id).toBe('trans_1234567890');
+			expect(next).toHaveBeenCalledWith();
+			expect(req.locals.data.pan).toBe('ABCDE1234F');
 		});
 
-		it('should fail validation if transaction_id is missing', async () => {
-			const mockRequest = createMockRequest({
-				body: {},
-			}) as any;
+		it('should not require a PAN from a normal guide', async () => {
+			const { req, next } = await run(validBody);
 
-			const mockResponse = createMockResponse();
-			const mockNext = createMockNext();
-
-			await ConfirmPaymentValidator(mockRequest, mockResponse as any, mockNext);
-
-			expect(mockNext).toHaveBeenCalledWith(expect.any(BadRequestError));
-		});
-
-		it('should fail validation if transaction_id is empty string', async () => {
-			const mockRequest = createMockRequest({
-				body: {
-					transaction_id: '',
-				},
-			}) as any;
-
-			const mockResponse = createMockResponse();
-			const mockNext = createMockNext();
-
-			await ConfirmPaymentValidator(mockRequest, mockResponse as any, mockNext);
-
-			expect(mockNext).toHaveBeenCalledWith(expect.any(BadRequestError));
-		});
-
-		it('should trim whitespace from transaction_id', async () => {
-			const mockRequest = createMockRequest({
-				body: {
-					transaction_id: '  trans_123  ',
-				},
-			}) as any;
-
-			const mockResponse = createMockResponse();
-			const mockNext = createMockNext();
-
-			await ConfirmPaymentValidator(mockRequest, mockResponse as any, mockNext);
-
-			expect(mockNext).toHaveBeenCalledWith();
-			expect(mockRequest.locals.data.transaction_id).toBe('trans_123');
+			expect(next).toHaveBeenCalledWith();
+			expect(req.locals.data.pan).toBeUndefined();
 		});
 	});
 });

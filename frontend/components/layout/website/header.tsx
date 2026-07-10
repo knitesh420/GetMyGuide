@@ -49,7 +49,7 @@ export function Header() {
     { href: "/", labelKey: "nav_home", icon: Home },
     { href: "/about", labelKey: "nav_about", icon: Info },
     { href: "/services", labelKey: "nav_tours", icon: MapPin },
-    { href: "/register-tourist", labelKey: "nav_find_guides", icon: Users2 },
+    { href: "/register-tourist", labelKey: "nav_planned_trip", icon: Users2 },
     { href: "/register-guide", labelKey: "nav_become_guide", icon: Users },
     { href: "/guide-availability", labelKey: "nav_guide_availability", icon: Shield },
     { href: "/how-it-works", labelKey: "nav_how_it_works", icon: HelpCircle },

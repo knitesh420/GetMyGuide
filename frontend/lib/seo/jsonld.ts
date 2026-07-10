@@ -89,14 +89,9 @@ export function blogPostingSchema(blog: BlogLike, title: string) {
 interface GuideLike {
   _id: string;
   name: string;
-  description?: string;
-  about?: string;
   photo?: string;
   profileImage?: string;
   city?: string;
-  state?: string;
-  country?: string;
-  specializations?: string[];
   averageRating?: number;
   numReviews?: number;
 }
@@ -117,15 +112,11 @@ export function personSchema(guide: GuideLike) {
     "@context": "https://schema.org",
     "@type": "Person",
     name: guide.name,
-    description: guide.description || guide.about,
     image: guide.photo || guide.profileImage,
     jobTitle: "Local Tour Guide",
-    knowsAbout: guide.specializations,
     address: {
       "@type": "PostalAddress",
       addressLocality: guide.city,
-      addressRegion: guide.state,
-      addressCountry: guide.country,
     },
     ...rating,
   };

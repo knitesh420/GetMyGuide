@@ -4,18 +4,13 @@ export default interface IGuide extends Document {
 	_id: Types.ObjectId;
 	accountId: Types.ObjectId;
 	languages: string[];
-	experience: string;
+	/** Absent on Guide records written before this field existed. */
+	type?: 'normal' | 'escort';
 	city: string;
-	state: string;
-	country: string;
-	price: number;
-	about: string;
-	specialization: string[];
-	availableDays: string[];
-	availableTime: string;
+	/** Escort guides only. */
+	pan?: string;
 	profileImage: string;
 	identityProofs: string[];
-	galleryImages: string[];
 	registrationCompleted: boolean;
 	paymentStatus: 'pending' | 'success' | 'failed';
 	isVisible: boolean;

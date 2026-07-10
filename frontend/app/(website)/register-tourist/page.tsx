@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/lib/hooks/useAuth";
+import RoleGuard from "@/components/auth/RoleGuard";
 
 declare global {
   interface Window {
@@ -180,7 +182,9 @@ const EXTRA_ALLOWANCE_EXCURSIONS = [
   "Lucknow-Ayodhya-Lucknow",
 ];
 
-export default function CombinedGuideBookingForm() {
+function CombinedGuideBookingForm() {
+  const { user, isAuthenticated, fetchCurrentUser } = useAuth();
+
   const [bookingData, setBookingData] = useState<BookingFormData>({
     name: "",
     phone: "",
@@ -222,6 +226,23 @@ export default function CombinedGuideBookingForm() {
   const [bookingId, setBookingId] = useState("");
   const [travelerConsent, setTravelerConsent] = useState(false);
   const [travelerConsentError, setTravelerConsentError] = useState("");
+
+  // Ensure the signed-in user's profile is loaded so we can prefill their details.
+  useEffect(() => {
+    if (!isAuthenticated) fetchCurrentUser();
+  }, [isAuthenticated, fetchCurrentUser]);
+
+  // Prefill the traveller's own details from their account. Only fill fields the
+  // user hasn't already typed into, so this never clobbers manual edits.
+  useEffect(() => {
+    if (!user) return;
+    setBookingData((prev) => ({
+      ...prev,
+      name: prev.name || user.name || "",
+      email: prev.email || user.email || "",
+      phone: prev.phone || user.phone || user.mobile || "",
+    }));
+  }, [user]);
 
   // For multi-select excursion type
   const handleExcursionTypeChange = (
@@ -666,14 +687,36 @@ export default function CombinedGuideBookingForm() {
         throw new Error("Payment gateway key missing. Please try again later.");
       }
 
-      const res = await fetch(`${API_BASE_URL}/booking/guest-booking`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-idempotency-key": crypto.randomUUID(),
-        },
-        body: JSON.stringify(payload),
-      });
+      const createBookingOrder = (useAuthed: boolean) =>
+        fetch(
+          `${API_BASE_URL}${
+            useAuthed ? "/booking/customised-booking" : "/booking/guest-booking"
+          }`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-idempotency-key": crypto.randomUUID(),
+            },
+            // Send the session cookie for authenticated tourists so the booking
+            // links to their account; guests book without credentials.
+            credentials: useAuthed ? "include" : "same-origin",
+            body: JSON.stringify(payload),
+          },
+        );
+
+      // The session cookie is the source of truth for auth. The client-side
+      // `isAuthenticated` flag may not have hydrated yet when the form is
+      // submitted, so we ALWAYS try the authenticated endpoint first — that's
+      // what links the booking to the tourist's account (so it shows under "My
+      // Bookings"). Only fall back to a guest booking if the server rejects the
+      // session with a 401.
+      let usedAuthed = true;
+      let res = await createBookingOrder(true);
+      if (res.status === 401) {
+        usedAuthed = false;
+        res = await createBookingOrder(false);
+      }
 
       const responseBody = await res.json();
       const data = responseBody?.data || responseBody;
@@ -687,7 +730,12 @@ export default function CombinedGuideBookingForm() {
       }
 
       const options = {
-        key: razorpayKey,
+        // Always prefer the key the backend used to create THIS order. The
+        // order_id is bound to that Razorpay account, so using any other key
+        // (e.g. a stale/placeholder NEXT_PUBLIC_RAZORPAY_KEY_ID) makes the
+        // checkout reject the payment. Fall back to the env/fetched key only
+        // if the backend didn't return one.
+        key: data.razorpay_options.key || razorpayKey,
         amount: data.razorpay_options.amount,
         currency: data.razorpay_options.currency,
         name: data.razorpay_options.name,
@@ -711,20 +759,35 @@ export default function CombinedGuideBookingForm() {
 
         handler: async (response: any) => {
           try {
-            // Verify payment signature and create booking in database
-            const verifyRes = await fetch(
-              `${API_BASE_URL}/booking/verify-guest-booking`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  razorpay_order_id: response.razorpay_order_id,
-                  razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_signature: response.razorpay_signature,
-                  booking_data: data.booking_data,
-                }),
-              },
-            );
+            // Verify payment signature and create booking in database.
+            // Use the same auth mode the order was created with so an
+            // authenticated booking is linked to the tourist's account.
+            const verifyBooking = (useAuthed: boolean) =>
+              fetch(
+                `${API_BASE_URL}${
+                  useAuthed
+                    ? "/booking/verify-booking"
+                    : "/booking/verify-guest-booking"
+                }`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  credentials: useAuthed ? "include" : "same-origin",
+                  body: JSON.stringify({
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_signature: response.razorpay_signature,
+                    booking_data: data.booking_data,
+                  }),
+                },
+              );
+
+            let verifyRes = await verifyBooking(usedAuthed);
+            if (usedAuthed && verifyRes.status === 401) {
+              // Session lapsed after payment — still record the booking as a
+              // guest so the paid booking is never lost.
+              verifyRes = await verifyBooking(false);
+            }
 
             const verifyData = await verifyRes.json();
 
@@ -2139,5 +2202,15 @@ export default function CombinedGuideBookingForm() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Guests and tourists may book; a signed-in guide is redirected to their own
+// dashboard with an "Unauthorized Access" notice (see section 6 role rules).
+export default function PlannedTripPage() {
+  return (
+    <RoleGuard allowRoles={["tourist", "admin"]} redirectTo="/dashboard/guide">
+      <CombinedGuideBookingForm />
+    </RoleGuard>
   );
 }

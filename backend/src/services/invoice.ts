@@ -125,7 +125,8 @@ class InvoiceService {
 				name: account.name,
 				email: account.email,
 				phone: account.phone,
-				country: guide.country || '',
+				// Guides no longer record a country; the PDF omits the line when blank.
+				country: '',
 			},
 			guideSnapshot: {
 				name: account.name,

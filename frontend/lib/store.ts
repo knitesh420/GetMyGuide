@@ -11,7 +11,6 @@ import contactReducer from "@/lib/redux/contactSlice";
 import bookingReducer from "@/lib/redux/bookingSlice";
 import tourGuideBookingReducer from "@/lib/redux/tourGuideBookingSlice";
 import userTourGuideBookingReducer from "@/lib/redux/userTourGuideBookingSlice";
-import customReducer from "@/lib/redux/customTourSlice";
 import dashboardReducer from "@/lib/redux/dashboardSlice";
 import blogReducer from "@/lib/redux/blogSlice";
 import advertisementReducer from "@/lib/redux/advertisementSlice";
@@ -33,7 +32,6 @@ export const store = configureStore({
     contacts: contactReducer,
     bookings: bookingReducer,
     tourGuideBooking: tourGuideBookingReducer,
-    customTour: customReducer,
     userTourGuideBookings: userTourGuideBookingReducer,
     dashboard: dashboardReducer,
     blogs: blogReducer,

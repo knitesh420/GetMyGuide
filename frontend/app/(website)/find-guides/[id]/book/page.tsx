@@ -215,7 +215,7 @@ export default function BookGuidePage() {
               <div className="flex flex-col items-center text-center">
                 <Image src={guide.photo || '/placeholder-avatar.png'} alt={guide.name} width={128} height={128} className="rounded-full mb-4 border-4 border-primary/20 shadow-md"/>
                 <h2 className="text-2xl font-bold">{guide.name}</h2>
-                <p className="text-muted-foreground">{guide.state}, {guide.country}</p>
+                <p className="text-muted-foreground">{guide.city}</p>
                 <div className="flex items-center gap-1.5 mt-2 text-yellow-500">
                   <span className="font-bold text-foreground">{guide.averageRating?.toFixed(1) || 'New'} ★</span>
                   <span className="text-muted-foreground">({guide.numReviews || 0} reviews)</span>
@@ -224,7 +224,6 @@ export default function BookGuidePage() {
               <hr className="my-6"/>
               <div>
                 <h4 className="font-semibold mb-2">Languages</h4><p className="text-muted-foreground">{guide.languages?.join(', ')}</p>
-                <h4 className="font-semibold mt-4 mb-2">Specializations</h4><p className="text-muted-foreground">{guide.specializations?.join(', ')}</p>
               </div>
             </div>
             

@@ -3,7 +3,11 @@ import { JWTPayload } from '@services/jwt';
 import { NextFunction, Request, Response } from 'express';
 import { Types } from 'mongoose';
 import { Respond } from 'node-be-utilities';
-import { AllocateGuideValidationResult, CreateBookingValidationResult } from './booking.validator';
+import {
+	AllocateGuideValidationResult,
+	CreateBookingValidationResult,
+	PackageBookingValidationResult,
+} from './booking.validator';
 import { RAZORPAY_API_KEY } from '@config/const';
 
 async function createCustomisedBooking(req: Request, res: Response, next: NextFunction) {
@@ -238,11 +242,63 @@ async function verifyAndCreateBooking(req: Request, res: Response, next: NextFun
 	}
 }
 
+async function createPackageBooking(req: Request, res: Response, next: NextFunction) {
+	try {
+		const user = req.locals.user as JWTPayload;
+		const data = req.locals.data as PackageBookingValidationResult;
+
+		const result = await BookingService.createPackageOrder(
+			data,
+			new Types.ObjectId(user.userId)
+		);
+
+		return Respond({
+			res,
+			status: 200,
+			data: result.data,
+		});
+	} catch (error) {
+		return next(error);
+	}
+}
+
+async function verifyPackageBooking(req: Request, res: Response, next: NextFunction) {
+	try {
+		const user = req.locals.user as JWTPayload;
+		const { razorpay_order_id, razorpay_payment_id, razorpay_signature, booking_data } = req.body;
+
+		if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !booking_data) {
+			return res.status(400).json({
+				success: false,
+				message: 'Missing required payment details',
+			});
+		}
+
+		const booking = await BookingService.verifyAndCreatePackageBooking({
+			razorpay_order_id,
+			razorpay_payment_id,
+			razorpay_signature,
+			booking_data,
+			user_id: user.userId,
+		});
+
+		return Respond({
+			res,
+			status: 201,
+			data: booking,
+		});
+	} catch (error) {
+		return next(error);
+	}
+}
+
 const Controller = {
 	createCustomisedBooking,
 	createGuestBooking,
 	verifyAndCreateGuestBooking,
 	verifyAndCreateBooking,
+	createPackageBooking,
+	verifyPackageBooking,
 	getMyBookings,
 	getBookingById,
 	getAllBookings,

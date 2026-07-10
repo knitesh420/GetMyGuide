@@ -36,9 +36,26 @@ async function deleteTourist(req: Request, res: Response, next: NextFunction) {
 	}
 }
 
+async function activateTourist(req: Request, res: Response, next: NextFunction) {
+	try {
+		const touristId = req.locals.id!;
+
+		const result = await UserService.activateTourist(touristId);
+
+		return Respond({
+			res,
+			status: 200,
+			data: result,
+		});
+	} catch (error) {
+		return next(error);
+	}
+}
+
 const Controller = {
 	getAllTourists,
 	deleteTourist,
+	activateTourist,
 };
 
 export default Controller;

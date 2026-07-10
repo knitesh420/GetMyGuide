@@ -12,6 +12,24 @@ import {
 const handleError = (err: any) =>
   err.response?.data?.message || err.message || "An error occurred";
 
+// The backend's Respond() helper spreads its payload onto the top level, so a
+// paginated list arrives as { data: [...], total, page, totalPages } directly
+// on the response body — `response.data` is the array, not a nested envelope.
+// Rebuild the PaginatedResult the reducers expect from those flat fields.
+function toPaginated<T>(response: {
+  data?: T[];
+  total?: number;
+  page?: number;
+  totalPages?: number;
+}): PaginatedResult<T> {
+  return {
+    data: response.data ?? [],
+    total: response.total ?? 0,
+    page: response.page ?? 1,
+    totalPages: response.totalPages ?? 0,
+  };
+}
+
 // Reuses the existing, unmodified GET /booking (admin) endpoint — the old
 // frontend bookingThunks.ts targets a mismatched shape and is intentionally
 // left untouched, so this fetches the real shape directly for this new page.
@@ -101,8 +119,8 @@ export const fetchAssignments = createAsyncThunk<
   { status?: string; guideId?: string; bookingId?: string; page?: number; limit?: number } | undefined
 >("assignment/fetchAll", async (params = {}, { rejectWithValue }) => {
   try {
-    const response = await apiService.get<PaginatedResult<Assignment>>("/assignment", { params });
-    return response.data!;
+    const response = await apiService.get<Assignment[]>("/assignment", { params });
+    return toPaginated(response);
   } catch (err: any) {
     return rejectWithValue(handleError(err));
   }
@@ -113,8 +131,8 @@ export const fetchMyAssignments = createAsyncThunk<
   { status?: string; page?: number; limit?: number } | undefined
 >("assignment/fetchMy", async (params = {}, { rejectWithValue }) => {
   try {
-    const response = await apiService.get<PaginatedResult<Assignment>>("/assignment/my", { params });
-    return response.data!;
+    const response = await apiService.get<Assignment[]>("/assignment/my", { params });
+    return toPaginated(response);
   } catch (err: any) {
     return rejectWithValue(handleError(err));
   }

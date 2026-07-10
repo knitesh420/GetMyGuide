@@ -238,6 +238,46 @@ export async function CreateBookingValidator(req: Request, res: Response, next: 
 	return next(new BadRequestError(message));
 }
 
+export type PackageBookingValidationResult = {
+	tourId: string;
+	guideId: string;
+	startDate: Date;
+	endDate: Date;
+	tourists: number;
+};
+
+export async function PackageBookingValidator(req: Request, res: Response, next: NextFunction) {
+	const toDate = (val: unknown) => (typeof val === 'string' ? new Date(val) : val);
+	const toInt = (val: unknown) => {
+		if (typeof val === 'string') {
+			const parsed = parseInt(val, 10);
+			return isNaN(parsed) ? val : parsed;
+		}
+		return val;
+	};
+
+	const reqValidator = z.object({
+		tourId: z.string().trim().min(1, 'Tour ID is required'),
+		guideId: z.string().trim().min(1, 'Guide ID is required'),
+		startDate: z.preprocess(toDate, z.date({ message: 'Invalid start date' })),
+		endDate: z.preprocess(toDate, z.date({ message: 'Invalid end date' })),
+		tourists: z.preprocess(toInt, z.number().min(1, 'At least one tourist is required')),
+	});
+
+	const reqValidatorResult = reqValidator.safeParse(req.body);
+
+	if (reqValidatorResult.success) {
+		req.locals.data = reqValidatorResult.data;
+		return next();
+	}
+
+	const message = reqValidatorResult.error.issues
+		.map((err) => `${err.path.join('.')}: ${err.message}`)
+		.join(', ');
+
+	return next(new BadRequestError(message));
+}
+
 export type AllocateGuideValidationResult = {
 	guide_id: string;
 };

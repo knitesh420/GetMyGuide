@@ -1,5 +1,5 @@
 import express from 'express';
-import VerifySession, { VerifyMinLevel } from '../../middleware/VerifySession';
+import VerifySession, { VerifyRole } from '../../middleware/VerifySession';
 import Controller from './tourist.controller';
 import { TouristProfileValidator } from './tourist.validator';
 
@@ -7,10 +7,10 @@ const router = express.Router();
 
 router
 	.route('/profile')
-	.get(VerifySession, VerifyMinLevel('tourist'), Controller.getTouristProfile)
+	.get(VerifySession, VerifyRole('tourist', 'admin'), Controller.getTouristProfile)
 	.put(
 		VerifySession,
-		VerifyMinLevel('tourist'),
+		VerifyRole('tourist', 'admin'),
 		TouristProfileValidator,
 		Controller.updateTouristProfile
 	);

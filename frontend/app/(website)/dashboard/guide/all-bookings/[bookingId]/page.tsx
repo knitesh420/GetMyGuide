@@ -3,39 +3,51 @@
 
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { toast } from "react-toastify";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import { fetchBookingById } from "@/lib/redux/thunks/booking/bookingThunks";
-import type { BookingStatus } from "@/lib/data";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Loader2,
   AlertCircle,
+  ArrowLeft,
   Calendar,
   CreditCard,
-  Users,
-  MapPin,
-  User,
   Mail,
+  MapPin,
   Phone,
-  ArrowLeft,
-  IndianRupee,
+  Settings2,
+  User,
+  Users,
 } from "lucide-react";
-import { resolvePackageImageUrl } from "@/lib/utils/utils";
+import {
+  GuideEmptyState,
+  GuideField as Field,
+  GuidePageHeader,
+  GuidePanel,
+  GuideSection as Section,
+  GuideStat,
+  GuideStatStrip,
+  GuideStatusBadge,
+  GuideYesNo as YesNo,
+} from "@/components/guide";
 
-const getStatusVariant = (status: BookingStatus) => {
-  switch (status) {
-    case "Upcoming":
-      return "default";
-    case "Completed":
-      return "secondary";
-    case "Cancelled":
-      return "destructive";
-    default:
-      return "outline";
-  }
+const currency = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 0,
+});
+
+const longDate = (value?: string) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf())
+    ? "—"
+    : date.toLocaleDateString("en-IN", {
+        weekday: "short",
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
 };
 
 export default function GuideBookingDetailsPage() {
@@ -52,317 +64,247 @@ export default function GuideBookingDetailsPage() {
 
   useEffect(() => {
     if (bookingId) {
-      console.log("🔍 Fetching booking details for ID:", bookingId);
       dispatch(fetchBookingById(bookingId as string));
     }
   }, [dispatch, bookingId]);
 
-  const handleCancel = () => {
-    if (!booking) return;
+  const backButton = (
+    <Button
+      variant="outline"
+      onClick={() => router.push("/dashboard/guide/all-bookings")}
+    >
+      <ArrowLeft className="mr-2 h-4 w-4" /> Back to My Bookings
+    </Button>
+  );
 
-    const tour = typeof booking.tour === "object" ? booking.tour : null;
-    const tourTitle = tour?.title || "this booking";
-
-    if (
-      confirm(
-        `Are you sure you want to cancel "${tourTitle}"? The customer's advance amount will be refunded.`,
-      )
-    ) {
-      dispatch(cancelAndRefundBooking(booking._id))
-        .unwrap()
-        .then(() => {
-          toast.success("Booking cancelled and refund initiated successfully!");
-        })
-        .catch((err) => {
-          toast.error(err || "Failed to cancel booking.");
-        });
-    }
-  };
-
-  if (loading) {
+  if (loading && !booking) {
     return (
-      <div className="flex justify-center items-center h-[calc(100vh-80px)]">
-        <Loader2 className="w-16 h-16 animate-spin text-primary" />
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-48" />
+        <Skeleton className="h-12 w-72" />
+        <Skeleton className="h-96" />
       </div>
     );
   }
 
-  if (error) {
+  if (error || !booking) {
     return (
-      <div className="text-center py-20">
-        <AlertCircle className="w-16 h-16 mx-auto text-destructive mb-4" />
-        <h2 className="text-2xl font-bold">Error</h2>
-        <p className="text-muted-foreground">{error}</p>
-        <Button onClick={() => router.back()} className="mt-4">
-          Go Back
-        </Button>
+      <div className="space-y-6">
+        {backButton}
+        <GuidePanel>
+          <GuideEmptyState
+            icon={AlertCircle}
+            title={error ? "Could not load this booking" : "Booking not found"}
+            description={
+              error || "The booking you're looking for doesn't exist."
+            }
+          />
+        </GuidePanel>
       </div>
     );
   }
 
-  if (!booking) {
-    return (
-      <div className="text-center py-20">
-        <AlertCircle className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-        <h2 className="text-2xl font-bold">Booking not found</h2>
-        <p className="text-muted-foreground mt-2">
-          The booking you're looking for doesn't exist.
-        </p>
-        <Button onClick={() => router.back()} className="mt-4">
-          Go Back
-        </Button>
-      </div>
-    );
-  }
-
-  const tour = typeof booking.tour === "object" ? booking.tour : null;
-  const user = typeof booking.user === "object" ? booking.user : null;
-
-  if (!tour || !user) {
-    return (
-      <div className="text-center py-20">
-        <AlertCircle className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-        <h2 className="text-2xl font-bold">Incomplete Data</h2>
-        <p className="text-muted-foreground mt-2">
-          Tour or user information is missing.
-        </p>
-        <Button onClick={() => router.back()} className="mt-4">
-          Go Back
-        </Button>
-      </div>
-    );
-  }
+  const { tourist_info, travel_details, guide_preferences, booking_configuration } =
+    booking;
+  const outstation = booking_configuration?.outstation;
 
   return (
-    <div className="min-h-screen bg-muted/50">
-      <div className="max-w-6xl mx-auto p-4 md:p-8">
-        <Button
-          variant="outline"
-          onClick={() => router.push("/dashboard/guide/all-bookings")}
-          className="mb-6"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" /> Back to My Bookings
-        </Button>
+    <div className="space-y-6">
+      {backButton}
 
-        <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-4">
-          <div>
-            <h1 className="text-3xl md:text-4xl font-extrabold mb-2">
-              {tour.title}
-            </h1>
-            <p className="text-muted-foreground">Booking ID: {booking._id}</p>
-          </div>
-          <Badge
-            variant={getStatusVariant(booking.status)}
-            className="text-md px-4 py-2 w-fit"
-          >
-            {booking.status}
-          </Badge>
+      <GuidePageHeader
+        title={travel_details.city || "Booking"}
+        description={`Booking ID: ${booking._id}`}
+        action={<GuideStatusBadge status={booking.status} />}
+      />
+
+      <GuidePanel>
+        <div className="border-b border-slate-200 px-5 py-4">
+          <GuideStatStrip>
+            <GuideStat
+              icon={Calendar}
+              label="Travel Date"
+              value={longDate(travel_details.date)}
+            />
+            <GuideStat
+              icon={Users}
+              label="Travellers"
+              value={travel_details.no_of_person}
+            />
+            <GuideStat
+              icon={CreditCard}
+              label="Total Amount"
+              value={currency.format(booking_configuration?.price ?? 0)}
+              accent
+            />
+          </GuideStatStrip>
+        </div>
+      </GuidePanel>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <GuidePanel>
+            <Section title="Tour Details" icon={MapPin}>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <Field label="City">{travel_details.city || "—"}</Field>
+                <Field label="Duration">
+                  {booking_configuration?.duration || "—"}
+                </Field>
+                <div className="md:col-span-2">
+                  <Field label="Places">
+                    {travel_details.places?.length
+                      ? travel_details.places.join(", ")
+                      : "—"}
+                  </Field>
+                </div>
+                <Field label="Hotel Required">
+                  <YesNo value={travel_details.preferences?.hotel} />
+                </Field>
+                <Field label="Taxi Required">
+                  <YesNo value={travel_details.preferences?.taxi} />
+                </Field>
+              </div>
+            </Section>
+
+            <Section title="Booking Configuration" icon={Settings2}>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <Field label="Foreign Language Required">
+                  <YesNo value={booking_configuration?.foreign_language_required} />
+                </Field>
+                <Field label="Early / Late Hours">
+                  <YesNo value={booking_configuration?.early_late_hours} />
+                </Field>
+                <Field label="Extra City Allowances">
+                  <YesNo value={booking_configuration?.extra_city_allowances} />
+                </Field>
+                <Field label="Preferred Guide Gender">
+                  {guide_preferences?.gender || "Any"}
+                </Field>
+                <div className="md:col-span-2">
+                  <Field label="Preferred Languages">
+                    {guide_preferences?.guide_language?.length
+                      ? guide_preferences.guide_language.join(", ")
+                      : "Any"}
+                  </Field>
+                </div>
+                {booking_configuration?.special_event_allowances?.length ? (
+                  <div className="md:col-span-2">
+                    <Field label="Special Event Allowances">
+                      {booking_configuration.special_event_allowances.join(", ")}
+                    </Field>
+                  </div>
+                ) : null}
+              </div>
+            </Section>
+
+            {outstation && (
+              <Section title="Outstation" icon={MapPin}>
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <Field label="Distance">{outstation.distance} km</Field>
+                  <Field label="Overnight Stays">
+                    {outstation.over_night_stay}
+                  </Field>
+                  <Field label="Accommodation & Meals">
+                    <YesNo value={outstation.accomodation_meals} />
+                  </Field>
+                  {outstation.special_excursion?.length ? (
+                    <Field label="Special Excursions">
+                      {outstation.special_excursion.join(", ")}
+                    </Field>
+                  ) : null}
+                </div>
+              </Section>
+            )}
+
+            <Section title="Payment" icon={CreditCard}>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <Field label="Total Amount">
+                  <span className="text-2xl font-bold text-green-600">
+                    {currency.format(booking_configuration?.price ?? 0)}
+                  </span>
+                </Field>
+                <Field label="Transaction ID">
+                  <span className="font-mono text-xs text-slate-500">
+                    {booking.transaction_id || "—"}
+                  </span>
+                </Field>
+              </div>
+            </Section>
+          </GuidePanel>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
-          {/* Left Column - Tour Details */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Tour Image */}
-            <Card>
-              <CardContent className="p-0">
-                <div className="relative w-full h-80 rounded-lg overflow-hidden">
-                  <Image
-                    src={resolvePackageImageUrl(tour.images?.[0])}
-                    alt={tour.title || "Tour"}
-                    fill
-                    className="object-cover"
-                  />
+        <div className="space-y-6">
+          <GuidePanel>
+            <Section title="Customer Information" icon={User}>
+              <div className="flex items-center gap-3 rounded-lg bg-slate-50 p-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+                  <User className="h-6 w-6 text-green-600" />
                 </div>
-              </CardContent>
-            </Card>
+                <div className="min-w-0">
+                  <p className="truncate text-base font-bold text-slate-900">
+                    {tourist_info.name}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {tourist_info.country || "Customer"}
+                  </p>
+                </div>
+              </div>
 
-            {/* Tour Details */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-primary" />
-                  Tour Details
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Start Date</p>
-                  <p className="text-lg font-semibold">
-                    {new Date(booking.startDate).toLocaleDateString("en-US", {
-                      weekday: "short",
-                      year: "numeric",
-                      month: "short",
-                      day: "numeric",
-                    })}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">End Date</p>
-                  <p className="text-lg font-semibold">
-                    {new Date(booking.endDate).toLocaleDateString("en-US", {
-                      weekday: "short",
-                      year: "numeric",
-                      month: "short",
-                      day: "numeric",
-                    })}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">
-                    Number of Tourists
-                  </p>
-                  <p className="text-lg font-semibold flex items-center gap-2">
-                    <Users className="w-5 h-5 text-primary" />
-                    {booking.numberOfTourists}{" "}
-                    {booking.numberOfTourists === 1 ? "Tourist" : "Tourists"}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Location(s)</p>
-                  <p className="text-lg font-semibold flex items-center gap-2">
-                    <MapPin className="w-5 h-5 text-primary" />
-                    {tour.locations?.join(", ") || "N/A"}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Payment Details */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <IndianRupee className="w-5 h-5 text-primary" />
-                  Payment Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Total Amount</p>
-                  <p className="text-2xl font-bold text-primary">
-                    ₹{booking.totalPrice.toLocaleString()}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Advance Paid</p>
-                  <p className="text-2xl font-bold text-green-600">
-                    ₹{booking.advanceAmount.toLocaleString()}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">
-                    Payment Status
-                  </p>
-                  <Badge variant="outline" className="text-sm">
-                    {booking.paymentStatus}
-                  </Badge>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Payment ID</p>
-                  <p className="text-sm font-mono flex items-center gap-2">
-                    <CreditCard className="w-4 h-4" />
-                    {booking.paymentId}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Right Column - Customer Info */}
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="w-5 h-5 text-primary" />
-                  Customer Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                    <User className="w-6 h-6 text-primary" />
+              <div className="mt-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <Mail className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                  <div className="min-w-0">
+                    <p className="text-xs text-slate-400">Email</p>
+                    <p className="truncate text-sm text-slate-700">
+                      {tourist_info.email || "—"}
+                    </p>
                   </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Phone className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
                   <div>
-                    <p className="font-bold text-lg">{user.name}</p>
-                    <p className="text-sm text-muted-foreground">Customer</p>
+                    <p className="text-xs text-slate-400">Phone</p>
+                    <p className="text-sm text-slate-700">
+                      {tourist_info.phone || "—"}
+                    </p>
                   </div>
                 </div>
+              </div>
 
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-start gap-3">
-                    <Mail className="w-5 h-5 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Email</p>
-                      <p className="text-sm">{user.email}</p>
-                    </div>
-                  </div>
+              {tourist_info.phone ? (
+                <Button className="mt-5 w-full" variant="outline" asChild>
+                  <a href={`tel:${tourist_info.phone}`}>
+                    <Phone className="mr-2 h-4 w-4" />
+                    Call Customer
+                  </a>
+                </Button>
+              ) : (
+                <Button className="mt-5 w-full" variant="outline" disabled>
+                  <Phone className="mr-2 h-4 w-4" />
+                  Phone Not Available
+                </Button>
+              )}
+            </Section>
+          </GuidePanel>
 
-                  {user.mobile && (
-                    <div className="flex items-start gap-3">
-                      <Phone className="w-5 h-5 text-muted-foreground mt-0.5" />
-                      <div>
-                        <p className="text-xs text-muted-foreground">Mobile</p>
-                        <p className="text-sm">{user.mobile}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Quick Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {user.mobile ? (
-                  <Button className="w-full" variant="outline" asChild>
-                    <a href={`tel:${user.mobile}`}>
-                      <Phone className="w-4 h-4 mr-2" />
-                      Call Customer
-                    </a>
-                  </Button>
-                ) : (
-                  <Button className="w-full" variant="outline" disabled>
-                    <Phone className="w-4 h-4 mr-2" />
-                    Customer Mobile Not Available
-                  </Button>
-                )}
-                {booking.status === "Upcoming" && (
-                  <Button
-                    className="w-full"
-                    variant="destructive"
-                    onClick={handleCancel}
-                    disabled={loading}
-                  >
-                    <Undo2 className="w-4 h-4 mr-2" />
-                    Cancel & Refund Booking
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Booking Timeline */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Booking Timeline</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
+          <GuidePanel>
+            <Section title="Booking Timeline" icon={Calendar}>
+              <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Created</span>
-                  <span className="font-medium">
-                    {new Date(booking.createdAt).toLocaleDateString()}
+                  <span className="text-slate-500">Created</span>
+                  <span className="font-medium text-slate-900">
+                    {longDate(booking.createdAt)}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Last Updated</span>
-                  <span className="font-medium">
-                    {new Date(booking.updatedAt).toLocaleDateString()}
+                  <span className="text-slate-500">Last Updated</span>
+                  <span className="font-medium text-slate-900">
+                    {longDate(booking.updatedAt)}
                   </span>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </Section>
+          </GuidePanel>
         </div>
       </div>
     </div>

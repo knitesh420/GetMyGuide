@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { TripStatus } from "@/lib/data";
 
 const STATUS_VARIANT: Record<TripStatus, "default" | "destructive" | "pending" | "outline"> = {
+  planned: "pending",
   "not-started": "outline",
   "in-progress": "pending",
   completed: "default",
@@ -9,6 +10,7 @@ const STATUS_VARIANT: Record<TripStatus, "default" | "destructive" | "pending" |
 };
 
 const STATUS_LABEL: Record<TripStatus, string> = {
+  planned: "Planned — Awaiting Guide",
   "not-started": "Not Started",
   "in-progress": "In Progress",
   completed: "Completed",

@@ -1,22 +1,41 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/lib/store";
 import { completeTrip, fetchMyTrips, startTrip } from "@/lib/redux/thunks/trip/tripThunks";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TripStatusBadge } from "@/components/trip/TripStatusBadge";
 import { StartTripDialog } from "@/components/trip/StartTripDialog";
 import { CompleteTripDialog } from "@/components/trip/CompleteTripDialog";
 import { showToast } from "@/lib/utils/toastHelper";
 import { PopulatedBookingSummary } from "@/lib/data";
+import { CheckCircle2, MapPinned, Route } from "lucide-react";
+import {
+  GuideCellStack,
+  GuideEmptyState,
+  GuidePageHeader,
+  GuidePanel,
+  GuideStat,
+  GuideStatusBadge,
+  GuideTable,
+  GuideTableCell,
+  GuideTableHead,
+  GuideTableRow,
+  GuideToolbar,
+} from "@/components/guide";
 
 function asBooking(value: unknown): PopulatedBookingSummary | null {
   return value && typeof value === "object" ? (value as PopulatedBookingSummary) : null;
 }
+
+const shortDate = (value: string) =>
+  new Date(value).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 
 export default function GuideTripsPage() {
   const dispatch = useDispatch<AppDispatch>();
@@ -28,6 +47,15 @@ export default function GuideTripsPage() {
   useEffect(() => {
     dispatch(fetchMyTrips({ page: 1, limit: 50 }));
   }, [dispatch]);
+
+  const stats = useMemo(() => {
+    const byStatus = (name: string) => myTrips.filter((t) => t.status === name).length;
+    return {
+      total: myTrips.length,
+      inProgress: byStatus("in-progress"),
+      completed: byStatus("completed"),
+    };
+  }, [myTrips]);
 
   const handleStart = async (notes?: string) => {
     if (!startTargetId) return;
@@ -56,62 +84,86 @@ export default function GuideTripsPage() {
   };
 
   return (
-    <div className="flex-1 space-y-6 p-4 sm:p-6 md:p-8 bg-muted/40">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">My Trips</h2>
-        <p className="text-muted-foreground">Trips created once you accept an assignment.</p>
-      </div>
+    <div className="space-y-6">
+      <GuidePageHeader
+        title="My Trips"
+        description="Trips created once you accept an assignment."
+      />
 
-      {loading && myTrips.length === 0 ? (
-        <div className="space-y-3">
-          <Skeleton className="h-32" />
-          <Skeleton className="h-32" />
-        </div>
-      ) : myTrips.length === 0 ? (
-        <Card>
-          <CardContent className="py-10 text-center text-muted-foreground">
-            You don&apos;t have any trips yet — accept an assignment to get started.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {myTrips.map((trip) => {
-            const booking = asBooking(trip.booking);
-            return (
-              <Card key={trip._id}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0">
-                  <CardTitle className="text-lg">{booking?.travel_details.city ?? "Trip"}</CardTitle>
-                  <TripStatusBadge status={trip.status} />
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="text-sm text-muted-foreground space-y-1">
-                    <p>Tourist: {booking?.tourist_info.name ?? "—"}</p>
-                    {booking?.travel_details.date && (
-                      <p>Date: {new Date(booking.travel_details.date).toLocaleDateString()}</p>
-                    )}
-                  </div>
+      <GuidePanel>
+        <GuideToolbar
+          stats={
+            <>
+              <GuideStat icon={MapPinned} label="Total Trips" value={stats.total} />
+              <GuideStat icon={Route} label="In Progress" value={stats.inProgress} />
+              <GuideStat icon={CheckCircle2} label="Completed" value={stats.completed} accent />
+            </>
+          }
+        >
+          <h2 className="text-sm font-semibold text-slate-900">All trips</h2>
+        </GuideToolbar>
 
-                  <div className="flex gap-2">
-                    {trip.status === "not-started" && (
-                      <Button size="sm" onClick={() => setStartTargetId(trip._id)}>
-                        Start Trip
-                      </Button>
-                    )}
-                    {trip.status === "in-progress" && (
-                      <Button size="sm" onClick={() => setCompleteTargetId(trip._id)}>
-                        Complete Trip
-                      </Button>
-                    )}
-                    <Button size="sm" variant="outline" asChild>
-                      <Link href={`/dashboard/guide/trips/${trip._id}`}>View Details</Link>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+        {loading && myTrips.length === 0 ? (
+          <div className="space-y-3 p-5">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-12" />
+            ))}
+          </div>
+        ) : myTrips.length === 0 ? (
+          <GuideEmptyState
+            icon={MapPinned}
+            title="No trips yet"
+            description="Accept an assignment to get started."
+          />
+        ) : (
+          <GuideTable>
+            <GuideTableHead
+              columns={["Destination", "Tourist", "Date", "Status", "Action"]}
+            />
+            <tbody>
+              {myTrips.map((trip) => {
+                const booking = asBooking(trip.booking);
+                return (
+                  <GuideTableRow key={trip._id}>
+                    <GuideTableCell>
+                      <GuideCellStack
+                        primary={booking?.travel_details.city ?? "Trip"}
+                        secondary={booking?.travel_details.places?.join(", ") || undefined}
+                      />
+                    </GuideTableCell>
+                    <GuideTableCell>{booking?.tourist_info.name ?? "—"}</GuideTableCell>
+                    <GuideTableCell className="whitespace-nowrap">
+                      {booking?.travel_details.date
+                        ? shortDate(booking.travel_details.date)
+                        : "—"}
+                    </GuideTableCell>
+                    <GuideTableCell>
+                      <GuideStatusBadge status={trip.status} />
+                    </GuideTableCell>
+                    <GuideTableCell last>
+                      <div className="flex gap-2">
+                        {trip.status === "not-started" && (
+                          <Button size="sm" onClick={() => setStartTargetId(trip._id)}>
+                            Start Trip
+                          </Button>
+                        )}
+                        {trip.status === "in-progress" && (
+                          <Button size="sm" onClick={() => setCompleteTargetId(trip._id)}>
+                            Complete Trip
+                          </Button>
+                        )}
+                        <Button size="sm" variant="outline" asChild>
+                          <Link href={`/dashboard/guide/trips/${trip._id}`}>View Details</Link>
+                        </Button>
+                      </div>
+                    </GuideTableCell>
+                  </GuideTableRow>
+                );
+              })}
+            </tbody>
+          </GuideTable>
+        )}
+      </GuidePanel>
 
       <StartTripDialog
         isOpen={!!startTargetId}

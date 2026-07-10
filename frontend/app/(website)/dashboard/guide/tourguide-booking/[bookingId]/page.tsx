@@ -5,33 +5,41 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useRouter } from 'next/navigation';
 import { AppDispatch, RootState } from '@/lib/store';
 import { format } from 'date-fns';
-import { Loader2, AlertCircle, ChevronLeft, User, Calendar, MapPin, IndianRupee , Languages } from 'lucide-react';
+import { AlertCircle, ChevronLeft, User, Calendar, MapPin, IndianRupee, Languages } from 'lucide-react';
 
 // Import thunks and actions from their consolidated location
 import { fetchMyGuideBookingByIdThunk } from '@/lib/redux/thunks/tourGuideBooking/userTourGuideBookingThunks';
 import { clearCurrentBooking } from '@/lib/redux/userTourGuideBookingSlice';
 
-// Shadcn/UI Components
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Separator } from '@/components/ui/separator';
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  GuideEmptyState,
+  GuideField,
+  GuidePageHeader,
+  GuidePanel,
+  GuideSection,
+  GuideStat,
+  GuideStatStrip,
+  GuideStatusBadge,
+} from "@/components/guide";
 
-const getStatusVariant = (status: string) => {
-    switch (status) {
-      case 'Upcoming': return 'default';
-      case 'Completed': return 'success';
-      case 'Cancelled': return 'destructive';
-      default: return 'secondary';
-    }
+const currency = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 0,
+});
+
+const longDate = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf()) ? "—" : format(date, "PPP");
 };
 
 export default function GuideBookingDetailPage() {
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
   const { bookingId } = useParams();
-  
+
   // Select the specific 'currentBooking' state for this page
   const { currentBooking: booking, loading, error } = useSelector((state: RootState) => state.userTourGuideBookings);
 
@@ -45,22 +53,34 @@ export default function GuideBookingDetailPage() {
     };
   }, [dispatch, bookingId]);
 
+  const backButton = (
+    <Button variant="outline" onClick={() => router.back()}>
+      <ChevronLeft className="mr-2 h-4 w-4" /> Back to All Bookings
+    </Button>
+  );
+
   if (loading) {
-    return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-48" />
+        <Skeleton className="h-12 w-72" />
+        <Skeleton className="h-64" />
+      </div>
+    );
   }
 
   if (error) {
     return (
-        <div className="container mx-auto py-8">
-            <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-            </Alert>
-            <Button variant="link" onClick={() => router.back()} className="mt-4">
-                <ChevronLeft className="w-4 h-4 mr-2" /> Go Back
-            </Button>
-        </div>
+      <div className="space-y-6">
+        {backButton}
+        <GuidePanel>
+          <GuideEmptyState
+            icon={AlertCircle}
+            title="Could not load this booking"
+            description={error}
+          />
+        </GuidePanel>
+      </div>
     );
   }
 
@@ -75,52 +95,89 @@ export default function GuideBookingDetailPage() {
     typeof booking.user === "object" && booking.user !== null ? booking.user : null;
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <Button variant="ghost" onClick={() => router.back()} className="mb-4">
-        <ChevronLeft className="w-4 h-4 mr-2" />
-        Back to All Bookings
-      </Button>
+    <div className="space-y-6">
+      {backButton}
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col md:flex-row justify-between md:items-start gap-4">
-            <div>
-              <CardTitle className="text-2xl font-bold">Booking Details</CardTitle>
-              <CardDescription className='mt-1'>Review the information for the tour in <strong>{booking.location}</strong>.</CardDescription>
-            </div>
-            <Badge variant={getStatusVariant(booking.status)} className="text-base w-fit">{booking.status}</Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <Separator />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-4">
-              <h3 className="font-semibold flex items-center text-lg"><User className="w-5 h-5 mr-3 text-primary" />Tourist Information</h3>
-              <p><strong>Name:</strong> {touristUser?.name || 'N/A'}</p>
-              <p><strong>Email:</strong> {touristUser?.email || 'No email'}</p>
-              <p><strong>Contact Name (on form):</strong> {booking.contactInfo.fullName}</p>
-            </div>
-            <div className="space-y-4">
-              <h3 className="font-semibold flex items-center text-lg"><Calendar className="w-5 h-5 mr-3 text-primary" />Tour Dates</h3>
-              <p><strong>Start Date:</strong> {format(new Date(booking.startDate), 'PPP')}</p>
-              <p><strong>End Date:</strong> {format(new Date(booking.endDate), 'PPP')}</p>
-            </div>
-          </div>
-          <Separator />
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-4">
-                <h3 className="font-semibold flex items-center text-lg"><MapPin className="w-5 h-5 mr-3 text-primary" />Location & Language</h3>
-                <p><strong>Location:</strong> {booking.location}</p>
-                <p><strong>Language Requested:</strong> {booking.language}</p>
+      <GuidePageHeader
+        title="Booking Details"
+        description={`Review the information for the tour in ${booking.location}.`}
+        action={<GuideStatusBadge status={booking.status} />}
+      />
+
+      <GuidePanel>
+        <div className="border-b border-slate-200 px-5 py-4">
+          <GuideStatStrip>
+            <GuideStat
+              icon={Calendar}
+              label="Start Date"
+              value={longDate(booking.startDate)}
+            />
+            <GuideStat
+              icon={Calendar}
+              label="End Date"
+              value={longDate(booking.endDate)}
+            />
+            <GuideStat
+              icon={IndianRupee}
+              label="Total Price"
+              value={currency.format(booking.totalPrice)}
+              accent
+            />
+          </GuideStatStrip>
+        </div>
+      </GuidePanel>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <GuidePanel>
+          <GuideSection title="Tourist Information" icon={User}>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              <GuideField label="Name">{touristUser?.name || "N/A"}</GuideField>
+              <GuideField label="Email">
+                {touristUser?.email || "No email"}
+              </GuideField>
+              <div className="sm:col-span-2">
+                <GuideField label="Contact Name (on form)">
+                  {booking.contactInfo.fullName}
+                </GuideField>
               </div>
-               <div className="space-y-4">
-                <h3 className="font-semibold flex items-center text-lg"><IndianRupee  className="w-5 h-5 mr-3 text-primary" />Payment Details</h3>
-                <p><strong>Total Price:</strong> ₹{booking.totalPrice.toLocaleString()}</p>
-                <p><strong>Payment Status:</strong> <Badge variant="outline">{booking.paymentStatus}</Badge></p>
-              </div>
-           </div>
-        </CardContent>
-      </Card>
+            </div>
+          </GuideSection>
+
+          <GuideSection title="Tour Dates" icon={Calendar}>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              <GuideField label="Start Date">{longDate(booking.startDate)}</GuideField>
+              <GuideField label="End Date">{longDate(booking.endDate)}</GuideField>
+            </div>
+          </GuideSection>
+        </GuidePanel>
+
+        <GuidePanel>
+          <GuideSection title="Location & Language" icon={MapPin}>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              <GuideField label="Location">{booking.location}</GuideField>
+              <GuideField label="Language Requested">
+                <span className="inline-flex items-center gap-2">
+                  <Languages className="h-4 w-4 text-slate-400" />
+                  {booking.language}
+                </span>
+              </GuideField>
+            </div>
+          </GuideSection>
+
+          <GuideSection title="Payment Details" icon={IndianRupee}>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              <GuideField label="Total Price">
+                <span className="text-2xl font-bold text-green-600">
+                  {currency.format(booking.totalPrice)}
+                </span>
+              </GuideField>
+              <GuideField label="Payment Status">
+                <GuideStatusBadge status={booking.paymentStatus} />
+              </GuideField>
+            </div>
+          </GuideSection>
+        </GuidePanel>
+      </div>
     </div>
   );
 }

@@ -59,15 +59,15 @@ function SuccessContent() {
         );
     }
 
-    // 4. Success State (using live data from currentBooking)
-    // `tour` and `guide` may come back either populated (object) or as a raw
-    // id (string) depending on the endpoint, so guard before reading fields.
-    const { tour, guide, startDate, _id } = currentBooking;
-    const tourObj = typeof tour === "object" && tour !== null ? tour : null;
-    const guideObj = typeof guide === "object" && guide !== null ? guide : null;
-    const tourTitle = tourObj?.title ?? "Your Tour";
-    const guideName = guideObj?.name ?? "Your Guide";
-    const guidePhoto = guideObj?.photo || "/placeholder.svg";
+    // 4. Success State — a package booking carries package/guide info plus the
+    // travel date and the advance/balance split.
+    const tourTitle = currentBooking.package_info?.title ?? "Your Tour";
+    const guideName = currentBooking.guide_info?.name ?? "Your Guide";
+    const guidePhoto = currentBooking.guide_info?.photo || "/placeholder.svg";
+    const startDate = currentBooking.travel_details?.date;
+    const advancePaid = currentBooking.advance_paid;
+    const balanceDue = currentBooking.balance_due;
+    const currency = "₹";
 
     return (
         <div className="max-w-3xl mx-auto">
@@ -86,7 +86,7 @@ function SuccessContent() {
                                 <Calendar className="w-5 h-5 text-primary" />
                                 <div>
                                     <p className="font-semibold">Start Date</p>
-                                    <p className="text-muted-foreground">{new Date(startDate!).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                                    <p className="text-muted-foreground">{startDate ? new Date(startDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'To be confirmed'}</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-3">
@@ -96,6 +96,18 @@ function SuccessContent() {
                                     <p className="text-muted-foreground">{guideName}</p>
                                 </div>
                             </div>
+                            {(advancePaid != null || balanceDue != null) && (
+                                <div className="flex items-center gap-3">
+                                    <CheckCircle className="w-5 h-5 text-primary" />
+                                    <div>
+                                        <p className="font-semibold">Payment</p>
+                                        <p className="text-muted-foreground">
+                                            {currency}{(advancePaid ?? 0).toLocaleString()} advance paid
+                                            {balanceDue != null && balanceDue > 0 && ` · ${currency}${balanceDue.toLocaleString()} balance due`}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         <div className="flex-shrink-0 text-center">
                             <Image src={guidePhoto} alt={guideName} width={80} height={80} className="rounded-full mx-auto shadow-md" />

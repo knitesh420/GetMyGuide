@@ -90,6 +90,26 @@ class UserService {
 			message: 'Tourist account deactivated successfully',
 		};
 	}
+
+	/**
+	 * Reactivate a previously deactivated tourist account by ID.
+	 * Inverse of deactivateTourist — restores account access.
+	 */
+	async activateTourist(touristId: Types.ObjectId): Promise<{ message: string }> {
+		const tourist = await AccountDB.findOneAndUpdate(
+			{ _id: touristId, role: 'tourist' },
+			{ isActive: true },
+			{ new: true }
+		);
+
+		if (!tourist) {
+			throw new NotFoundError('Tourist not found');
+		}
+
+		return {
+			message: 'Tourist account activated successfully',
+		};
+	}
 }
 
 export default new UserService();

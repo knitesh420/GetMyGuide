@@ -3,37 +3,39 @@ import idempotency from '../../middleware/idempotency';
 import IDValidator from '../../middleware/idValidator';
 import VerifySession, { VerifyMinLevel } from '../../middleware/VerifySession';
 import Controller from './guide.controller';
-import { parseGuideEnrollmentFormData, parseGuideProfileFormData } from './guide.middleware';
+import { parseGuideProfileFormData } from './guide.middleware';
 import {
-	ConfirmPaymentValidator,
 	ContactInquiryValidator,
-	EnrollValidator,
+	GuideProfilePatchValidator,
 	GuideProfileValidator,
 	MembershipConfirmPaymentValidator,
 } from './guide.validator';
 
 const router = express.Router();
 
-// ---- Legacy anonymous KYC-and-pay enrollment ------------------------------
-// Superseded by the account-first profile + membership flow below. Left
-// mounted, untouched, in case of any in-flight Razorpay checkout sessions —
-// safe to remove later once confirmed there's no more traffic.
-
-// Public routes
-router
-	.route('/enroll')
-	.post(parseGuideEnrollmentFormData, EnrollValidator, idempotency, Controller.enroll);
-
-router.route('/enroll-status/:id').get(IDValidator, Controller.getEnrollStatus);
-
-router
-	.route('/confirm-payment')
-	.post(ConfirmPaymentValidator, Controller.confirmPayment);
+// ---- Legacy enrollment records (read-only) --------------------------------
+// The anonymous KYC-and-pay write path (enroll → Razorpay → confirm-payment)
+// is gone: registration is now account-first via PUT /guide/profile below.
+// GuideEnrollment documents are retained and still read — `getGuideProfile`
+// falls back to them for the `type` of guides who predate the Guide model, so
+// dropping them would silently downgrade legacy escort guides to normal. The
+// read routes below are what the admin panel uses to review those records.
 
 // Admin only - list all enrollments (includes PII + KYC document references)
 router.route('/list-all').get(VerifySession, VerifyMinLevel('admin'), Controller.listAll);
 
+// Admin only - read one enrollment. This was an unauthenticated route while the
+// public enrol-and-pay flow needed to poll it; nothing polls it now, and it
+// returns PII + KYC document references, so it is gated with the list above.
+router
+	.route('/enroll-status/:id')
+	.get(VerifySession, VerifyMinLevel('admin'), IDValidator, Controller.getEnrollStatus);
+
 // Guide profile & availability (authenticated guide)
+//
+// PUT  = one-time registration, multipart (KYC profile + files).
+// PATCH = post-registration edit, JSON, limited to phone/city/type/languages.
+//         Rejected with 400 until the guide has registered via PUT.
 router
 	.route('/profile')
 	.get(VerifySession, Controller.getGuideProfile)
@@ -43,6 +45,12 @@ router
 		parseGuideProfileFormData,
 		GuideProfileValidator,
 		Controller.updateGuideProfile
+	)
+	.patch(
+		VerifySession,
+		VerifyMinLevel('guide'),
+		GuideProfilePatchValidator,
+		Controller.patchGuideProfile
 	);
 router.route('/availability').put(VerifySession, Controller.updateAvailability);
 

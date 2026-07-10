@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/lib/store";
+import { guideImageUrl } from "@/lib/images";
 import { logoutUser } from "@/lib/redux/authSlice";
 import {
   Users,
@@ -24,6 +25,7 @@ import {
   Pencil,
   ToggleLeft,
   ToggleRight,
+  Receipt,
 } from "lucide-react";
 import { useAuth } from "@/lib/hooks/useAuth";
 import dynamic from "next/dynamic";
@@ -57,6 +59,10 @@ interface Guide {
 
 interface Tourist {
   id: string;
+  /** Present when this row is a real tourist account (vs. a guest-only booking
+   *  group). Used to deactivate the actual account, not just a booking. */
+  accountId?: string;
+  isActive?: boolean;
   name: string;
   email: string;
   phone: string;
@@ -196,6 +202,29 @@ interface Advertisement {
   updatedAt: string;
 }
 
+interface Invoice {
+  _id: string;
+  invoiceNumber: string;
+  invoiceType: "booking" | "guide_membership" | "trip_completion" | string;
+  invoiceDate: string;
+  paymentDate: string;
+  razorpayPaymentId?: string;
+  razorpayOrderId?: string;
+  customerSnapshot: {
+    name: string;
+    email: string;
+    phone: string;
+    country?: string;
+  };
+  paymentInfo: {
+    amount: number;
+    grandTotal: number;
+    status: string;
+    currency: string;
+  };
+  status: string;
+}
+
 function AdminDashboard() {
   const router = useRouter();
   const dispatch = useDispatch();
@@ -212,6 +241,7 @@ function AdminDashboard() {
   const [packages, setPackages] = useState<ServicePackage[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [advertisements, setAdvertisements] = useState<Advertisement[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedGuide, setSelectedGuide] = useState<Guide | null>(null);
   const [loadingGuideDetails, setLoadingGuideDetails] = useState(false);
@@ -336,6 +366,100 @@ function AdminDashboard() {
     } catch (err) {
       console.error("Error deleting booking:", err);
       alert("Error deleting booking");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Deactivate (soft-delete) a real tourist account. Distinct from deleting a
+  // single booking above — this removes access for the whole account.
+  const handleDeleteTouristAccount = async (accountId: string) => {
+    if (
+      !confirm(
+        "Are you sure you want to deactivate this tourist account? They will lose access until reactivated.",
+      )
+    )
+      return;
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/user/${accountId}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        console.error("Deactivate failed:", res.status, txt);
+        alert(
+          `Failed to deactivate account: ${res.status} ${res.statusText}`,
+        );
+        return;
+      }
+
+      const data = await res.json();
+      // Reflect the deactivation in the list without dropping the row, so the
+      // admin can still see the (now inactive) account and its history.
+      setTourists((prev) =>
+        prev.map((t) =>
+          t.accountId === accountId
+            ? { ...t, isActive: false, status: "inactive" }
+            : t,
+        ),
+      );
+      alert(data?.message || "Tourist account deactivated successfully");
+    } catch (err) {
+      console.error("Error deactivating account:", err);
+      alert("Error deactivating account");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Reactivate a previously deactivated tourist account — inverse of the
+  // deactivate action above, so an admin can restore access.
+  const handleActivateTouristAccount = async (accountId: string) => {
+    if (
+      !confirm(
+        "Are you sure you want to activate this tourist account? They will regain access.",
+      )
+    )
+      return;
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/user/${accountId}/activate`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        console.error("Activate failed:", res.status, txt);
+        alert(`Failed to activate account: ${res.status} ${res.statusText}`);
+        return;
+      }
+
+      const data = await res.json();
+      setTourists((prev) =>
+        prev.map((t) =>
+          t.accountId === accountId
+            ? { ...t, isActive: true, status: "active" }
+            : t,
+        ),
+      );
+      alert(data?.message || "Tourist account activated successfully");
+    } catch (err) {
+      console.error("Error activating account:", err);
+      alert("Error activating account");
     } finally {
       setLoading(false);
     }
@@ -536,6 +660,11 @@ function AdminDashboard() {
       label: "Advertisements",
       icon: Film,
     },
+    {
+      id: "payments",
+      label: "Payments",
+      icon: Receipt,
+    },
   ];
 
   useEffect(() => {
@@ -645,7 +774,57 @@ function AdminDashboard() {
           }
           break;
 
-        case "tourists":
+        case "tourists": {
+          // Show every registered tourist account (even those who never booked)
+          // AND every guest booking. Start from accounts, then fold bookings in.
+          const touristMap = new Map<string, Tourist>();
+
+          // 1) All tourist accounts
+          try {
+            const accountsRes = await fetch(
+              `${API_BASE}/user/tourists?limit=1000`,
+              {
+                credentials: "include",
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                },
+              },
+            );
+            if (accountsRes.ok) {
+              const accountsData = await accountsRes.json();
+              const accounts =
+                accountsData.data?.tourists || accountsData.tourists || [];
+              accounts.forEach((acc: any) => {
+                touristMap.set(acc.email, {
+                  id: acc._id,
+                  accountId: acc._id,
+                  isActive: acc.isActive,
+                  name: acc.name,
+                  email: acc.email,
+                  phone: acc.phone || "",
+                  country: "",
+                  gender: "",
+                  role: acc.role || "tourist",
+                  status:
+                    acc.isActive === false
+                      ? "inactive"
+                      : acc.status || "active",
+                  createdAt: acc.createdAt,
+                  bookingCount: 0,
+                  totalSpent: 0,
+                  lastBookingDate: acc.createdAt,
+                  cities: [],
+                  bookings: [],
+                  services: [],
+                });
+              });
+            }
+          } catch (err) {
+            console.error("Error fetching tourist accounts:", err);
+          }
+
+          // 2) All bookings — attach to the matching account, or add a guest row
           const touristBookingsRes = await fetch(`${API_BASE}/booking`, {
             credentials: "include",
             headers: {
@@ -654,41 +833,35 @@ function AdminDashboard() {
             },
           });
 
-          if (!touristBookingsRes.ok) {
-            console.error(
-              "Failed to fetch tourists:",
-              touristBookingsRes.status,
-              touristBookingsRes.statusText,
-            );
-            const errorText = await touristBookingsRes.text();
-            console.error("Error response:", errorText);
-            setTourists([]);
-            break;
-          }
-
-          const touristBookingsData = await touristBookingsRes.json();
-
-          // Handle both response structures: {bookings: [...]} or {data: {bookings: [...]}}
-          const touristBookingsArray =
-            touristBookingsData.bookings || touristBookingsData.data?.bookings;
-
-          if (touristBookingsData.success && touristBookingsArray) {
-            // Extract unique tourists from bookings with aggregated data
-            const uniqueTouristsMap = new Map<string, Tourist>();
+          if (touristBookingsRes.ok) {
+            const touristBookingsData = await touristBookingsRes.json();
+            const touristBookingsArray =
+              touristBookingsData.bookings ||
+              touristBookingsData.data?.bookings ||
+              [];
 
             touristBookingsArray.forEach((booking: Booking) => {
               const email = booking.tourist_info.email;
+              const service = {
+                city: booking.travel_details.city,
+                places: booking.travel_details.places,
+                duration: booking.booking_configuration.duration,
+                price: booking.booking_configuration.price,
+                date: booking.travel_details.date,
+                preferences: booking.travel_details.preferences,
+              };
+              const existing = touristMap.get(email);
 
-              if (!uniqueTouristsMap.has(email)) {
-                // Create new tourist entry
-                uniqueTouristsMap.set(email, {
+              if (!existing) {
+                // Guest booking with no matching account
+                touristMap.set(email, {
                   id: booking.id,
                   name: booking.tourist_info.name,
-                  email: booking.tourist_info.email,
+                  email,
                   phone: booking.tourist_info.phone,
                   country: booking.tourist_info.country,
                   gender: booking.tourist_info.gender,
-                  role: "tourist",
+                  role: "guest",
                   status: booking.status,
                   createdAt: booking.createdAt,
                   bookingCount: 1,
@@ -696,61 +869,41 @@ function AdminDashboard() {
                   lastBookingDate: booking.createdAt,
                   cities: [booking.travel_details.city],
                   bookings: [booking],
-                  services: [
-                    {
-                      city: booking.travel_details.city,
-                      places: booking.travel_details.places,
-                      duration: booking.booking_configuration.duration,
-                      price: booking.booking_configuration.price,
-                      date: booking.travel_details.date,
-                      preferences: booking.travel_details.preferences,
-                    },
-                  ],
+                  services: [service],
                 });
               } else {
-                // Update existing tourist with new booking data
-                const existingTourist = uniqueTouristsMap.get(email)!;
-                existingTourist.bookingCount += 1;
-                existingTourist.totalSpent +=
-                  booking.booking_configuration.price;
-
-                // Update to latest booking date
+                existing.bookingCount += 1;
+                existing.totalSpent += booking.booking_configuration.price;
+                if (!existing.country)
+                  existing.country = booking.tourist_info.country;
+                if (!existing.gender)
+                  existing.gender = booking.tourist_info.gender;
+                if (!existing.phone)
+                  existing.phone = booking.tourist_info.phone;
                 if (
                   new Date(booking.createdAt) >
-                  new Date(existingTourist.lastBookingDate)
+                  new Date(existing.lastBookingDate)
                 ) {
-                  existingTourist.lastBookingDate = booking.createdAt;
-                  existingTourist.status = booking.status;
+                  existing.lastBookingDate = booking.createdAt;
                 }
-
-                // Add city if not already in list
-                if (
-                  !existingTourist.cities.includes(booking.travel_details.city)
-                ) {
-                  existingTourist.cities.push(booking.travel_details.city);
+                if (!existing.cities.includes(booking.travel_details.city)) {
+                  existing.cities.push(booking.travel_details.city);
                 }
-
-                // Add full booking to bookings array
-                existingTourist.bookings.push(booking);
-
-                // Add service details
-                existingTourist.services.push({
-                  city: booking.travel_details.city,
-                  places: booking.travel_details.places,
-                  duration: booking.booking_configuration.duration,
-                  price: booking.booking_configuration.price,
-                  date: booking.travel_details.date,
-                  preferences: booking.travel_details.preferences,
-                });
+                existing.bookings.push(booking);
+                existing.services.push(service);
               }
             });
-
-            const touristsList = Array.from(uniqueTouristsMap.values());
-            setTourists(touristsList);
           } else {
-            setTourists([]);
+            console.error(
+              "Failed to fetch tourist bookings:",
+              touristBookingsRes.status,
+              touristBookingsRes.statusText,
+            );
           }
+
+          setTourists(Array.from(touristMap.values()));
           break;
+        }
 
         case "bookings":
           try {
@@ -871,6 +1024,41 @@ function AdminDashboard() {
             console.error("Error fetching advertisements:", error);
             alert(`Error fetching advertisements: ${error}`);
             setAdvertisements([]);
+          }
+          break;
+
+        case "payments":
+          try {
+            // Admins get every invoice from this endpoint (see backend
+            // buildQuery). High limit so the ledger isn't paginated away.
+            const invRes = await fetch(`${API_BASE}/invoice?limit=1000`, {
+              credentials: "include",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            });
+
+            if (invRes.ok) {
+              const invBody = await invRes.json();
+              const payload = invBody.data ?? invBody;
+              const list = Array.isArray(payload)
+                ? payload
+                : payload.data || payload.invoices || [];
+              setInvoices(list);
+            } else {
+              const errorText = await invRes.text();
+              console.error(
+                "Failed to fetch payments:",
+                invRes.status,
+                invRes.statusText,
+                errorText,
+              );
+              setInvoices([]);
+            }
+          } catch (error) {
+            console.error("Error fetching payments:", error);
+            setInvoices([]);
           }
           break;
       }
@@ -1005,6 +1193,7 @@ function AdminDashboard() {
                     {activeTab === "bookings" && leads.length}
                     {activeTab === "services" && packages.length}
                     {activeTab === "advertisements" && advertisements.length}
+                    {activeTab === "payments" && invoices.length}
                   </span>
                 </p>
               </div>
@@ -1052,6 +1241,8 @@ function AdminDashboard() {
                   <TouristsTable
                     tourists={tourists}
                     onDelete={handleDeleteTouristBooking}
+                    onDeleteAccount={handleDeleteTouristAccount}
+                    onActivateAccount={handleActivateTouristAccount}
                   />
                 )}
               </>
@@ -1115,6 +1306,23 @@ function AdminDashboard() {
                 apiBase={API_BASE}
                 onRefresh={() => fetchData("advertisements")}
               />
+            )}
+            {activeTab === "payments" && (
+              <>
+                {invoices.length === 0 && !loading && (
+                  <div className="text-center py-8">
+                    <Receipt className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500">No payments found.</p>
+                  </div>
+                )}
+                {invoices.length > 0 && (
+                  <PaymentsTable
+                    invoices={invoices}
+                    token={token}
+                    apiBase={API_BASE}
+                  />
+                )}
+              </>
             )}
           </div>
         )}
@@ -1272,7 +1480,7 @@ function GuidesTable({
                 <div className="md:col-span-2">
                   <div className="flex items-center gap-3">
                     <img
-                      src={`${API_BASE}/media/misc/${guide.photo}`}
+                      src={guideImageUrl(guide.photo) ?? undefined}
                       alt={guide.name}
                       className="w-12 h-12 rounded-full object-cover border-2 border-blue-100"
                     />
@@ -1341,7 +1549,7 @@ function GuidesTable({
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center gap-2 mb-3">
                         <img
-                          src={`${API_BASE}/media/misc/${guide.photo}`}
+                          src={guideImageUrl(guide.photo) ?? undefined}
                           alt={guide.name}
                           className="w-16 h-16 rounded-full object-cover border-2 border-blue-200"
                         />
@@ -1586,9 +1794,13 @@ function GuidesTable({
 function TouristsTable({
   tourists,
   onDelete,
+  onDeleteAccount,
+  onActivateAccount,
 }: {
   tourists: Tourist[];
   onDelete: (id: string) => void;
+  onDeleteAccount: (accountId: string) => void;
+  onActivateAccount: (accountId: string) => void;
 }) {
   const [expandedTourist, setExpandedTourist] = useState<string | null>(null);
 
@@ -2115,18 +2327,49 @@ function TouristsTable({
                   </div>
                 )}
 
-                {/* Delete Button */}
+                {/* Actions: deactivate a real account, or delete a guest booking */}
                 <div className="mt-4 flex justify-end">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(tourist.id);
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Delete
-                  </button>
+                  {tourist.accountId ? (
+                    tourist.isActive === false ? (
+                      <div className="flex items-center gap-3">
+                        <span className="px-3 py-2 text-sm text-gray-500 bg-gray-100 rounded-md">
+                          Account Deactivated
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onActivateAccount(tourist.accountId!);
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
+                        >
+                          <ToggleRight className="w-4 h-4" />
+                          Activate Account
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteAccount(tourist.accountId!);
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Deactivate Account
+                      </button>
+                    )
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(tourist.id);
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete Booking
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -3222,7 +3465,7 @@ function GuideDetailsModal({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="flex items-center gap-4">
                     <img
-                      src={`${API_BASE}/media/misc/${guide.photo}`}
+                      src={guideImageUrl(guide.photo) ?? undefined}
                       alt={guide.name}
                       className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
                     />
@@ -3429,6 +3672,163 @@ function GuideDetailsModal({
 }
 
 // Leads Table Component
+function PaymentsTable({
+  invoices,
+  token,
+  apiBase,
+}: {
+  invoices: Invoice[];
+  token: string | null;
+  apiBase: string;
+}) {
+  // Download a file from an authenticated endpoint (PDF invoice or CSV export).
+  const downloadWithAuth = async (url: string, fallbackName: string) => {
+    try {
+      const res = await fetch(url, {
+        credentials: "include",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        alert(`Download failed: ${res.status} ${res.statusText}`);
+        return;
+      }
+      const blob = await res.blob();
+      const href = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = fallbackName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(href);
+    } catch (err) {
+      console.error("Download error:", err);
+      alert("Could not download the file.");
+    }
+  };
+
+  const typeLabel: Record<string, string> = {
+    booking: "Booking",
+    guide_membership: "Guide Membership",
+    trip_completion: "Trip",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <button
+          onClick={() =>
+            downloadWithAuth(
+              `${apiBase}/invoice/admin/export?format=csv`,
+              "invoices.csv",
+            )
+          }
+          className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors text-sm"
+        >
+          <Download className="w-4 h-4" />
+          Export CSV
+        </button>
+      </div>
+
+      <div className="overflow-x-auto border border-gray-200 rounded-lg">
+        <table className="min-w-full divide-y divide-gray-200 text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-3 text-left font-medium text-gray-600">
+                Invoice
+              </th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600">
+                Type
+              </th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600">
+                Customer
+              </th>
+              <th className="px-4 py-3 text-right font-medium text-gray-600">
+                Amount
+              </th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600">
+                Status
+              </th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600">
+                Date
+              </th>
+              <th className="px-4 py-3 text-left font-medium text-gray-600">
+                Payment ID
+              </th>
+              <th className="px-4 py-3 text-right font-medium text-gray-600">
+                Invoice
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 bg-white">
+            {invoices.map((inv) => (
+              <tr key={inv._id} className="hover:bg-gray-50">
+                <td className="px-4 py-3 font-medium text-gray-900">
+                  {inv.invoiceNumber}
+                </td>
+                <td className="px-4 py-3 text-gray-700">
+                  {typeLabel[inv.invoiceType] || inv.invoiceType}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="text-gray-900">
+                    {inv.customerSnapshot?.name}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {inv.customerSnapshot?.email}
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-right font-medium text-green-700">
+                  {inv.paymentInfo?.currency || "INR"}{" "}
+                  {(
+                    inv.paymentInfo?.grandTotal ??
+                    inv.paymentInfo?.amount ??
+                    0
+                  ).toLocaleString()}
+                </td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`px-2 py-1 text-xs rounded-full ${
+                      inv.status === "paid"
+                        ? "bg-green-100 text-green-800"
+                        : inv.status === "refunded"
+                          ? "bg-yellow-100 text-yellow-800"
+                          : "bg-gray-100 text-gray-800"
+                    }`}
+                  >
+                    {inv.status}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-gray-600">
+                  {inv.paymentDate
+                    ? new Date(inv.paymentDate).toLocaleDateString()
+                    : new Date(inv.invoiceDate).toLocaleDateString()}
+                </td>
+                <td className="px-4 py-3 text-gray-600">
+                  {inv.razorpayPaymentId || "—"}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <button
+                    onClick={() =>
+                      downloadWithAuth(
+                        `${apiBase}/invoice/${inv._id}/download`,
+                        `${inv.invoiceNumber}.pdf`,
+                      )
+                    }
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    PDF
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function LeadsTable({
   leads,
   onDelete,

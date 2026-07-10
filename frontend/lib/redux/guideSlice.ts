@@ -4,6 +4,7 @@ import { GuideState, GuideProfile, tourGuideBooking } from "@/lib/data"; // Assu
 import {
   getMyGuideProfile,
   updateMyGuideProfile,
+  patchMyGuideProfile,
   getAllGuides,
   getGuideById,
   toggleGuideApproval,
@@ -72,6 +73,14 @@ const guideSlice = createSlice({
         state.myProfile = action.payload;
       })
       .addCase(updateMyGuideProfile.rejected, setRejected)
+
+      // Handle Patch My Profile (post-registration edits)
+      .addCase(patchMyGuideProfile.pending, setPending)
+      .addCase(patchMyGuideProfile.fulfilled, (state, action) => {
+        state.loading = false;
+        state.myProfile = action.payload;
+      })
+      .addCase(patchMyGuideProfile.rejected, setRejected)
 
       // Handle Confirm Membership Payment (first payment or renewal)
       .addCase(confirmGuideMembershipPayment.pending, setPending)

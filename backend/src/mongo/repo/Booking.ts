@@ -146,6 +146,26 @@ const BookingSchema = new mongoose.Schema<IBooking>(
 			type: mongoose.Schema.Types.ObjectId,
 			ref: 'Account',
 		},
+		booking_type: {
+			type: String,
+			enum: ['guide', 'package'],
+			default: 'guide',
+		},
+		package: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: 'Package',
+		},
+		end_date: {
+			type: Date,
+		},
+		advance_paid: {
+			type: Number,
+			min: 0,
+		},
+		balance_due: {
+			type: Number,
+			min: 0,
+		},
 		status: {
 			type: String,
 			enum: ['payment-pending', 'successful', 'confirmed', 'allocated', 'completed'],

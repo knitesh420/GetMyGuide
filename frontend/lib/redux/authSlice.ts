@@ -238,11 +238,6 @@ const authSlice = createSlice({
       .addCase(loginUser.rejected, setRejected);
 
     builder
-      .addCase(registerUser.pending, setPending)
-      .addCase(registerUser.fulfilled, setFulfilled)
-      .addCase(registerUser.rejected, setRejected);
-
-    builder
       .addCase(sendLoginOtp.pending, setPending)
       .addCase(sendLoginOtp.fulfilled, (state) => {
         state.loading = false;

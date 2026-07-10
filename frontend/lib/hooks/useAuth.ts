@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { AppDispatch, RootState } from "../store";
 import {
   loginUser,
-  registerUser,
   sendLoginOtp,
   loginWithOtp,
   sendRegistrationOtp as sendRegistrationOtpThunk,
@@ -47,7 +46,7 @@ export const useAuth = () => {
         const role = userData?.role ?? "user";
         const userName = userData?.name || "User";
 
-        showToast.success(`Welcome back, ${userName}!`);
+        showToast.success(`Welcome back ${userName}!`);
         router.push(ROLE_ROUTES[role] ?? "/dashboard");
 
         return result;
@@ -88,19 +87,6 @@ export const useAuth = () => {
     [dispatch, router],
   );
 
-  const register = useCallback(
-    async (data: any) => {
-      const result = await dispatch(registerUser(data));
-      if (registerUser.fulfilled.match(result)) {
-        showToast.success("Registration successful!");
-      } else {
-        showToast.error((result.payload as string) || "Registration failed");
-      }
-      return result;
-    },
-    [dispatch],
-  );
-
   const sendRegistrationOtp = useCallback(
     async (data: RegisterSendOtpRequest) => {
       try {
@@ -118,7 +104,9 @@ export const useAuth = () => {
   const verifyRegistrationOtp = useCallback(
     async (email: string, otp: string) => {
       try {
-        const result = await dispatch(verifyRegistrationOtpThunk({ email, otp })).unwrap();
+        const result = await dispatch(
+          verifyRegistrationOtpThunk({ email, otp }),
+        ).unwrap();
         const userData = result.user;
         showToast.success(`Welcome, ${userData?.name || "there"}!`);
         const role = userData?.role ?? "tourist";
@@ -135,7 +123,9 @@ export const useAuth = () => {
     async (email: string) => {
       try {
         await dispatch(sendForgotPasswordOtpThunk({ email })).unwrap();
-        showToast.success("If that email is registered, a reset code has been sent.");
+        showToast.success(
+          "If that email is registered, a reset code has been sent.",
+        );
         return true;
       } catch (err: any) {
         showToast.error(err || "Failed to send reset code");
@@ -185,7 +175,6 @@ export const useAuth = () => {
     login,
     sendOtp,
     verifyOtpLogin,
-    register,
     sendRegistrationOtp,
     verifyRegistrationOtp,
     sendForgotPasswordOtp,

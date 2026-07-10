@@ -93,3 +93,27 @@ export function VerifyMinLevel(minRole: 'tourist' | 'guide' | 'admin') {
 		next();
 	};
 }
+
+/**
+ * Restricts a route to an explicit set of roles. Unlike VerifyMinLevel — which
+ * is hierarchical and lets higher roles through — this is an exact-membership
+ * check. Use it where a role must be excluded even though it outranks the
+ * target: e.g. a guide (level 5) must NOT reach tourist booking endpoints even
+ * though 5 > 1, and vice-versa.
+ */
+export function VerifyRole(...allowedRoles: Array<'tourist' | 'guide' | 'admin'>) {
+	return (req: Request, _res: Response, next: NextFunction) => {
+		const user = req.locals.user as JWTPayload | undefined;
+		if (!user) {
+			return next(new UnauthorizedError('User information not found'));
+		}
+		if (!allowedRoles.includes(user.role)) {
+			return next(
+				new ForbiddenError(
+					'Unauthorized access: this action is not permitted for your account type'
+				)
+			);
+		}
+		next();
+	};
+}

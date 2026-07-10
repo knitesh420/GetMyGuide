@@ -191,29 +191,6 @@ export type PaymentStatus = "Advance Paid" | "Fully Paid" | "Refunded";
 
 // NOTE: The second conflicting 'Booking' interface has been REMOVED.
 
-export type CustomTourRequestStatus =
-  | "Pending"
-  | "Quoted"
-  | "Booked"
-  | "Rejected";
-
-export type CustomTourRequest = {
-  _id: string;
-  userName: string;
-  userEmail: string;
-  locations: string[];
-  language: string;
-  startDate: string | null;
-  endDate: string | null;
-  numTravelers: number;
-  specialRequests: string;
-  submissionDate: string;
-  status: CustomTourRequestStatus;
-  assignedGuideId: string | null;
-  quotedPrice: number | null;
-  adminNotes: string;
-};
-
 export type AddOnPerk = {
   _id: string;
   title: string;
@@ -284,25 +261,15 @@ export interface GuideProfile {
   countryCode?: string;
   dob?: string;
   city?: string;
-  state?: string;
-  country?: string;
   age?: number;
   languages?: string[];
   serviceLocations?: string[];
-  experience?: string;
-  specialization?: string[];
-  specializations?: string[];
-  availability?: string[];
-  availableDays?: string[];
-  availableTime?: string;
-  price?: number;
-  description?: string;
-  about?: string;
+  /** Escort guides only. */
+  pan?: string;
   license?: string;
   photo?: string;
   profileImage?: string;
   identityProofs?: string[];
-  galleryImages?: string[];
   isApproved: boolean;
   profileComplete: boolean;
   createdAt: string;
@@ -311,6 +278,7 @@ export interface GuideProfile {
   averageRating: number;
   numReviews: number;
   isCertified: boolean;
+  type?: "normal" | "escort";
   subscriptionId: string;
   subscriptionPlan: string;
   subscriptionExpiresAt?: Date;
@@ -536,6 +504,14 @@ export interface AdminBookingSummary {
   linked_to?: string;
   transaction_id: string;
   allocated_guide?: string;
+  // Present on package-tour bookings.
+  booking_type?: string;
+  package?: string;
+  end_date?: string;
+  advance_paid?: number;
+  balance_due?: number;
+  package_info?: { title: string };
+  guide_info?: { name: string; photo?: string };
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -552,7 +528,15 @@ export interface AssignableGuide {
   membershipExpiryDate: string | null;
 }
 
-export type TripStatus = "not-started" | "in-progress" | "completed" | "cancelled";
+// 'planned' is a synthetic, client-facing status for a booking that has no Trip
+// yet (awaiting a guide). It is never persisted — the backend derives it for the
+// tourist's My Trips view; a real Trip always starts at 'not-started'.
+export type TripStatus =
+  | "planned"
+  | "not-started"
+  | "in-progress"
+  | "completed"
+  | "cancelled";
 
 export interface Trip {
   _id: string;

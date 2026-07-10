@@ -2,88 +2,6 @@ import { NextFunction, Request, Response } from 'express';
 import { BadRequestError } from 'node-be-utilities';
 import { z } from 'zod';
 
-export type EnrollValidationResult = {
-	name: string;
-	email: string;
-	phone: string;
-	city: string;
-	type: 'normal' | 'escort';
-	pan?: string;
-	languages: string[];
-};
-
-export async function EnrollValidator(req: Request, res: Response, next: NextFunction) {
-	const reqValidator = z.object({
-		name: z.string().trim().min(1, 'Name is required'),
-		email: z.string().trim().email('Invalid email format'),
-		phone: z.string().trim().min(1, 'Phone is required'),
-		city: z.string().trim().min(1, 'City is required'),
-		type: z.enum(['normal', 'escort'], {
-			message: 'Type must be either normal or escort',
-		}),
-		pan: z.string().trim().optional(),
-		languages: z
-			.preprocess(
-				(val) => {
-					if (typeof val === 'string') {
-						try {
-							return JSON.parse(val);
-						} catch {
-							return val.split(',').map((s) => s.trim());
-						}
-					}
-					return Array.isArray(val) ? val : [val];
-				},
-				z.array(z.string().trim().min(1)).min(1, 'At least one language is required')
-			)
-			.transform((val) => (Array.isArray(val) ? val : [val])),
-	});
-
-	const reqValidatorResult = reqValidator.safeParse(req.body);
-
-	if (reqValidatorResult.success) {
-		req.locals.data = reqValidatorResult.data;
-		return next();
-	}
-
-	const message = reqValidatorResult.error.issues
-		.map((err) => `${err.path.join('.')}: ${err.message}`)
-		.join(', ');
-
-	return next(new BadRequestError(message));
-}
-
-export type ConfirmPaymentValidationResult = {
-	transaction_id: string;
-	razorpay_order_id: string;
-	razorpay_payment_id: string;
-	razorpay_signature: string;
-	enrollment_data: string;
-};
-
-export async function ConfirmPaymentValidator(req: Request, res: Response, next: NextFunction) {
-	const reqValidator = z.object({
-		transaction_id: z.string().trim().min(1, 'Transaction ID is required'),
-		razorpay_order_id: z.string().trim().min(1, 'Razorpay order ID is required'),
-		razorpay_payment_id: z.string().trim().min(1, 'Razorpay payment ID is required'),
-		razorpay_signature: z.string().trim().min(1, 'Razorpay signature is required'),
-		enrollment_data: z.string().trim().min(1, 'Enrollment data is required'),
-	});
-
-	const reqValidatorResult = reqValidator.safeParse(req.body);
-
-	if (reqValidatorResult.success) {
-		req.locals.data = reqValidatorResult.data;
-		return next();
-	}
-
-	const message = reqValidatorResult.error.issues
-		.map((err) => `${err.path.join('.')}: ${err.message}`)
-		.join(', ');
-
-	return next(new BadRequestError(message));
-}
-
 // ---- Guide profile (post-login, membership) --------------------------------
 
 const stringArray = (label: string, required = false) =>
@@ -108,32 +26,87 @@ const stringArray = (label: string, required = false) =>
 			: z.array(z.string().trim().min(1)).default([])
 	);
 
+/** Bare 10-digit national number; the country code is a separate Account field. */
+const phoneSchema = z
+	.string()
+	.trim()
+	.regex(/^\d{10}$/, 'Phone number must be exactly 10 digits');
+
+const guideTypeSchema = z.enum(['normal', 'escort'], {
+	message: 'Guide type must be either normal or escort',
+});
+
 export type GuideProfileValidationResult = {
 	languages: string[];
-	experience: string;
+	type: 'normal' | 'escort';
+	phone: string;
 	city: string;
-	state: string;
-	country: string;
-	price: number;
-	about: string;
-	specialization: string[];
-	availableDays: string[];
-	availableTime: string;
+	pan?: string;
 };
 
 export async function GuideProfileValidator(req: Request, res: Response, next: NextFunction) {
-	const reqValidator = z.object({
-		languages: stringArray('language', true),
-		experience: z.string().trim().min(1, 'Experience is required'),
-		city: z.string().trim().min(1, 'City is required'),
-		state: z.string().trim().min(1, 'State is required'),
-		country: z.string().trim().min(1, 'Country is required'),
-		price: z.coerce.number().positive('Price must be a positive number'),
-		about: z.string().trim().min(1, 'About is required'),
-		specialization: stringArray('specialization'),
-		availableDays: stringArray('available day', true),
-		availableTime: z.string().trim().min(1, 'Available time is required'),
-	});
+	const reqValidator = z
+		.object({
+			languages: stringArray('language', true),
+			type: guideTypeSchema,
+			phone: phoneSchema,
+			city: z.string().trim().min(1, 'City is required'),
+			pan: z.string().trim().optional(),
+		})
+		// PAN identifies escort guides for tax purposes; normal guides never supply it.
+		.refine((data) => data.type !== 'escort' || !!data.pan, {
+			message: 'PAN is required for escort guides',
+			path: ['pan'],
+		});
+
+	const reqValidatorResult = reqValidator.safeParse(req.body);
+
+	if (reqValidatorResult.success) {
+		req.locals.data = reqValidatorResult.data;
+		return next();
+	}
+
+	const message = reqValidatorResult.error.issues
+		.map((err) => `${err.path.join('.')}: ${err.message}`)
+		.join(', ');
+
+	return next(new BadRequestError(message));
+}
+
+// ---- Guide profile PATCH (post-registration edits) -------------------------
+
+export type GuideProfilePatchValidationResult = {
+	phone?: string;
+	city?: string;
+	type?: 'normal' | 'escort';
+	languages?: string[];
+};
+
+/**
+ * Only phone, city, type and languages may change after registration. Unknown
+ * keys are rejected outright rather than silently ignored, so a client that
+ * tries to smuggle in `price` or `registrationCompleted` gets a 400 instead of
+ * believing the edit went through.
+ */
+export async function GuideProfilePatchValidator(
+	req: Request,
+	res: Response,
+	next: NextFunction
+) {
+	const reqValidator = z
+		.object({
+			phone: phoneSchema.optional(),
+			city: z.string().trim().min(1, 'City cannot be empty').optional(),
+			type: guideTypeSchema.optional(),
+			languages: z
+				.array(z.string().trim().min(1))
+				.min(1, 'At least one language is required')
+				.optional(),
+		})
+		.strict()
+		.refine((data) => Object.keys(data).length > 0, {
+			message: 'Provide at least one of: phone, city, type, languages',
+		});
 
 	const reqValidatorResult = reqValidator.safeParse(req.body);
 

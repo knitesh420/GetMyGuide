@@ -99,6 +99,35 @@
   --sidebar-ring: oklch(0.65 0.25 25);
 }
 
+/*
+ * Guide panel palette.
+ *
+ * The app-wide brand is red, but the guide dashboard is styled green. Because
+ * `@theme inline` below maps every --color-* utility onto a var() rather than a
+ * literal, redeclaring these on a wrapper element repaints all shadcn
+ * primitives beneath it — so this stays contained to /dashboard/guide and no
+ * other route shifts colour. Applied by app/(website)/dashboard/guide/layout.tsx.
+ *
+ * Values track Tailwind's `green` ramp (500/600/700) so hand-written
+ * `green-*` utilities in the guide components sit on the same scale as the
+ * tokens the primitives consume.
+ */
+.guide-theme {
+  --primary: oklch(0.723 0.219 149.579); /* green-500 */
+  --primary-foreground: oklch(1 0 0);
+
+  --ring: oklch(0.723 0.219 149.579);
+
+  /* shadcn hover/selected surfaces (`hover:bg-accent`) — pale green, not pink. */
+  --accent: oklch(0.962 0.044 156.743); /* green-50 */
+  --accent-foreground: oklch(0.527 0.154 150.069); /* green-700 */
+
+  /* The red brand `--muted` is pure white, which erases every subtle surface.
+     The reference leans on a light grey page bed to float white panels. */
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+}
+
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -311,6 +340,32 @@ html {
 ::-webkit-scrollbar-thumb {
   background: #e4e4e4;
   border-radius: 99px;
+}
+
+/*
+ * Guide panel scrollbar. The default 5px #e4e4e4 thumb on a transparent track
+ * is almost invisible against the white shell, so the guide scroll container
+ * gets a wider, green, higher-contrast bar. Applied by dashboard/layout.tsx to
+ * the scrolling element itself — a scrollbar can only be styled on the element
+ * that actually scrolls, which sits outside the .guide-theme subtree.
+ */
+.guide-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #4ade80 #eef2f5; /* green-400 on a light track */
+}
+.guide-scrollbar::-webkit-scrollbar {
+  width: 10px;
+}
+.guide-scrollbar::-webkit-scrollbar-track {
+  background: #eef2f5;
+}
+.guide-scrollbar::-webkit-scrollbar-thumb {
+  background: #4ade80;
+  border: 2px solid #eef2f5; /* inset the thumb so it reads as a pill */
+  border-radius: 99px;
+}
+.guide-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #22c55e;
 }
 
 /* Selection colour */

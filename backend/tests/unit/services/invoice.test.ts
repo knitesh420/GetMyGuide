@@ -150,7 +150,6 @@ describe('InvoiceService', () => {
 			const guide = await GuideDB.create({
 				accountId: account._id,
 				city: 'Jaipur',
-				country: 'India',
 				registrationCompleted: true,
 				isVisible: true,
 			});

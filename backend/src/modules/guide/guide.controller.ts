@@ -1,70 +1,12 @@
 import GuideService from '@services/guide';
+import { uploadMulterImage } from '@utils/cloudinaryUpload';
 import { NextFunction, Request, Response } from 'express';
 import { BadRequestError, Respond } from 'node-be-utilities';
 import {
-	ConfirmPaymentValidationResult,
-	EnrollValidationResult,
+	GuideProfilePatchValidationResult,
 	GuideProfileValidationResult,
 	MembershipConfirmPaymentValidationResult,
 } from './guide.validator';
-
-async function enroll(req: Request, res: Response, next: NextFunction) {
-	try {
-		const data = req.locals.data as EnrollValidationResult;
-
-		// Get uploaded files from multer (already processed by parseGuideEnrollmentFormData middleware)
-		const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
-
-		if (!files) {
-			return next(new BadRequestError('Files are required'));
-		}
-
-		// Validate required files
-		if (!files.licence || files.licence.length === 0) {
-			return next(new BadRequestError('Licence PDF file is required'));
-		}
-
-		if (!files.aadhar || files.aadhar.length === 0) {
-			return next(new BadRequestError('Aadhar PDF file is required'));
-		}
-
-		if (!files.photo || files.photo.length === 0) {
-			return next(new BadRequestError('Photo image file is required'));
-		}
-
-		const licenceFile = files.licence[0];
-		const aadharFile = files.aadhar[0];
-		const photoFile = files.photo[0];
-
-		// Validate file types
-		if (licenceFile.mimetype !== 'application/pdf') {
-			return next(new BadRequestError('Licence must be a PDF file'));
-		}
-
-		if (aadharFile.mimetype !== 'application/pdf') {
-			return next(new BadRequestError('Aadhar must be a PDF file'));
-		}
-
-		const allowedImageTypes = ['image/png', 'image/webp', 'image/jpg', 'image/jpeg'];
-		if (!allowedImageTypes.includes(photoFile.mimetype)) {
-			return next(new BadRequestError('Photo must be a JPG, PNG, or WEBP image'));
-		}
-		// Create enrollment using service
-		const result = await GuideService.enroll({
-			...data,
-			licence: licenceFile.filename,
-			aadhar: aadharFile.filename,
-			photo: photoFile.filename,
-		});
-		return Respond({
-			res,
-			status: 201,
-			data: result,
-		});
-	} catch (error) {
-		return next(error);
-	}
-}
 
 async function listAll(req: Request, res: Response, next: NextFunction) {
 	try {
@@ -92,28 +34,6 @@ async function getEnrollStatus(req: Request, res: Response, next: NextFunction) 
 			res,
 			status: 200,
 			data: enrollment,
-		});
-	} catch (error) {
-		return next(error);
-	}
-}
-
-async function confirmPayment(req: Request, res: Response, next: NextFunction) {
-	try {
-		const data = req.locals.data as ConfirmPaymentValidationResult;
-
-		const result = await GuideService.confirmPayment({
-			transaction_id: data.transaction_id,
-			razorpay_order_id: data.razorpay_order_id,
-			razorpay_payment_id: data.razorpay_payment_id,
-			razorpay_signature: data.razorpay_signature,
-			enrollment_data: data.enrollment_data,
-		});
-
-		return Respond({
-			res,
-			status: 201,
-			data: result,
 		});
 	} catch (error) {
 		return next(error);
@@ -229,11 +149,38 @@ async function updateGuideProfile(req: Request, res: Response, next: NextFunctio
 		const data = req.locals.data as GuideProfileValidationResult;
 		const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
 
+		// The profile photo is rendered by public/dashboard clients, so it lives on
+		// Cloudinary and we store the URL. Identity proofs are private KYC docs and
+		// stay on local disk, referenced by filename.
+		const profileImageFile = files?.profileImage?.[0];
+		const profileImage = profileImageFile
+			? await uploadMulterImage(profileImageFile, 'getmyguide/guides')
+			: undefined;
+
 		const profile = await GuideService.upsertGuideProfile(user.userId, data, {
-			profileImage: files?.profileImage?.[0]?.filename,
+			profileImage,
 			identityProofs: files?.identityProofs?.map((f) => f.filename),
-			galleryImages: files?.galleryImages?.map((f) => f.filename),
 		});
+
+		return Respond({
+			res,
+			status: 200,
+			data: profile,
+		});
+	} catch (error) {
+		return next(error);
+	}
+}
+
+async function patchGuideProfile(req: Request, res: Response, next: NextFunction) {
+	try {
+		const user = req.locals.user;
+		if (!user || !user.userId) {
+			return next(new BadRequestError('User not authenticated'));
+		}
+
+		const data = req.locals.data as GuideProfilePatchValidationResult;
+		const profile = await GuideService.patchGuideProfile(user.userId, data);
 
 		return Respond({
 			res,
@@ -371,10 +318,8 @@ async function getMyGuideEnrollment(req: Request, res: Response, next: NextFunct
 }
 
 const Controller = {
-	enroll,
 	listAll,
 	getEnrollStatus,
-	confirmPayment,
 	createContactInquiry,
 	getContactInquiries,
 	deleteGuide,
@@ -382,6 +327,7 @@ const Controller = {
 	getMyGuideEnrollment,
 	getGuideProfile,
 	updateGuideProfile,
+	patchGuideProfile,
 	createMembershipOrder,
 	confirmMembershipPayment,
 	updateAvailability,

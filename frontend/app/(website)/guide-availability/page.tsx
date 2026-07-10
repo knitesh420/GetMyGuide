@@ -1,4 +1,5 @@
 "use client";
+import { guideImageUrl } from "@/lib/images";
 import { useState, useEffect } from "react";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -157,22 +158,7 @@ interface Guide {
   photo: string;
 }
 
-// Helper function to get image URL
-const getImageUrl = (guide: Guide): string | null => {
-  if (guide.photo) {
-    if (
-      guide.photo.startsWith("http://") ||
-      guide.photo.startsWith("https://")
-    ) {
-      return guide.photo;
-    }
-    if (guide.photo.startsWith("/media/")) {
-      return `${API_BASE_URL}${guide.photo}`;
-    }
-    return `${API_BASE_URL}/media/misc/${guide.photo}`;
-  }
-  return null;
-};
+const getImageUrl = (guide: Guide): string | null => guideImageUrl(guide.photo);
 
 export default function GuideAvailabilityPage() {
   const [guides, setGuides] = useState<Guide[]>([]);
@@ -211,8 +197,9 @@ export default function GuideAvailabilityPage() {
       const data = await response.json();
 
       if (data.success || data.data) {
-        // Shape: { data: { data: GuideProfile[], total, page, totalPages } }
-        const list: any[] = data.data?.data ?? [];
+        // Respond() spreads its payload onto the body root, so the wire shape
+        // is { data: GuideProfile[], total, page, totalPages, success }.
+        const list: any[] = Array.isArray(data.data) ? data.data : [];
         const normalized: Guide[] = list.map((g) => ({
           id: g._id ?? g.id ?? "",
           name: g.name ?? "",

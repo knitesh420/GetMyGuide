@@ -35,7 +35,10 @@ function CheckoutContent() {
   const endDate = searchParams.get("endDate");
   const numberOfTourists = searchParams.get("tourists");
 
-  const { currentUser } = useSelector((state: RootState) => state.user);
+  // Use the authenticated user from the auth slice — state.user.currentUser is
+  // not populated on normal login, so it would leave a logged-in tourist unable
+  // to pay. The backend derives the real user from the session cookie anyway.
+  const authUser = useSelector((state: RootState) => state.auth.user);
   const { items: packages, loading: packagesLoading } = useSelector(
     (state: RootState) => state.packages,
   );
@@ -81,7 +84,7 @@ function CheckoutContent() {
   }, [currentBooking, router]);
 
   const handlePayment = async () => {
-    if (!tour || !guide || !currentUser || !numberOfTourists) {
+    if (!tour || !guide || !authUser || !numberOfTourists) {
       toast({
         variant: "destructive",
         title: "Error",
@@ -91,20 +94,24 @@ function CheckoutContent() {
     }
 
     const touristsCount = parseInt(numberOfTourists);
-    const totalCost = tour.price * touristsCount;
-    const advanceAmount = totalCost * 0.2;
 
     try {
-      const orderResult = await dispatch(
+      // Backend computes the price (package.price x tourists, 20% advance) and
+      // returns the Razorpay order plus an encoded booking_data blob.
+      const orderResult: any = await dispatch(
         createRazorpayOrder({
-          amount: advanceAmount,
-          receipt: `receipt_tour_${Date.now()}`,
+          tourId: tourId!,
+          guideId: guideId!,
+          startDate: startDate!,
+          endDate: endDate!,
+          tourists: touristsCount,
         }),
       ).unwrap();
 
-      const order = orderResult;
+      const rzp = orderResult?.razorpay_options;
+      const bookingData = orderResult?.booking_data;
 
-      if (!order || !order.id) {
+      if (!rzp || !rzp.order_id || !bookingData) {
         toast({
           variant: "destructive",
           title: "Payment Error",
@@ -114,30 +121,26 @@ function CheckoutContent() {
       }
 
       const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-        amount: order.amount,
-        currency: "INR",
-        name: "GetMyGuide",
-        description: `Advance for ${tour.title}`,
-        order_id: order.id,
+        key: rzp.key || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        amount: rzp.amount,
+        currency: rzp.currency || "INR",
+        name: rzp.name || "GetMyGuide",
+        description: rzp.description || `Advance for ${tour.title}`,
+        order_id: rzp.order_id,
         handler: function (response: any) {
           dispatch(
             verifyPaymentAndCreateBooking({
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
-              tourId: tourId!,
-              guideId: guideId!,
-              startDate: startDate!,
-              endDate: endDate!,
-              numberOfTourists: touristsCount,
+              booking_data: bookingData,
             }),
           );
         },
-        prefill: {
-          name: currentUser.name,
-          email: currentUser.email,
-          contact: currentUser.mobile || "",
+        prefill: rzp.prefill || {
+          name: authUser.name,
+          email: authUser.email,
+          contact: authUser.mobile || authUser.phone || "",
         },
         theme: { color: "#FF0000" },
       };

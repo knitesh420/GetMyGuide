@@ -1,6 +1,30 @@
 const CDN = "https://res.cloudinary.com/dmpz3k4mb/image/upload";
 const BASE = `${CDN}/getmyguide/public`;
 
+/**
+ * Resolve a stored guide image reference to a displayable URL.
+ *
+ * Guide photos now upload to Cloudinary and are stored as absolute URLs, but
+ * records created before that change hold a bare filename that only resolves
+ * against the backend's /media/misc mount. Both shapes are in the database, so
+ * both must render.
+ */
+export function guideImageUrl(
+  value: string | null | undefined,
+): string | null {
+  if (!value) return null;
+
+  if (value.startsWith("http://") || value.startsWith("https://")) {
+    return value;
+  }
+
+  const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+  // Legacy: some records stored a rooted path, others a bare filename.
+  if (value.startsWith("/media/")) return `${apiBase}${value}`;
+  return `${apiBase}/media/misc/${value}`;
+}
+
 export const IMAGES = {
   // Background / scene images
   scene1: `${BASE}/1.jpg`,

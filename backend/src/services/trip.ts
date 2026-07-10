@@ -212,21 +212,57 @@ class TripService {
 	}
 
 	async getMyAsTourist(touristUserId: string, { page = 1, limit = 20 }: PageParams = {}) {
-		const bookings = await BookingDB.find({ linked_to: touristUserId }).select('_id').lean();
+		// A tourist's "My Trips" spans the whole lifecycle: a booking they just
+		// made (no guide yet) should show as a 'planned' trip, then turn into a
+		// real Trip once a guide accepts. So we start from the tourist's bookings
+		// and fold in any Trip that already exists for each.
+		const bookings = await BookingDB.find({ linked_to: touristUserId })
+			.select('_id tourist_info travel_details linked_to status createdAt')
+			.sort({ createdAt: -1 })
+			.lean();
 		const bookingIds = bookings.map((b) => b._id);
 
-		const query = { booking: { $in: bookingIds } };
+		const trips = await TripDB.find({ booking: { $in: bookingIds } })
+			.populate('booking', 'tourist_info travel_details linked_to status')
+			.populate('guide', 'name email phone')
+			.lean();
+
+		// Key the real trips by their booking id so each booking can find its trip.
+		const tripByBooking = new Map<string, (typeof trips)[number]>();
+		for (const trip of trips) {
+			const bookingRef = trip.booking as unknown as { _id?: Types.ObjectId } | Types.ObjectId | null;
+			const key =
+				bookingRef && typeof bookingRef === 'object' && '_id' in bookingRef
+					? bookingRef._id?.toString()
+					: bookingRef?.toString();
+			if (key) tripByBooking.set(key, trip);
+		}
+
+		// Merge, newest booking first: emit the real Trip when present, otherwise a
+		// synthetic 'planned' entry carrying the booking so the tourist still sees it.
+		const merged = bookings.map((b) => {
+			const existing = tripByBooking.get(b._id.toString());
+			if (existing) return existing;
+			return {
+				_id: `planned-${b._id.toString()}`,
+				booking: {
+					_id: b._id,
+					tourist_info: b.tourist_info,
+					travel_details: b.travel_details,
+					linked_to: b.linked_to,
+					status: b.status,
+				},
+				assignment: null,
+				guide: null,
+				status: 'planned',
+				createdAt: b.createdAt,
+				updatedAt: b.createdAt,
+			};
+		});
+
+		const total = merged.length;
 		const skip = (page - 1) * limit;
-		const [data, total] = await Promise.all([
-			TripDB.find(query)
-				.populate('booking', 'tourist_info travel_details linked_to status')
-				.populate('guide', 'name email phone')
-				.sort({ createdAt: -1 })
-				.skip(skip)
-				.limit(limit)
-				.lean(),
-			TripDB.countDocuments(query),
-		]);
+		const data = merged.slice(skip, skip + limit);
 
 		return { data, total, page, totalPages: Math.ceil(total / limit) || 1 };
 	}

@@ -6,11 +6,12 @@ stack: **Next.js (App Router)** frontend, **Express + TypeScript + Mongoose** ba
 Atlas**, **JWT-in-httpOnly-cookie** authentication, **Razorpay** payments, **Resend** transactional
 email.
 
-> This document describes the system as it exists today, including two generations of
-> guide/tourist onboarding that currently coexist: the original **anonymous, no-account** flows
-> (`register-guide`, `register-tourist`) and the newer **account-based, OTP-verified** flows
-> (`/signup` → `/verify-otp` → profile onboarding). Both are explained in full below — this is not
-> a design choice you need to resolve, it's the current, intentional state of the app.
+> This document describes the system as it exists today. Guide onboarding is **account-first**:
+> a single auth-gated form at `register-guide` handles both registration and later edits, and
+> takes the first 30-day membership payment. Tourist onboarding still has two generations that
+> coexist: the original **anonymous, no-account** `register-tourist` flow and the newer
+> **account-based, OTP-verified** flow (`/signup` → `/verify-otp` → profile onboarding). Both are
+> explained in full below — that coexistence is the current, intentional state of the app.
 
 ---
 
@@ -365,38 +366,45 @@ Indexed on `{ isVisible: 1, membershipExpiryDate: 1 }` — the exact filter the 
 on every request, so a membership lapsing removes the guide from search results automatically, on
 the very next read, with **no cron job**.
 
-### 2. The legacy, anonymous "Become a Guide" KYC-and-pay flow
+### 2. `/register-guide` — the single, account-first guide registration form
 
-`frontend/app/(website)/register-guide/page.tsx` (component `BecomeGuidePage`) is the **original**
-guide onboarding, and is **still fully functional and mounted** — deliberately left running in
-case of any in-flight Razorpay sessions. It predates any account/login concept:
+`frontend/app/(website)/register-guide/page.tsx` (component `BecomeGuidePage`) is now the **only**
+guide registration form. It is **auth-gated**: a logged-out visitor is redirected to `/signin`.
 
-1. Anonymous visitor fills: Name, Email, Phone, Languages, Guide Type (normal/escort), PAN
-   (escort only), City, plus uploads: Licence (PDF), Aadhar (PDF), Photo.
-2. `POST /guide/enroll` — validates, uploads files, creates a Razorpay order. **Does not write to
-   the database yet** — the form data is base64-encoded and carried through the payment step.
-3. Razorpay checkout completes → `POST /guide/confirm-payment` — verifies the signature, **only
-   now** creates a `GuideEnrollment` document (`status: 'completed'`), and (this is the important
-   part) **immediately creates a login-capable `Account`** with `role: 'guide'`, `status:
-  'verified'`, `emailVerified: true`, and a **randomly-generated password**.
+1. A logged-in guide fills: Phone, City, Guide Type (normal/escort), PAN (escort only), Languages,
+   plus uploads: Photo, Licence, Aadhaar. Name and email come from the `Account` and are read-only.
+2. `PUT /guide/profile` — writes those fields onto the guide's own `Guide` document and flips
+   `registrationCompleted`. The profile is persisted **before** checkout opens, so a guide who
+   abandons payment keeps their registration and can pay later from the dashboard.
+3. The page then opens Razorpay for the **first 30-day membership** via the existing
+   `POST /guide/membership/create-order` + `/membership/confirm-payment` pair. There is exactly one
+   payment concept in the system: membership.
 
-**⚠️ Known historical bug, intentionally not "fixed" in the old code path**: that
-random password is never emailed to the guide (a `sendGuideCredentialsEmail` function exists but
-is never called — a payment-confirmation email is sent instead, which claims credentials were
-emailed but they weren't). Any guide who came through this flow **cannot know their password**.
-Their only way in is the new OTP-based **Forgot Password** flow (`/forgot-password`), which is
-role-agnostic and, as a side effect of a successful reset, also sets `emailVerified: true`. This is
-the de facto migration path for these accounts — not a gap to close, a deliberate remediation.
+The same page doubles as the **edit** form. A guide with `registrationCompleted: true` sees it
+prefilled, with the file inputs and the payment step gone, and saving issues a
+`PATCH /guide/profile` limited to the four mutable fields (phone, city, type, languages).
 
-This flow has **no membership concept** — it was a flat one-time ₹500 fee, and a guide who paid
-through it stays permanently `status: 'verified'` with no expiry, using the *old* visibility
+**The old anonymous KYC-and-pay flow has been removed.** `POST /guide/enroll` and
+`POST /guide/confirm-payment` are gone, along with the anonymous account-creation path (and with it
+the historical bug where the auto-generated password was never emailed — `sendGuideCredentialsEmail`
+was defined but never called). Guides who came through that flow can still get in via the OTP
+**Forgot Password** flow (`/forgot-password`), which is role-agnostic and sets `emailVerified: true`
+as a side effect of a successful reset. That remains their migration path.
+
+`GuideEnrollment` is **retained read-only**, not dropped. `getGuideProfile` still falls back to the
+enrollment's `type` for guides whose `Guide` record predates that field — deleting the model would
+silently downgrade legacy escort guides to `normal`, and `isCertified` keys off it. Admins still
+read these records via `GET /guide/list-all` and `GET /guide/enroll-status/:id` (both admin-only;
+the latter used to be unauthenticated while the public flow polled it).
+
+The old flow had **no membership concept** — it was a flat one-time ₹500 fee, and a guide who paid
+through it stayed permanently `status: 'verified'` with no expiry, using the *old* visibility
 definition (`Account.status === 'verified'`). A one-time migration script
 (`migrateGuideMembership.ts`, already run — see below) backfilled a `Guide` document for every
 guide who came through this path, granting them `isVisible: true` and a **fresh 30-day membership
 window starting from the day the migration ran** (a goodwill grace period, since they'd already
 paid once under the old model), with `registrationCompleted: true` so they're never forced through
-the new profile form as a blocking gate — the dashboard just shows a non-blocking nudge to fill in
-the newer fields (price, available days/time, gallery) for a better listing.
+the registration form as a blocking gate.
 
 `GuideEnrollment` (the KYC document record from this flow) is kept as a permanent historical/audit
 record — it is not deleted or repurposed by the newer `Guide` collection.
@@ -656,7 +664,7 @@ bookings), dispatched internally by `reference_type`.
   forgot-password    OTP-based password reset
 
 /(website)/
-  register-guide            LEGACY anonymous KYC-and-pay guide application (no account)
+  register-guide            Guide registration + edit (auth-gated; registers, then takes membership)
   register-tourist          LEGACY anonymous guest tour-guide booking (no account)
   tourist/onboarding        NEW tourist profile form (post-signup, first login)
   dashboard/
@@ -736,15 +744,21 @@ Located in `backend/src/scripts/`, run via
 
 Documented here so it isn't mistaken for something broken or in-scope for future auth work:
 
-- `register-guide` and `register-tourist` pages are intentionally anonymous/account-less — see
-  their sections above. Don't "fix" them to require login; that would remove functionality
-  walk-up users rely on.
-- `GuideEnrollment`'s auto-generated password is never emailed to the guide (confirmed bug in the
-  legacy flow). Not patched — the OTP forgot-password flow is the accepted remediation path for
-  any guide who came through that flow.
-- `sendPaymentLinkEmail` / `PaymentLinkTemplate` and `sendGuideCredentialsEmail` /
-  `GuideCredentialsTemplate` are defined but never called — remnants of an earlier, abandoned
-  "admin reviews KYC, then emails a payment link" design that was never wired up.
+- `register-tourist` is intentionally anonymous/account-less — see its section above. Don't "fix"
+  it to require login; that would remove functionality walk-up users rely on. (`register-guide`
+  **is** now auth-gated — that was a deliberate change, see its section above.)
+- `GuideEnrollment` documents are retained read-only. Do not drop the model: `getGuideProfile`
+  falls back to `enrollment.type` for `Guide` records written before that field existed, and
+  `isCertified` keys off it, so removing it silently downgrades legacy escort guides to `normal`.
+- Guides who came through the removed anonymous flow have an auto-generated password that was
+  never emailed to them. The OTP forgot-password flow is the accepted remediation path.
+- `sendPaymentLinkEmail` / `PaymentLinkTemplate`, `sendGuideCredentialsEmail` /
+  `GuideCredentialsTemplate`, and `sendGuidePaymentConfirmationEmail` are defined but never called
+  — remnants of the abandoned "admin reviews KYC, then emails a payment link" design and of the
+  removed anonymous enrolment flow.
+- `payment.ts`'s webhook still routes `type: 'guide' | 'enrollment'` transactions to
+  `GuideEnrollmentDB`. Nothing creates those transactions any more; the branch is kept so any
+  in-flight Razorpay webhook from the old flow still settles.
 - `POST /session/signup` (plain, non-OTP signup) still exists and works, but no frontend page
   calls it — superseded by the OTP-registration flow. Left mounted rather than deleted, in case
   anything external still depends on it.

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -26,6 +27,7 @@ interface GuideCardProps {
 
 export function GuideCard({
   guide,
+  checkoutHref,
   buttonText = "Book Now",
 }: GuideCardProps) {
   const [showForm, setShowForm] = useState(false);
@@ -119,11 +121,7 @@ export function GuideCard({
           <CardContent className="grow p-4 space-y-3">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <MapPin className="w-4 h-4 text-primary" />
-              <span>
-                {guide.state && guide.country
-                  ? `${guide.state}, ${guide.country}`
-                  : guide.country || "Location not set"}
-              </span>
+              <span>{guide.city || "Location not set"}</span>
             </div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Languages className="w-4 h-4 text-primary" />
@@ -131,21 +129,22 @@ export function GuideCard({
                 {guide.languages?.join(", ") || "Languages not listed"}
               </span>
             </div>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {guide.specializations?.slice(0, 3).map((spec) => (
-                <Badge key={spec} variant="secondary">
-                  {spec}
-                </Badge>
-              ))}
-            </div>
           </CardContent>
           <CardFooter className="p-4">
-            <Button
-              onClick={() => setShowForm(true)}
-              className="w-full font-bold"
-            >
-              {buttonText}
-            </Button>
+            {checkoutHref ? (
+              // Package-tour flow: go straight to checkout for this guide.
+              <Button asChild className="w-full font-bold">
+                <Link href={checkoutHref}>{buttonText}</Link>
+              </Button>
+            ) : (
+              // Standalone use: open the inline booking-inquiry form.
+              <Button
+                onClick={() => setShowForm(true)}
+                className="w-full font-bold"
+              >
+                {buttonText}
+              </Button>
+            )}
           </CardFooter>
         </>
       ) : (

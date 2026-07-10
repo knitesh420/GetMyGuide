@@ -18,14 +18,18 @@ function SigninContent() {
   const infoMessage = searchParams.get("message");
 
   const { login, loading, error, clearAuthError } = useAuth();
-  const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
+  const { isAuthenticated, user } = useSelector(
+    (state: RootState) => state.auth,
+  );
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      router.push(user.role === "guide" ? "/dashboard/guide" : "/dashboard/user");
+      router.push(
+        user.role === "guide" ? "/dashboard/guide" : "/dashboard/user",
+      );
     }
   }, [isAuthenticated, user, router]);
 
@@ -55,9 +59,11 @@ function SigninContent() {
   if (isAuthenticated) return null;
 
   return (
-    <div className="bg-card rounded-xl shadow-lg p-8 border border-border animate-scale-in">
+    <div className="bg-card rounded-xl shadow-lg p-6 border border-border animate-scale-in">
       <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-foreground mb-2">Welcome Back</h1>
+        <h1 className="text-3xl font-bold text-foreground mb-2">
+          Welcome Back
+        </h1>
         <p className="text-muted-foreground">Sign in to your account</p>
       </div>
 
@@ -99,19 +105,30 @@ function SigninContent() {
         {error && /verify/i.test(error) && (
           <p className="text-xs text-muted-foreground">
             Didn&apos;t verify your email?{" "}
-            <Link href="/signup" className="text-primary font-semibold hover:underline">
+            <Link
+              href="/signup"
+              className="text-primary font-semibold hover:underline"
+            >
               Resend a code
             </Link>
           </p>
         )}
 
-        <Button type="submit" disabled={loading} className="w-full red-gradient" size="lg">
+        <Button
+          type="submit"
+          disabled={loading}
+          className="w-full red-gradient"
+          size="lg"
+        >
           {loading ? "Signing in..." : "Sign In"}
         </Button>
 
         <p className="text-center text-sm text-muted-foreground">
           Don&apos;t have an account?{" "}
-          <Link href="/signup" className="text-primary font-semibold hover:underline">
+          <Link
+            href="/signup"
+            className="text-primary font-semibold hover:underline"
+          >
             Create one
           </Link>
         </p>

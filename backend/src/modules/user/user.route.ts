@@ -12,4 +12,9 @@ router
 	.route('/:id')
 	.delete(VerifySession, VerifyMinLevel('admin'), IDValidator, Controller.deleteTourist);
 
+// Reactivate a previously deactivated tourist account.
+router
+	.route('/:id/activate')
+	.patch(VerifySession, VerifyMinLevel('admin'), IDValidator, Controller.activateTourist);
+
 export default router;

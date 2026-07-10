@@ -59,7 +59,7 @@ export const getMyGuideProfile = createAsyncThunk<GuideProfile, void>(
   }
 );
 
-// Update own guide profile
+// One-time guide registration — full profile + KYC files, multipart
 export const updateMyGuideProfile = createAsyncThunk<GuideProfile, FormData>(
   "guide/updateMyProfile",
   async (formData, { rejectWithValue }) => {
@@ -73,6 +73,30 @@ export const updateMyGuideProfile = createAsyncThunk<GuideProfile, FormData>(
           },
         }
       );
+      return response as unknown as GuideProfile;
+    } catch (err: any) {
+      return rejectWithValue(handleError(err));
+    }
+  }
+);
+
+/**
+ * The only fields a guide may edit once registered. The backend rejects any
+ * other key outright, and rejects the request entirely until registration is
+ * complete.
+ */
+export interface GuideProfilePatch {
+  phone?: string;
+  city?: string;
+  type?: "normal" | "escort";
+  languages?: string[];
+}
+
+export const patchMyGuideProfile = createAsyncThunk<GuideProfile, GuideProfilePatch>(
+  "guide/patchMyProfile",
+  async (patch, { rejectWithValue }) => {
+    try {
+      const response = await apiService.patch<GuideProfile>("/guides/profile", patch);
       return response as unknown as GuideProfile;
     } catch (err: any) {
       return rejectWithValue(handleError(err));

@@ -63,7 +63,7 @@ export default function UserDashboardPage() {
   return (
     <div className="flex-1 space-y-8 p-4 sm:p-6 md:p-8 bg-muted/40">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Welcome back, {user?.name || "Traveler"}!</h2>
+        <h2 className="text-3xl font-bold tracking-tight">Welcome back {user?.name || "Traveler"}!</h2>
         <p className="text-muted-foreground">Here's your travel profile at a glance.</p>
       </div>
 
@@ -104,7 +104,7 @@ export default function UserDashboardPage() {
         </CardHeader>
         <CardContent>
           <Button asChild className="red-gradient">
-            <Link href="/find-guides">
+            <Link href="/guide-availability">
               <Search className="h-4 w-4 mr-2" />
               Find Guides
             </Link>

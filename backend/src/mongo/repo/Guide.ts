@@ -13,57 +13,31 @@ const GuideSchema = new mongoose.Schema<IGuide>(
 			type: [String],
 			default: [],
 		},
-		experience: {
+		// Mirrors GuideEnrollment.type; 'escort' is what `isCertified` keys off.
+		// Deliberately has no default: Guide records written before this field
+		// existed must hydrate as `undefined` so getGuideProfile can fall back to
+		// the legacy enrollment's type. A default of 'normal' is applied on read
+		// too, which would silently downgrade legacy escort guides.
+		type: {
 			type: String,
-			default: '',
-			trim: true,
+			enum: ['normal', 'escort'],
 		},
 		city: {
 			type: String,
 			default: '',
 			trim: true,
 		},
-		state: {
+		// Collected for escort guides only; mirrors GuideEnrollment.pan.
+		pan: {
 			type: String,
-			default: '',
-			trim: true,
-		},
-		country: {
-			type: String,
-			default: '',
-			trim: true,
-		},
-		price: {
-			type: Number,
-			default: 0,
-		},
-		about: {
-			type: String,
-			default: '',
-			trim: true,
-		},
-		specialization: {
-			type: [String],
-			default: [],
-		},
-		availableDays: {
-			type: [String],
-			default: [],
-		},
-		availableTime: {
-			type: String,
-			default: '',
 			trim: true,
 		},
 		profileImage: {
 			type: String,
 			default: '',
 		},
+		// Licence and Aadhaar uploads land here, in that order.
 		identityProofs: {
-			type: [String],
-			default: [],
-		},
-		galleryImages: {
 			type: [String],
 			default: [],
 		},

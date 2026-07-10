@@ -164,7 +164,7 @@ function GuideSelectionContent() {
                                             opacity: 0,
                                         }}
                                     >
-                                        <GuideCard guide={guide} />
+                                        <GuideCard guide={guide} checkoutHref={checkoutHref} />
                                     </div>
                                 );
                             })}

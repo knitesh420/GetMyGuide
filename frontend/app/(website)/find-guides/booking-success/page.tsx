@@ -52,7 +52,7 @@ const BookingSuccessPage: FC = () => {
                         <Link href="/"><Home className="mr-2 h-4 w-4" /> Go to Homepage</Link>
                     </Button> 
                     <Button asChild>
-                        <Link href="/dashboard/user/tour-guide-booking"><Calendar className="mr-2 h-4 w-4" /> View My Bookings</Link>
+                        <Link href="/dashboard/user/my-bookings"><Calendar className="mr-2 h-4 w-4" /> View My Bookings</Link>
                     </Button>
                 </div>
             </div>

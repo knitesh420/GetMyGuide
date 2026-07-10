@@ -1,9 +1,7 @@
 import { GUIDE_MEMBERSHIP_DURATION_DAYS, GUIDE_MEMBERSHIP_FEE } from '@config/const';
 import { AccountDB, ContactInquiryDB, GuideDB, GuideEnrollmentDB } from '@mongo';
 import IGuideEnrollment from '@mongo/types/guideEnrollment';
-import { sendGuidePaymentConfirmationEmail } from '@provider/email';
 import { verifyRazorpaySignature } from '@utils/paymentVerify';
-import { randomBytes } from 'crypto';
 import { Types } from 'mongoose';
 import { BadRequestError, NotFoundError, ServerError, error as logError } from 'node-be-utilities';
 import InvoiceService from './invoice';
@@ -11,34 +9,27 @@ import TransactionService from './transaction';
 
 interface GuideProfileData {
 	languages: string[];
-	experience: string;
+	type: 'normal' | 'escort';
+	phone: string;
 	city: string;
-	state: string;
-	country: string;
-	price: number;
-	about: string;
-	specialization: string[];
-	availableDays: string[];
-	availableTime: string;
+	/** Escort guides only. */
+	pan?: string;
 }
 
 interface GuideProfileFiles {
 	profileImage?: string;
 	identityProofs?: string[];
-	galleryImages?: string[];
 }
 
-interface EnrollData {
-	name: string;
-	email: string;
-	phone: string;
-	city: string;
-	type: 'normal' | 'escort';
-	pan?: string;
-	licence: string;
-	aadhar: string;
-	languages: string[];
-	photo: string;
+/**
+ * The only fields a registered guide may change after registration. Everything
+ * else on the profile is fixed at registration time.
+ */
+interface GuideProfilePatchData {
+	phone?: string;
+	city?: string;
+	type?: 'normal' | 'escort';
+	languages?: string[];
 }
 
 interface TransformedEnrollment {
@@ -94,56 +85,16 @@ function transformEnrollment(
 
 class GuideService {
 	/**
-	 * Create a Razorpay order for guide enrollment.
-	 * Does NOT save enrollment to DB — data is encoded and returned to frontend.
-	 * DB write only happens after payment verification in confirmPayment().
+	 * Read a single legacy enrollment. The anonymous enrol-and-pay flow is gone,
+	 * but admins still open these records to review the KYC documents attached
+	 * to guides who came through it.
 	 */
-	async enroll(data: EnrollData): Promise<{
-		enrollment_data: string;
-		transaction_id: string;
-		razorpay_options: {
-			description: string;
-			currency: string;
-			amount: number;
-			name: string;
-			order_id: string;
-			prefill: {
-				name: string;
-				contact: string;
-				email: string;
-			};
-			key: string;
-		};
-	}> {
-		// Encode form data (including file names) — NO DB write here
-		const enrollment_data = Buffer.from(JSON.stringify(data)).toString('base64');
-
-		// Create a temporary reference for the order
-		const tempReference = randomBytes(12).toString('base64').slice(0, 16);
-
-		// Fixed registration fee — defined on backend only
-		const GUIDE_REGISTRATION_FEE = 500;
-
-		// Create transaction using TransactionService for payment
-		const transaction = await TransactionService.createTransaction(
-			{
-				name: data.name,
-				email: data.email,
-				phone_number: data.phone,
-			},
-			GUIDE_REGISTRATION_FEE,
-			{
-				reference_id: tempReference,
-				reference_type: 'pending_enrollment',
-				type: 'guide',
-				description: 'Guide Registration Fee - Rs 500',
-			}
-		);
-		return {
-			enrollment_data,
-			transaction_id: transaction.transaction_id,
-			razorpay_options: transaction.razorpay_options,
-		};
+	async getEnrollmentById(enrollmentId: Types.ObjectId): Promise<TransformedEnrollment> {
+		const enrollment = await GuideEnrollmentDB.findById(enrollmentId);
+		if (!enrollment) {
+			throw new NotFoundError('Enrollment not found');
+		}
+		return transformEnrollment(enrollment);
 	}
 
 	/**
@@ -194,120 +145,6 @@ class GuideService {
 		);
 
 		return enrollmentsWithTransactions;
-	}
-
-	/**
-	 * Get enrollment by ID
-	 */
-	async getEnrollmentById(enrollmentId: Types.ObjectId): Promise<TransformedEnrollment> {
-		const enrollment = await GuideEnrollmentDB.findById(enrollmentId).lean();
-
-		if (!enrollment) {
-			throw new NotFoundError('Enrollment not found');
-		}
-
-		return transformEnrollment(enrollment as IGuideEnrollment);
-	}
-
-	/**
-	 * Confirm payment — verify Razorpay signature, then save enrollment + create account.
-	 * This is the ONLY place where guide data is written to DB.
-	 */
-	async confirmPayment(params: {
-		transaction_id: string;
-		razorpay_order_id: string;
-		razorpay_payment_id: string;
-		razorpay_signature: string;
-		enrollment_data: string;
-	}): Promise<{ message: string }> {
-		const {
-			transaction_id,
-			razorpay_order_id,
-			razorpay_payment_id,
-			razorpay_signature,
-			enrollment_data,
-		} = params;
-
-		// Step 1: Verify Razorpay signature (HMAC SHA256)
-		const isValid = verifyRazorpaySignature(
-			razorpay_order_id,
-			razorpay_payment_id,
-			razorpay_signature
-		);
-
-		if (!isValid) {
-			throw new ServerError('Payment verification failed: invalid signature');
-		}
-
-		// Step 2: Verify transaction exists and matches
-		const transaction = await TransactionService.getTransaction(transaction_id);
-
-		if (transaction.razorpay_order_id !== razorpay_order_id) {
-			throw new ServerError('Order ID mismatch');
-		}
-
-		// Step 3: Decode enrollment data
-		const data: EnrollData = JSON.parse(
-			Buffer.from(enrollment_data, 'base64').toString()
-		);
-
-		// Step 4: Check for duplicate — prevent double save
-		const existingGuideAccount = await AccountDB.findOne({
-			email: data.email.toLowerCase(),
-			role: 'guide',
-		});
-		if (existingGuideAccount) {
-			throw new ServerError('A guide account with this email already exists');
-		}
-
-		// Step 5: NOW save enrollment to DB (only after verification)
-		const enrollment = await GuideEnrollmentDB.create({ ...data, status: 'completed' });
-
-		// Step 6: Update transaction with enrollment reference and mark as paid
-		transaction.reference_id = enrollment._id.toString();
-		transaction.reference_type = 'enrollment';
-		transaction.status = 'paid';
-		await transaction.save();
-
-		// Step 7: Generate random password and create guide account
-		const password = randomBytes(12).toString('base64').slice(0, 16);
-
-		await AccountDB.create({
-			name: data.name,
-			email: data.email.toLowerCase(),
-			phone: data.phone,
-			password, // Will be hashed by pre-save hook
-			role: 'guide',
-			status: 'verified',
-			// Razorpay payment + submitted KYC docs already prove control of this
-			// email/identity — trusted path, same as admin creation.
-			emailVerified: true,
-			isActive: true,
-		});
-
-		// Step 8: Send payment confirmation email (non-blocking)
-		try {
-			await sendGuidePaymentConfirmationEmail(data.email, {
-				name: data.name,
-				email: data.email,
-				phone: data.phone,
-				city: data.city,
-				experience: data.type === 'escort' ? 'Licensed Escort Guide' : 'Regular Guide',
-				languages: data.languages,
-				amount: 500,
-				transactionId: transaction.transaction_id,
-				orderId: razorpay_order_id,
-			});
-		} catch (emailError) {
-			// Non-blocking - don't fail if email fails
-		}
-
-		return {
-			message:
-				'Payment confirmed successfully. Your guide account has been created. Please check your email (' +
-				data.email +
-				') for your login credentials.',
-		};
 	}
 
 	/**
@@ -454,23 +291,18 @@ class GuideService {
 			mobile: account.phone,
 			countryCode: account.countryCode,
 			languages: guide?.languages?.length ? guide.languages : enrollment?.languages || [],
-			experience: guide?.experience || '',
 			city: guide?.city || enrollment?.city || '',
-			state: guide?.state || '',
-			country: guide?.country || '',
-			price: guide?.price || 0,
-			about: guide?.about || '',
-			specialization: guide?.specialization || [],
-			availableDays: guide?.availableDays || [],
-			availableTime: guide?.availableTime || '',
+			pan: guide?.pan || enrollment?.pan || '',
 			profileImage: guide?.profileImage || enrollment?.photo || '',
 			identityProofs: guide?.identityProofs || [],
-			galleryImages: guide?.galleryImages || [],
 			// Legacy field names some existing frontend code still reads
 			serviceLocations: guide?.city ? [guide.city] : enrollment ? [enrollment.city] : [],
 			photo: guide?.profileImage || enrollment?.photo || '',
 			isApproved: account.status === 'verified',
-			isCertified: enrollment?.type === 'escort',
+			// The Guide record is authoritative once registered; the legacy
+			// enrollment is only a fallback for guides who predate the new form.
+			type: guide?.type || enrollment?.type || 'normal',
+			isCertified: (guide?.type || enrollment?.type) === 'escort',
 			unavailableDates: account.unavailableDates || [],
 			// Membership
 			registrationCompleted: guide?.registrationCompleted || false,
@@ -484,10 +316,13 @@ class GuideService {
 	}
 
 	/**
-	 * Create or update the post-login guide profile (languages, experience,
-	 * location, pricing, KYC/gallery files, etc). Does not touch
-	 * payment/visibility/membership fields — those only change via the
-	 * membership payment flow below.
+	 * One-time guide registration: writes the KYC profile (languages, type,
+	 * city, PAN, photo and identity documents) and flips
+	 * `registrationCompleted`. Does not touch payment/visibility/membership
+	 * fields — those only change via the membership payment flow below.
+	 *
+	 * Post-registration edits go through `patchGuideProfile`, which is limited
+	 * to the four mutable fields.
 	 */
 	async upsertGuideProfile(
 		accountId: string,
@@ -513,15 +348,59 @@ class GuideService {
 			}
 		}
 
-		const update: Record<string, unknown> = { ...data, registrationCompleted: true };
+		// `phone` lives on the Account, not the Guide — pull it out so the
+		// Guide update carries only Guide paths.
+		const { phone, ...guideData } = data;
+
+		const update: Record<string, unknown> = { ...guideData, registrationCompleted: true };
 		if (files.profileImage) update.profileImage = files.profileImage;
 		if (files.identityProofs?.length) update.identityProofs = files.identityProofs;
-		if (files.galleryImages?.length) update.galleryImages = files.galleryImages;
 
 		if (existing) {
 			await GuideDB.findOneAndUpdate({ accountId: account._id }, { $set: update });
 		} else {
 			await GuideDB.create({ accountId: account._id, ...update });
+		}
+
+		if (phone && phone !== account.phone) {
+			await AccountDB.updateOne({ _id: account._id }, { $set: { phone } });
+		}
+
+		return this.getGuideProfile(accountId);
+	}
+
+	/**
+	 * Partial update of the only fields a guide may change after registering:
+	 * phone, city, type and languages. Rejects guides who have not registered
+	 * yet — they must go through `upsertGuideProfile` first.
+	 *
+	 * `phone` is written to the Account; the rest to the Guide. Nothing here
+	 * touches credentials, role, tokenVersion, or membership state.
+	 */
+	async patchGuideProfile(accountId: string, data: GuideProfilePatchData) {
+		const account = await AccountDB.findOne({ _id: accountId, role: 'guide' });
+		if (!account) {
+			throw new NotFoundError('Guide account not found');
+		}
+
+		const guide = await GuideDB.findOne({ accountId: account._id });
+		if (!guide || !guide.registrationCompleted) {
+			throw new BadRequestError(
+				'Please complete your guide registration before editing your profile'
+			);
+		}
+
+		const guideUpdate: Record<string, unknown> = {};
+		if (data.city !== undefined) guideUpdate.city = data.city;
+		if (data.type !== undefined) guideUpdate.type = data.type;
+		if (data.languages !== undefined) guideUpdate.languages = data.languages;
+
+		if (Object.keys(guideUpdate).length > 0) {
+			await GuideDB.updateOne({ _id: guide._id }, { $set: guideUpdate });
+		}
+
+		if (data.phone !== undefined) {
+			await AccountDB.updateOne({ _id: account._id }, { $set: { phone: data.phone } });
 		}
 
 		return this.getGuideProfile(accountId);

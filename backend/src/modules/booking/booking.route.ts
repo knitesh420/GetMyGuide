@@ -1,8 +1,12 @@
 import express from 'express';
-import { idempotency, VerifyMinLevel, VerifySession } from '../../middleware';
+import { idempotency, VerifyMinLevel, VerifyRole, VerifySession } from '../../middleware';
 import IDValidator from '../../middleware/idValidator';
 import Controller from './booking.controller';
-import { AllocateGuideValidator, CreateBookingValidator } from './booking.validator';
+import {
+	AllocateGuideValidator,
+	CreateBookingValidator,
+	PackageBookingValidator,
+} from './booking.validator';
 
 const router = express.Router();
 
@@ -13,12 +17,13 @@ router
 	.post(CreateBookingValidator, idempotency, Controller.createGuestBooking);
 router.route('/verify-guest-booking').post(Controller.verifyAndCreateGuestBooking);
 
-// Tourist routes
+// Tourist routes — exact-role gated so guides (who outrank tourists in the
+// hierarchy) cannot create or read tourist bookings. Admins retain access.
 router
 	.route('/customised-booking')
 	.post(
 		VerifySession,
-		VerifyMinLevel('tourist'),
+		VerifyRole('tourist', 'admin'),
 		CreateBookingValidator,
 		idempotency,
 		Controller.createCustomisedBooking
@@ -26,11 +31,27 @@ router
 
 router
 	.route('/verify-booking')
-	.post(VerifySession, VerifyMinLevel('tourist'), Controller.verifyAndCreateBooking);
+	.post(VerifySession, VerifyRole('tourist', 'admin'), Controller.verifyAndCreateBooking);
 
 router
 	.route('/my-bookings')
-	.get(VerifySession, VerifyMinLevel('tourist'), Controller.getMyBookings);
+	.get(VerifySession, VerifyRole('tourist', 'admin'), Controller.getMyBookings);
+
+// Package-tour booking (authenticated tourist, 20% advance). Registered before
+// the '/:id' routes so these literal paths win over the id matcher.
+router
+	.route('/package/create-order')
+	.post(
+		VerifySession,
+		VerifyRole('tourist', 'admin'),
+		PackageBookingValidator,
+		idempotency,
+		Controller.createPackageBooking
+	);
+
+router
+	.route('/package/verify')
+	.post(VerifySession, VerifyRole('tourist', 'admin'), Controller.verifyPackageBooking);
 
 // Admin routes
 router.route('/').get(VerifySession, VerifyMinLevel('admin'), Controller.getAllBookings);

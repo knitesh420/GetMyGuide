@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { Suspense } from "react";
 import { Header } from "@/components/layout/website/header";
-import { Footer } from "@/components/layout/website/footer";
+import { ConditionalFooter } from "@/components/layout/website/ConditionalFooter";
 import Script from "next/script";
 import { WhatsAppFloatingButton } from "@/components/WhatsAppFloatingButton";
 import FloatingVideoAd from "@/components/FloatingVideoAd";
@@ -59,7 +59,7 @@ export default function RootLayout({
       <div className="pt-14 lg:pt-16">
         <Suspense fallback={null}>{children}</Suspense>
       </div>
-      <Footer />
+      <ConditionalFooter />
       <FloatingVideoAd />
       <WhatsAppFloatingButton
         phoneNumber="917470222666"

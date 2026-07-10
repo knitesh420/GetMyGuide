@@ -40,6 +40,13 @@ export default interface IBooking extends Document {
 	linked_to?: Types.ObjectId;
 	transaction_id: string;
 	allocated_guide?: Types.ObjectId;
+	// Package-tour bookings reuse this document but set booking_type='package'
+	// and carry the package reference, trip end date, and advance/balance split.
+	booking_type?: 'guide' | 'package';
+	package?: Types.ObjectId;
+	end_date?: Date;
+	advance_paid?: number;
+	balance_due?: number;
 	status: 'payment-pending' | 'successful' | 'confirmed' | 'allocated' | 'completed';
 	createdAt: Date;
 	updatedAt: Date;

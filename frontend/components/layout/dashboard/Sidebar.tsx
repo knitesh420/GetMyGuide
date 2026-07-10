@@ -12,7 +12,6 @@ import {
   Banknote,
   Calendar,
   Bus,
-  TramFront,
   PersonStanding,
   PlaneLanding,
   Binoculars,
@@ -74,23 +73,9 @@ const guideNavigation = [
 
 const userNavigation = [
   { name: "Dashboard", href: "/dashboard/user", icon: LayoutGrid },
-  { name: "Find a Guide", href: "/find-guides", icon: PersonStanding },
+  { name: "Find a Guide", href: "/guide-availability", icon: PersonStanding },
+  { name: "Planned Trip", href: "/register-tourist", icon: Binoculars },
   { name: "Explore Our packages", href: "/services", icon: PlaneLanding },
-  {
-    name: "Plan Your Tour",
-    href: "/dashboard/user/custom-tour",
-    icon: Binoculars,
-  },
-  {
-    name: "Your Planned Tours",
-    href: "/dashboard/user/planned-tours",
-    icon: TramFront,
-  },
-  {
-    name: "Tour Guide Booking",
-    href: "/dashboard/user/tour-guide-booking",
-    icon: BookOpen,
-  },
   { name: "My Bookings", href: "/dashboard/user/my-bookings", icon: BookOpen },
   { name: "My Trips", href: "/dashboard/user/trips", icon: MapPinned },
   { name: "Write a Review", href: "/dashboard/user/reviews", icon: Star },
@@ -103,6 +88,24 @@ const roleNavigations = {
   guide: guideNavigation,
   user: userNavigation,
   manager: adminNavigation,
+};
+
+// The guide dashboard is themed green (see `.guide-theme` in globals.css). The
+// sidebar renders outside that subtree, so its accent is selected by role here
+// rather than inherited. Every other role keeps the existing teal.
+const GUIDE_ACCENT = {
+  active: "bg-green-50 text-green-700 font-bold shadow-sm",
+  idle: "text-slate-600 hover:bg-green-500/10 hover:text-green-700",
+  /** No edge bar — the pale green fill alone marks the active guide item. */
+  bar: "",
+  icon: "text-green-600",
+};
+
+const DEFAULT_ACCENT = {
+  active: "bg-white text-teal-600 font-bold shadow-sm",
+  idle: "text-slate-600 hover:bg-teal-500/10 hover:text-teal-600",
+  bar: "bg-teal-500",
+  icon: "text-teal-500",
 };
 
 export default function Sidebar({
@@ -120,6 +123,16 @@ export default function Sidebar({
   const navigation =
     roleNavigations[userRole === "tourist" ? "user" : userRole] ||
     userNavigation;
+  const accent = userRole === "guide" ? GUIDE_ACCENT : DEFAULT_ACCENT;
+
+  // Only the most specific matching link lights up. A plain `startsWith` marks
+  // the section root active on every child route too — on /dashboard/guide/
+  // buy-subscription both "Dashboard" and "Subscription" would highlight.
+  const activeHref = navigation
+    .filter(
+      (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
+    )
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   const handleLinkClick = (href: string) => {
     if (href === "/logout") {
@@ -143,7 +156,7 @@ export default function Sidebar({
         className={`fixed inset-y-0 left-0 z-50 w-[270px] flex-col border-r bg-white 
         transform transition-transform duration-300 ease-in-out
         ${isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"}
-        lg:sticky lg:h-screen lg:translate-x-0 lg:flex lg:shadow-none`}
+        lg:sticky lg:z-30 lg:h-full lg:translate-x-0 lg:flex lg:shadow-none`}
       >
         <button
           onClick={onClose}
@@ -152,38 +165,40 @@ export default function Sidebar({
           <X className="h-6 w-6" />
         </button>
 
-        <div className="flex flex-col items-center gap-2 border-b px-4 py-5">
+        {/* h-18 (72px) and px-6 match the dashboard Header, so the brand sits on
+            the same line as the page title and the accent rule the layout draws
+            across both columns lands on this block's bottom edge. The border is
+            only needed below lg, where this panel floats above the rule (z-50)
+            rather than sitting flush under it. */}
+        <div className="flex h-18 shrink-0 items-center border-b px-6 lg:border-b-0">
           <Link
             href="/"
             className="text-2xl font-extrabold tracking-tight text-slate-900"
           >
             GetMyGuide
           </Link>
-          <div className="h-1 w-3/4 rounded-full bg-gradient-to-r from-teal-400 to-cyan-500" />
         </div>
 
-        <div className="flex-1 overflow-y-auto py-8">
-          <nav className="grid items-start gap-3 px-6 text-base font-medium">
+        <div className="flex-1 overflow-y-auto py-6">
+          <nav className="grid items-start gap-1.5 px-4 text-sm font-medium">
             {navigation.map((item) => {
-              const isActive = pathname.startsWith(item.href);
+              const isActive = item.href === activeHref;
               return (
                 <Link
                   key={item.name}
                   href={item.href}
                   onClick={() => handleLinkClick(item.href)}
-                  className={`relative flex items-center gap-4 rounded-xl px-3 py-3 transition-all duration-200 
-                    ${
-                      isActive
-                        ? "bg-white text-teal-600 font-bold shadow-sm"
-                        : "text-slate-600 hover:bg-teal-500/10 hover:text-teal-600"
-                    }`}
+                  className={`relative flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all duration-200
+                    ${isActive ? accent.active : accent.idle}`}
                 >
-                  {isActive && (
-                    <div className="absolute left-0 h-8 w-1 rounded-r-full bg-teal-500" />
+                  {isActive && accent.bar && (
+                    <div
+                      className={`absolute left-0 h-7 w-1 rounded-r-full ${accent.bar}`}
+                    />
                   )}
                   <item.icon
-                    className={`h-6 w-6 transition-colors ${
-                      isActive ? "text-teal-500" : ""
+                    className={`h-5 w-5 shrink-0 transition-colors ${
+                      isActive ? accent.icon : ""
                     }`}
                   />
                   <span>{item.name}</span>
@@ -200,9 +215,9 @@ export default function Sidebar({
               e.preventDefault();
               logout();
             }}
-            className="flex items-center gap-4 rounded-xl px-3 py-3 text-red-600 transition-all hover:bg-red-100"
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-600 transition-all hover:bg-red-100"
           >
-            <LogOut className="h-6 w-6" />
+            <LogOut className="h-5 w-5 shrink-0" />
             <span>Logout</span>
           </Link>
         </div>

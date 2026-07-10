@@ -1,5 +1,6 @@
-import { AccountDB, BookingDB, TransactionDB } from '@mongo';
+import { AccountDB, BookingDB, PackageDB, TransactionDB } from '@mongo';
 import IBooking from '@mongo/types/booking';
+import IPackage from '@mongo/types/package';
 import {
 	sendBookingAllocatedGuideEmail,
 	sendBookingAllocatedTouristEmail,
@@ -12,6 +13,33 @@ import { Types } from 'mongoose';
 import { NotFoundError, ServerError } from 'node-be-utilities';
 import InvoiceService from './invoice';
 import TransactionService from './transaction';
+
+// Tourists pay a 20% advance to confirm a package-tour booking; the balance is
+// settled with the guide/operator later.
+const PACKAGE_ADVANCE_RATE = 0.2;
+
+/**
+ * Resolve display fields for a package, tolerating both the legacy flat fields
+ * and the translations.en shape, so a booking always has a city + non-empty
+ * places array (the Booking schema requires at least one place).
+ */
+function resolvePackageFields(pkg: IPackage): {
+	title: string;
+	city: string;
+	places: string[];
+} {
+	const en = pkg.translations?.en;
+	const title = pkg.title || en?.title || 'Tour Package';
+	const city = pkg.city || en?.city || 'N/A';
+	const placesSource =
+		pkg.places && pkg.places.length
+			? pkg.places
+			: en?.places && en.places.length
+				? en.places
+				: [];
+	const places = placesSource.length ? placesSource : [title];
+	return { title, city, places };
+}
 
 interface CreateBookingData {
 	tourist_info: {
@@ -92,6 +120,14 @@ interface TransformedBooking {
 	linked_to?: string;
 	transaction_id: string;
 	allocated_guide?: string;
+	booking_type?: string;
+	package?: string;
+	end_date?: Date;
+	advance_paid?: number;
+	balance_due?: number;
+	// Populated only for package bookings (for the confirmation screen).
+	package_info?: { title: string };
+	guide_info?: { name: string; photo?: string };
 	status: string;
 	createdAt: Date;
 	updatedAt: Date;
@@ -108,6 +144,11 @@ function transformBooking(booking: IBooking): TransformedBooking {
 		linked_to: booking.linked_to?.toString(),
 		transaction_id: booking.transaction_id,
 		allocated_guide: booking.allocated_guide?.toString(),
+		booking_type: booking.booking_type,
+		package: booking.package?.toString(),
+		end_date: booking.end_date,
+		advance_paid: booking.advance_paid,
+		balance_due: booking.balance_due,
 		status: booking.status,
 		createdAt: booking.createdAt,
 		updatedAt: booking.updatedAt,
@@ -277,6 +318,21 @@ class BookingService {
 		// Step 3: Decode booking data
 		const data: CreateBookingData = JSON.parse(Buffer.from(booking_data, 'base64').toString());
 
+		// Step 3.5: Re-derive the price on the server and refuse to create a booking
+		// whose configuration doesn't match the amount actually paid. This blocks a
+		// tampered booking_data (e.g. paying for a cheap order but submitting an
+		// expensive config at verify time). transaction.amount is stored in rupees,
+		// the same unit calculateBookingPrice returns.
+		const priceBreakdown = calculateBookingPrice(
+			data.travel_details.no_of_person,
+			data.travel_details.city,
+			data.booking_configuration
+		);
+		if (priceBreakdown.total !== transaction.amount) {
+			throw new ServerError('Payment verification failed: booking amount mismatch');
+		}
+		data.booking_configuration.price = priceBreakdown.total;
+
 		// Step 4: Create booking now that payment is verified
 		const booking = await BookingDB.create({
 			...data,
@@ -321,6 +377,213 @@ class BookingService {
 	}
 
 	/**
+	 * Create a Razorpay order for a package-tour booking (20% advance).
+	 * Mirrors createBooking: no DB write here — the booking is created only
+	 * after payment is verified.
+	 */
+	async createPackageOrder(
+		data: {
+			tourId: string;
+			guideId: string;
+			startDate: Date;
+			endDate: Date;
+			tourists: number;
+		},
+		userId: Types.ObjectId
+	): Promise<{
+		data: {
+			transaction_id: string;
+			booking_data: string;
+			user_id: string;
+			razorpay_options: {
+				description: string;
+				currency: string;
+				amount: number;
+				name: string;
+				order_id: string;
+				prefill: { name: string; contact: string; email: string };
+				key: string;
+			};
+		};
+	}> {
+		const pkg = await PackageDB.findById(data.tourId);
+		if (!pkg) {
+			throw new NotFoundError('Tour package not found');
+		}
+		if (!pkg.price || pkg.price <= 0) {
+			throw new ServerError('This package is not available for online booking');
+		}
+
+		const guide = await AccountDB.findById(data.guideId);
+		if (!guide || guide.role !== 'guide') {
+			throw new NotFoundError('Guide not found');
+		}
+
+		const account = await AccountDB.findById(userId);
+		if (!account) {
+			throw new NotFoundError('Account not found');
+		}
+
+		const total = pkg.price * data.tourists;
+		const advance = Math.round(total * PACKAGE_ADVANCE_RATE);
+
+		// Encode what the verify step needs. Prices are recomputed on the server
+		// at verify time, so tampering with this blob changes nothing.
+		const booking_data = Buffer.from(
+			JSON.stringify({
+				tourId: data.tourId,
+				guideId: data.guideId,
+				startDate: data.startDate,
+				endDate: data.endDate,
+				tourists: data.tourists,
+			})
+		).toString('base64');
+		const tempReference = randomBytes(12).toString('base64').slice(0, 16);
+
+		const transaction = await TransactionService.createTransaction(
+			{
+				name: account.name,
+				email: account.email,
+				phone_number: account.phone || 'N/A',
+			},
+			advance,
+			{
+				reference_id: tempReference,
+				reference_type: 'pending_package_booking',
+				type: 'tourist',
+				description: 'Get My Guide Tour Package Advance Payment',
+			}
+		);
+
+		return {
+			data: {
+				...transaction,
+				booking_data,
+				user_id: userId.toString(),
+			},
+		};
+	}
+
+	/**
+	 * Verify Razorpay signature and create a package-tour booking after payment.
+	 */
+	async verifyAndCreatePackageBooking(params: {
+		razorpay_order_id: string;
+		razorpay_payment_id: string;
+		razorpay_signature: string;
+		booking_data: string;
+		user_id: string;
+	}): Promise<TransformedBooking> {
+		const { razorpay_order_id, razorpay_payment_id, razorpay_signature, booking_data, user_id } =
+			params;
+
+		const isValid = verifyRazorpaySignature(
+			razorpay_order_id,
+			razorpay_payment_id,
+			razorpay_signature
+		);
+		if (!isValid) {
+			throw new ServerError('Payment verification failed: invalid signature');
+		}
+
+		const transaction = await TransactionDB.findOne({ razorpay_order_id });
+		if (!transaction) {
+			throw new NotFoundError('Transaction not found');
+		}
+
+		const decoded: {
+			tourId: string;
+			guideId: string;
+			startDate: string;
+			endDate: string;
+			tourists: number;
+		} = JSON.parse(Buffer.from(booking_data, 'base64').toString());
+
+		const pkg = await PackageDB.findById(decoded.tourId);
+		if (!pkg) {
+			throw new NotFoundError('Tour package not found');
+		}
+		if (!pkg.price || pkg.price <= 0) {
+			throw new ServerError('Package pricing is unavailable');
+		}
+
+		// Re-derive the amounts server-side and reject if the paid advance does
+		// not match — blocks a tampered order/price.
+		const total = pkg.price * decoded.tourists;
+		const advance = Math.round(total * PACKAGE_ADVANCE_RATE);
+		if (advance !== transaction.amount) {
+			throw new ServerError('Payment verification failed: booking amount mismatch');
+		}
+
+		const guide = await AccountDB.findById(decoded.guideId);
+		if (!guide || guide.role !== 'guide') {
+			throw new NotFoundError('Guide not found');
+		}
+
+		const account = await AccountDB.findById(user_id);
+		if (!account) {
+			throw new NotFoundError('Account not found');
+		}
+
+		const { title, city, places } = resolvePackageFields(pkg);
+
+		const booking = await BookingDB.create({
+			booking_type: 'package',
+			package: pkg._id,
+			tourist_info: {
+				name: account.name,
+				gender: 'other',
+				phone: account.phone || 'N/A',
+				email: account.email,
+				country: 'N/A',
+			},
+			travel_details: {
+				places,
+				city,
+				date: new Date(decoded.startDate),
+				no_of_person: decoded.tourists,
+				preferences: { hotel: false, taxi: false },
+			},
+			guide_preferences: {
+				guide_language: [],
+				gender: 'none',
+			},
+			booking_configuration: {
+				duration: 'full-day',
+				foreign_language_required: false,
+				early_late_hours: false,
+				extra_city_allowances: false,
+				special_event_allowances: [],
+				price: total,
+			},
+			end_date: new Date(decoded.endDate),
+			advance_paid: advance,
+			balance_due: total - advance,
+			allocated_guide: guide._id,
+			linked_to: new Types.ObjectId(user_id),
+			transaction_id: transaction.transaction_id,
+			status: 'allocated',
+		});
+
+		transaction.reference_id = booking._id.toString();
+		transaction.reference_type = 'booking';
+		transaction.status = 'paid';
+		await transaction.save();
+
+		try {
+			await InvoiceService.createBookingInvoice(transaction, booking);
+		} catch (invoiceError) {
+			// Non-blocking — don't fail the booking if invoice generation fails
+		}
+
+		return {
+			...transformBooking(booking),
+			package_info: { title },
+			guide_info: { name: guide.name },
+		};
+	}
+
+	/**
 	 * Get all bookings for authenticated tourist
 	 */
 	async getMyBookings(userId: Types.ObjectId): Promise<TransformedBooking[]> {
@@ -359,7 +622,24 @@ class BookingService {
 			throw new NotFoundError('Booking not found');
 		}
 
-		return transformBooking(booking as IBooking);
+		const transformed = transformBooking(booking as IBooking);
+
+		// Package bookings carry a package + pre-allocated guide; hydrate their
+		// display info so the confirmation screen renders on a fresh load.
+		if (booking.booking_type === 'package') {
+			const [pkg, guide] = await Promise.all([
+				booking.package ? PackageDB.findById(booking.package) : null,
+				booking.allocated_guide ? AccountDB.findById(booking.allocated_guide) : null,
+			]);
+			if (pkg) {
+				transformed.package_info = { title: resolvePackageFields(pkg).title };
+			}
+			if (guide) {
+				transformed.guide_info = { name: guide.name };
+			}
+		}
+
+		return transformed;
 	}
 
 	/**

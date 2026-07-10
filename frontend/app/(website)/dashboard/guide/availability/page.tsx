@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import Link from 'next/link';
 import type { AppDispatch, RootState } from '@/lib/store';
 import {
   getMyGuideProfile,
@@ -13,17 +12,21 @@ import {
   fetchMyGuideCalendar,
 } from '@/lib/redux/thunks/guide/guideThunk';
 import { toast } from 'react-toastify';
-import { Calendar as CalendarIcon, CheckCircle, XCircle, RefreshCw, Info, Pencil } from 'lucide-react';
+import { CheckCircle, XCircle, RefreshCw, Info, CalendarOff, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
 import { GuideLeaveForm } from '@/components/availability/GuideLeaveForm';
 import { GuideLeaveList } from '@/components/availability/GuideLeaveList';
 import { GuideLeaveType } from '@/lib/data';
+import {
+  GuidePageHeader,
+  GuidePanel,
+  GuideStat,
+  GuideStatStrip,
+} from '@/components/guide';
 
 // --- HELPER FUNCTION ---
 // This function safely converts a Date object to a 'YYYY-MM-DD' string
@@ -35,6 +38,14 @@ const toLocalDateString = (date: Date): string => {
     return `${year}-${month}-${day}`;
 };
 
+// Literal colours rather than `hsl(var(--destructive))`: --destructive holds an
+// oklch() value, so wrapping it in hsl() produces invalid CSS and the day never
+// gets highlighted.
+const UNAVAILABLE_DAY_STYLE = {
+    backgroundColor: 'rgb(254 226 226)', // red-100
+    color: 'rgb(185 28 28)', // red-700
+    textDecoration: 'line-through',
+} as const;
 
 export default function GuideAvailabilityPage() {
     const dispatch = useDispatch<AppDispatch>();
@@ -135,164 +146,125 @@ export default function GuideAvailabilityPage() {
         unavailable: unavailableDays,
     };
     const modifierStyles = {
-        unavailable: {
-            backgroundColor: 'hsl(var(--destructive) / 0.1)',
-            color: 'hsl(var(--destructive))',
-            textDecoration: 'line-through',
-        }
+        unavailable: UNAVAILABLE_DAY_STYLE,
     };
 
     if (profileLoading && !myProfile) {
         return (
-            <div className="container max-w-7xl mx-auto px-4 py-10">
-                <Skeleton className="h-12 w-1/3 mb-4" />
-                <Skeleton className="h-6 w-2/3 mb-10" />
-                <Card className="shadow-lg">
-                    <div className="grid grid-cols-1 lg:grid-cols-3">
-                        <div className="lg:col-span-2 p-4 flex justify-center border-b lg:border-b-0 lg:border-r">
-                            <Skeleton className="w-full h-[400px]" />
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <Skeleton className="h-8 w-1/2" />
-                            <Skeleton className="h-10 w-full" />
-                            <Skeleton className="h-10 w-full" />
-                            <Separator className="my-6"/>
-                            <Skeleton className="h-12 w-full" />
-                        </div>
-                    </div>
-                </Card>
+            <div className="space-y-6">
+                <Skeleton className="h-12 w-1/3" />
+                <Skeleton className="h-6 w-2/3" />
+                <Skeleton className="h-[420px]" />
             </div>
         )
     }
 
     return (
-        <div className="min-h-screen bg-muted/50">
-            <main className="pt-10">
-                <section className="py-10">
-                    <div className="container max-w-7xl mx-auto px-4">
-                        <h1 className="text-4xl font-extrabold">My Schedule</h1>
-                        <p className="mt-2 text-lg text-muted-foreground">
-                           Manage your blocked dates, vacation/emergency leave, and working schedule. Admins see this before assigning you a trip.
-                        </p>
-                    </div>
-                </section>
+        <div className="space-y-6">
+            <GuidePageHeader
+                title="My Schedule"
+                description="Manage your blocked dates and your vacation and emergency leave. Admins see this before assigning you a trip."
+            />
 
-                <section className="pb-12">
-                    <div className="container max-w-7xl mx-auto px-4">
-                        <Tabs defaultValue="blocked-dates">
-                            <TabsList>
-                                <TabsTrigger value="blocked-dates">Blocked Dates</TabsTrigger>
-                                <TabsTrigger value="leave">Vacation &amp; Emergency Leave</TabsTrigger>
-                                <TabsTrigger value="schedule">Working Schedule</TabsTrigger>
-                            </TabsList>
+            <GuidePanel>
+                <div className="border-b border-slate-200 px-5 py-4">
+                    <GuideStatStrip>
+                        <GuideStat
+                            icon={CalendarOff}
+                            label="Blocked Dates"
+                            value={unavailableDays.length}
+                        />
+                        <GuideStat
+                            icon={CalendarDays}
+                            label="Leave Requests"
+                            value={myLeaves?.length ?? 0}
+                            accent
+                        />
+                    </GuideStatStrip>
+                </div>
+            </GuidePanel>
 
-                            <TabsContent value="blocked-dates">
-                                <Card className="shadow-lg">
-                                   <div className="grid grid-cols-1 lg:grid-cols-3">
-                                        {/* Left Side: Calendar */}
-                                        <div className="lg:col-span-2 p-4 flex justify-center border-b lg:border-b-0 lg:border-r">
-                                            <Calendar
-                                                mode="multiple"
-                                                min={0}
-                                                selected={selectedDays}
-                                                onSelect={setSelectedDays}
-                                                modifiers={modifiers}
-                                                modifiersStyles={modifierStyles}
-                                                numberOfMonths={2}
-                                                className="p-3"
-                                            />
-                                        </div>
+            <Tabs defaultValue="blocked-dates" className="space-y-4">
+                <TabsList>
+                    <TabsTrigger value="blocked-dates">Blocked Dates</TabsTrigger>
+                    <TabsTrigger value="leave">Vacation &amp; Emergency Leave</TabsTrigger>
+                </TabsList>
 
-                                        {/* Right Side: Action Panel */}
-                                        <div className="p-6">
-                                            <h3 className="text-xl font-bold mb-4">Update Your Schedule</h3>
-                                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-sm flex items-start gap-2 mb-6">
-                                                <Info className="w-4 h-4 mt-0.5 shrink-0"/>
-                                                <p>Select dates on the calendar, then mark them as available or unavailable.</p>
-                                            </div>
+                <TabsContent value="blocked-dates">
+                    <GuidePanel>
+                        <div className="grid grid-cols-1 lg:grid-cols-3">
+                            {/* Left Side: Calendar */}
+                            <div className="flex justify-center border-b border-slate-200 p-4 lg:col-span-2 lg:border-b-0 lg:border-r">
+                                <Calendar
+                                    mode="multiple"
+                                    min={0}
+                                    selected={selectedDays}
+                                    onSelect={setSelectedDays}
+                                    modifiers={modifiers}
+                                    modifiersStyles={modifierStyles}
+                                    numberOfMonths={2}
+                                    className="p-3"
+                                />
+                            </div>
 
-                                            <div className="space-y-3">
-                                                <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => handleSetAvailability(true)}>
-                                                    <CheckCircle className="w-4 h-4 mr-2" /> Mark Selected as Available
-                                                </Button>
-                                                <Button className="w-full" variant="destructive" onClick={() => handleSetAvailability(false)}>
-                                                    <XCircle className="w-4 h-4 mr-2" /> Mark Selected as Unavailable
-                                                </Button>
-                                            </div>
-
-                                            <Separator className="my-6"/>
-
-                                            <div className="space-y-3">
-                                                <h4 className="font-semibold">Legend</h4>
-                                                <div className="flex items-center gap-2 text-sm"><div className="w-4 h-4 rounded-full border"/> Available</div>
-                                                <div className="flex items-center gap-2 text-sm"><div className="w-4 h-4 rounded-full" style={modifierStyles.unavailable}/> Unavailable</div>
-                                                <div className="flex items-center gap-2 text-sm"><div className="w-4 h-4 rounded-full bg-primary"/> Selected</div>
-                                            </div>
-
-                                            <Separator className="my-6"/>
-
-                                            <Button size="lg" className="w-full" onClick={handleSaveChanges} disabled={isSaving}>
-                                                {isSaving ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin"/>Saving...</> : 'Save All Changes'}
-                                            </Button>
-                                        </div>
-                                   </div>
-                                </Card>
-                            </TabsContent>
-
-                            <TabsContent value="leave">
-                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                    <Card className="lg:col-span-1 p-6">
-                                        <h3 className="text-xl font-bold mb-4">Request Leave</h3>
-                                        <GuideLeaveForm onSubmit={handleRequestLeave} isSubmitting={isRequestingLeave} />
-                                    </Card>
-                                    <Card className="lg:col-span-2 p-6">
-                                        <h3 className="text-xl font-bold mb-4">Your Leave Requests</h3>
-                                        <GuideLeaveList
-                                            leaves={myLeaves}
-                                            onCancel={handleCancelLeave}
-                                            cancellingId={cancellingId}
-                                        />
-                                    </Card>
+                            {/* Right Side: Action Panel */}
+                            <div className="p-6">
+                                <h3 className="mb-4 text-lg font-bold text-slate-900">Update Your Schedule</h3>
+                                <div className="mb-6 flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                                    <Info className="mt-0.5 h-4 w-4 shrink-0"/>
+                                    <p>Select dates on the calendar, then mark them as available or unavailable.</p>
                                 </div>
-                            </TabsContent>
 
-                            <TabsContent value="schedule">
-                                <Card className="p-6 max-w-2xl">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h3 className="text-xl font-bold">Weekly Working Schedule</h3>
-                                        <Link href="/dashboard/guide/profile">
-                                            <Button variant="outline" size="sm">
-                                                <Pencil className="w-3.5 h-3.5 mr-2" /> Edit in Profile
-                                            </Button>
-                                        </Link>
-                                    </div>
-                                    <div className="space-y-4">
-                                        <div>
-                                            <p className="text-sm font-medium text-muted-foreground mb-2">Available Days</p>
-                                            <div className="flex flex-wrap gap-2">
-                                                {myProfile?.availableDays?.length ? (
-                                                    myProfile.availableDays.map((day) => (
-                                                        <Badge key={day} variant="secondary">{day}</Badge>
-                                                    ))
-                                                ) : (
-                                                    <p className="text-sm text-muted-foreground">Not set yet.</p>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-medium text-muted-foreground mb-2">Working Hours</p>
-                                            <div className="flex items-center gap-2 text-sm">
-                                                <CalendarIcon className="w-4 h-4 text-muted-foreground" />
-                                                {myProfile?.availableTime || 'Not set yet.'}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </Card>
-                            </TabsContent>
-                        </Tabs>
+                                <div className="space-y-3">
+                                    <Button className="w-full" onClick={() => handleSetAvailability(true)}>
+                                        <CheckCircle className="mr-2 h-4 w-4" /> Mark Selected as Available
+                                    </Button>
+                                    <Button
+                                        className="w-full border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                                        variant="outline"
+                                        onClick={() => handleSetAvailability(false)}
+                                    >
+                                        <XCircle className="mr-2 h-4 w-4" /> Mark Selected as Unavailable
+                                    </Button>
+                                </div>
+
+                                <Separator className="my-6"/>
+
+                                <div className="space-y-3">
+                                    <h4 className="text-sm font-semibold text-slate-900">Legend</h4>
+                                    <div className="flex items-center gap-2 text-sm text-slate-600"><div className="h-4 w-4 rounded-full border border-slate-300"/> Available</div>
+                                    <div className="flex items-center gap-2 text-sm text-slate-600"><div className="h-4 w-4 rounded-full" style={UNAVAILABLE_DAY_STYLE}/> Unavailable</div>
+                                    <div className="flex items-center gap-2 text-sm text-slate-600"><div className="h-4 w-4 rounded-full bg-primary"/> Selected</div>
+                                </div>
+
+                                <Separator className="my-6"/>
+
+                                <Button size="lg" className="w-full" onClick={handleSaveChanges} disabled={isSaving}>
+                                    {isSaving ? <><RefreshCw className="mr-2 h-4 w-4 animate-spin"/>Saving...</> : 'Save All Changes'}
+                                </Button>
+                            </div>
+                        </div>
+                    </GuidePanel>
+                </TabsContent>
+
+                <TabsContent value="leave">
+                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                        <GuidePanel className="p-6 lg:col-span-1">
+                            <h3 className="mb-4 text-lg font-bold text-slate-900">Request Leave</h3>
+                            <GuideLeaveForm onSubmit={handleRequestLeave} isSubmitting={isRequestingLeave} />
+                        </GuidePanel>
+                        <GuidePanel className="p-6 lg:col-span-2">
+                            <h3 className="mb-4 text-lg font-bold text-slate-900">Your Leave Requests</h3>
+                            <GuideLeaveList
+                                leaves={myLeaves}
+                                onCancel={handleCancelLeave}
+                                cancellingId={cancellingId}
+                            />
+                        </GuidePanel>
                     </div>
-                </section>
-            </main>
+                </TabsContent>
+
+            </Tabs>
         </div>
     );
 }
