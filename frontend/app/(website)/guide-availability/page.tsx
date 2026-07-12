@@ -176,9 +176,7 @@ export default function GuideAvailabilityPage() {
       setLoading(true);
       setError(null);
 
-      // Public endpoint: approved, currently-visible guides. (The old
-      // `/guide/list-all` is admin-only and returns KYC enrollment data, so it
-      // 401s for anonymous visitors — which left this page permanently empty.)
+      // Public endpoint: approved, currently-visible guides.
       const response = await fetch(`${API_BASE_URL}/guide/all?limit=1000`);
 
       if (!response.ok) {

@@ -16,6 +16,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { BookingActions } from "@/components/booking/BookingActions";
+import { BookingChat } from "@/components/chat/BookingChat";
 import {
   AlertCircle,
   Calendar,
@@ -504,6 +506,25 @@ export default function BookingDetailPage() {
             </div>
           </CardContent>
         </Card>
+
+        <div className="mt-6 space-y-6">
+          <BookingActions
+            bookingId={booking._id}
+            status={booking.status}
+            balanceDue={(booking as any).balance_due}
+            onChanged={() => dispatch(fetchBookingById(booking._id))}
+          />
+
+          {/* No guide, no counterparty — there is nobody on the other end of the
+              thread until one is allocated. */}
+          {booking.allocated_guide && (
+            <BookingChat
+              bookingId={booking._id}
+              disabled={booking.status === "cancelled"}
+              disabledReason="This booking was cancelled, so the conversation is closed."
+            />
+          )}
+        </div>
       </div>
     </div>
   );

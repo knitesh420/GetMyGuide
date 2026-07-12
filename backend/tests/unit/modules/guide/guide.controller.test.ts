@@ -11,7 +11,7 @@ import { clearDatabase, connectTestDB, disconnectTestDB } from '../../../setup/d
 jest.mock('@services/guide', () => ({
 	__esModule: true,
 	default: {
-		getAllEnrollments: jest.fn(),
+		getAllGuidesForAdmin: jest.fn(),
 	},
 }));
 
@@ -31,41 +31,30 @@ describe('Guide Controller', () => {
 		jest.clearAllMocks();
 	});
 
-	describe('listAll', () => {
-		it('should return all enrollments', async () => {
-			const mockUser = createMockUser({ role: 'admin' });
+	describe('getAllGuidesForAdmin', () => {
+		it('returns the guide listing wrapped under `data`', async () => {
 			const mockRequest = createMockRequest({
-				locals: {
-					user: mockUser,
-				},
+				locals: { user: createMockUser({ role: 'admin' }) },
 			}) as any;
-
 			const mockResponse = createMockResponse();
 			const mockNext = createMockNext();
 
-			const mockEnrollments = [
-				{
-					id: '123',
-					name: 'Guide 1',
-					email: 'guide1@example.com',
-					status: 'unverified',
-				},
-				{
-					id: '456',
-					name: 'Guide 2',
-					email: 'guide2@example.com',
-					status: 'payment-pending',
-				},
+			const mockGuides = [
+				{ accountId: '123', name: 'Guide 1', email: 'guide1@example.com', type: 'normal' },
+				{ accountId: '456', name: 'Guide 2', email: 'guide2@example.com', type: 'escort' },
 			];
+			(GuideService.getAllGuidesForAdmin as jest.Mock).mockResolvedValue(mockGuides);
 
-			(GuideService.getAllEnrollments as jest.Mock).mockResolvedValue(mockEnrollments);
-
-			await Controller.listAll(mockRequest, mockResponse as any, mockNext);
+			await Controller.getAllGuidesForAdmin(mockRequest, mockResponse as any, mockNext);
 
 			expect(mockNext).not.toHaveBeenCalled();
 			expect(mockResponse.status).toHaveBeenCalledWith(200);
-			expect(GuideService.getAllEnrollments).toHaveBeenCalled();
+			expect(GuideService.getAllGuidesForAdmin).toHaveBeenCalled();
+			// Respond() spreads `data` onto the body root, so the array must stay
+			// wrapped or it would splat into numeric keys.
+			expect(mockResponse.json).toHaveBeenCalledWith(
+				expect.objectContaining({ data: mockGuides })
+			);
 		});
 	});
-
 });

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import ITourist from '../types/tourist';
+import { attachCodeOnUpsert } from '../utils/businessId';
 
 const TouristSchema = new mongoose.Schema<ITourist>(
 	{
@@ -51,11 +52,25 @@ const TouristSchema = new mongoose.Schema<ITourist>(
 			type: Boolean,
 			default: false,
 		},
+		// Human-facing business ID, e.g. "TO000001". Sparse for backward compat.
+		touristCode: {
+			type: String,
+			unique: true,
+			sparse: true,
+			trim: true,
+		},
 	},
 	{
 		timestamps: true,
 	}
 );
+
+// Tourist profiles are created via findOneAndUpdate({ upsert: true }), which
+// does not fire document validate hooks — mint the code via $setOnInsert only
+// when the profile does not yet exist.
+TouristSchema.pre('findOneAndUpdate', async function () {
+	await attachCodeOnUpsert(this, 'tourist', 'touristCode');
+});
 
 const TouristDB = mongoose.model<ITourist>('Tourist', TouristSchema);
 

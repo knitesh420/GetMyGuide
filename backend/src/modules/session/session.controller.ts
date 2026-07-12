@@ -6,7 +6,8 @@ import {
 } from '@config/const';
 import AuthService from '@services/auth';
 import { CookieOptions, NextFunction, Request, Response } from 'express';
-import { Respond, UnauthorizedError } from 'node-be-utilities';
+import { UnauthorizedError } from 'node-be-utilities';
+import { Respond } from '@utils/respond';
 import {
 	ForgotPasswordValidationResult,
 	LoginValidationResult,

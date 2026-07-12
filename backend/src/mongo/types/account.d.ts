@@ -14,6 +14,7 @@ export default interface IAccount extends Document {
 	paymentStatus: 'pending' | 'success' | 'failed' | 'na';
 	unavailableDates: Date[];
 	tokenVersion: number;
+	deletedAt?: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
 

@@ -211,7 +211,7 @@ export type User = {
   id: string;
   name: string;
   email: string;
-  role: "user" | "guide" | "admin";
+  role: "tourist" | "guide" | "admin";
 };
 
 export type AdminAddOn = {
@@ -255,6 +255,8 @@ export type SubscriptionPlan = {
 export interface GuideProfile {
   _id: string;
   user: string;
+  // Human-facing business code (GU######) — null until backfilled.
+  guideCode?: string | null;
   name: string;
   email: string;
   mobile?: string;
@@ -296,6 +298,8 @@ export interface GuideProfile {
 export interface TouristProfile {
   _id: string;
   user: string;
+  // Human-facing business code (TO######) — null until backfilled.
+  touristCode?: string | null;
   name: string;
   email: string;
   mobile?: string;
@@ -325,9 +329,19 @@ export interface GuideState {
   currentGuide: GuideProfile | null;
   myProfile: GuideProfile | null;
   tourGuideBooking: tourGuideBooking[];
+  /**
+   * What a guide charges, from GET /guides/:id/pricing-details. Direct bookings
+   * are priced off `pricing.fullDay` server-side; `bookable` is false when the
+   * guide is unverified or has never published rates.
+   */
   pricingDetails: {
-    locations: AdminLocation[];
-    languages: LanguageOption[];
+    guideId: string;
+    name: string;
+    currency: string;
+    pricing: { halfDay: number; fullDay: number } | null;
+    isCertified: boolean;
+    bookable: boolean;
+    unavailableReason: string | null;
   } | null;
   pricingLoading: boolean;
   loading: boolean;
@@ -423,6 +437,9 @@ export interface PopulatedAccountSummary {
   name: string;
   email: string;
   phone?: string;
+  // Guide business code (GU######) — enriched only when this account is a guide
+  // populated onto an assignment. Absent for assignedBy (admin) accounts.
+  guideCode?: string | null;
 }
 
 export interface PopulatedBookingSummary {
@@ -441,6 +458,11 @@ export interface PopulatedBookingSummary {
     no_of_person: number;
   };
   linked_to?: string;
+  // Human-facing business codes. bookingCode (BK######) comes from the booking
+  // itself; touristCode (TO######) is enriched from the linked tourist profile
+  // and is null for guest bookings with no linked account.
+  bookingCode?: string;
+  touristCode?: string | null;
   status: string;
 }
 
@@ -448,6 +470,9 @@ export type AssignmentStatus = "pending" | "accepted" | "declined" | "reassigned
 
 export interface Assignment {
   _id: string;
+  // Human-facing business code (AS######). Absent on assignments that predate
+  // the code field and have not been backfilled.
+  assignmentCode?: string;
   booking: string | PopulatedBookingSummary;
   guide: string | PopulatedAccountSummary;
   assignedBy: string | PopulatedAccountSummary;
@@ -502,6 +527,9 @@ export interface AdminBookingSummary {
     price: number;
   };
   linked_to?: string;
+  // Human-facing business codes (see PopulatedBookingSummary).
+  bookingCode?: string;
+  touristCode?: string | null;
   transaction_id: string;
   allocated_guide?: string;
   // Present on package-tour bookings.
@@ -519,6 +547,7 @@ export interface AdminBookingSummary {
 
 export interface AssignableGuide {
   accountId: string;
+  guideCode?: string | null;
   name: string;
   email: string;
   phone?: string;
@@ -526,6 +555,51 @@ export interface AssignableGuide {
   languages: string[];
   isVisible: boolean;
   membershipExpiryDate: string | null;
+}
+
+// Admin management listing of a guide — every guide account (active + inactive)
+// joined with its Guide profile. Returned by GET /guide/admin/all.
+export interface AdminGuide {
+  accountId: string;
+  guideCode: string | null;
+  name: string;
+  email: string;
+  phone?: string;
+  isActive: boolean;
+  status: string;
+  city: string;
+  languages: string[];
+  type: string;
+  /** Escort guides only. */
+  pan?: string;
+  isVisible: boolean;
+  registrationCompleted: boolean;
+  paymentStatus: string;
+  membershipActive: boolean;
+  membershipStartDate: string | null;
+  membershipExpiryDate: string | null;
+  profileImage: string;
+  /** KYC uploads in upload order: [licence, aadhaar]. */
+  identityProofs?: string[];
+  createdAt: string;
+  updatedAt?: string;
+}
+
+// Admin management listing of a tourist — every tourist account joined with its
+// Tourist profile. Returned by GET /tourist/admin/all.
+export interface AdminTourist {
+  accountId: string;
+  touristCode: string | null;
+  name: string;
+  email: string;
+  phone?: string;
+  isActive: boolean;
+  status: string;
+  nationality: string;
+  preferredLanguages: string[];
+  numberOfTravelers: number;
+  registrationCompleted: boolean;
+  createdAt: string;
 }
 
 // 'planned' is a synthetic, client-facing status for a booking that has no Trip
@@ -540,6 +614,9 @@ export type TripStatus =
 
 export interface Trip {
   _id: string;
+  // Human-facing business code (TR######). Absent on synthetic 'planned' trips
+  // (a booking with no real Trip yet) and on records that predate the field.
+  tripCode?: string;
   booking: string | PopulatedBookingSummary;
   assignment: string;
   guide: string | PopulatedAccountSummary;
@@ -760,6 +837,118 @@ export interface Invoice {
   createdBy?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// --- Tourist Dashboard Home overview (GET /tourist/dashboard) ---
+//
+// One read-only aggregate of data the detail pages already expose, so Dashboard
+// Home loads with a single request instead of fanning out to five endpoints.
+// The detail pages keep using their own endpoints — this only backs the summary.
+
+export interface TouristDashboardProfile extends TouristProfile {
+  /** Percentage (0-100) of the onboarding profile the tourist has filled in. */
+  profileCompletion: number;
+  /** Account creation date; null if it could not be resolved. */
+  memberSince: string | null;
+}
+
+export interface TouristDashboardStats {
+  upcomingTrips: number;
+  completedTrips: number;
+  activeBookings: number;
+  pendingPayments: number;
+  unreadNotifications: number;
+  pendingReviews: number;
+  /** Total of every paid invoice, in INR. */
+  totalSpent: number;
+}
+
+export interface TouristDashboardGuide {
+  _id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  /** Mean rating across the guide's visible reviews; 0 when never reviewed. */
+  rating: number;
+  ratingCount: number;
+}
+
+/** The soonest trip that hasn't finished — drives the hero card. */
+export interface TouristUpcomingTrip {
+  _id: string;
+  tripCode: string | null;
+  status: TripStatus;
+  bookingId: string;
+  bookingCode: string | null;
+  bookingStatus: string;
+  destination: string;
+  places: string[];
+  travelDate: string;
+  travelers: number;
+  /** null until a guide accepts the assignment. */
+  guide: TouristDashboardGuide | null;
+}
+
+export interface TouristPendingReview {
+  tripId: string;
+  bookingId: string;
+  tripCode: string | null;
+  destination: string;
+  completedAt: string;
+  guide: { _id: string; name: string } | null;
+}
+
+export interface TouristLatestInvoice {
+  _id: string;
+  invoiceNumber: string;
+  amount: number;
+  currency: string;
+  paidAt: string;
+  destination: string | null;
+}
+
+export interface TouristPaymentSummary {
+  /** Sum of paid invoices. */
+  totalPaid: number;
+  /** Still owed: full price of unpaid bookings + any outstanding package balance. */
+  pendingAmount: number;
+  invoiceCount: number;
+  latestInvoice: TouristLatestInvoice | null;
+}
+
+export type TouristActivityType =
+  | "booking-created"
+  | "payment-successful"
+  | "guide-assigned"
+  | "trip-updated"
+  | "review-submitted";
+
+export interface TouristActivityEntry {
+  id: string;
+  type: TouristActivityType;
+  title: string;
+  description: string;
+  at: string;
+  href?: string;
+}
+
+export interface TouristDashboardOverview {
+  profile: TouristDashboardProfile;
+  stats: TouristDashboardStats;
+  upcomingTrip: TouristUpcomingTrip | null;
+  recentBookings: AdminBookingSummary[];
+  recentTrips: Trip[];
+  notifications: NotificationItem[];
+  payments: TouristPaymentSummary;
+  pendingReviews: TouristPendingReview[];
+  /** Newest first, already truncated by the backend. */
+  activity: TouristActivityEntry[];
+}
+
+export interface TouristDashboardState {
+  overview: TouristDashboardOverview | null;
+  loading: boolean;
+  error: string | null;
 }
 
 // Sample data for development

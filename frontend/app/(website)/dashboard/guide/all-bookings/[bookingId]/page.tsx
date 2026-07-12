@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import { fetchBookingById } from "@/lib/redux/thunks/booking/bookingThunks";
+import { BookingChat } from "@/components/chat/BookingChat";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -305,6 +306,12 @@ export default function GuideBookingDetailsPage() {
               </div>
             </Section>
           </GuidePanel>
+
+          <BookingChat
+            bookingId={booking._id}
+            disabled={booking.status === "cancelled"}
+            disabledReason="This booking was cancelled, so the conversation is closed."
+          />
         </div>
       </div>
     </div>

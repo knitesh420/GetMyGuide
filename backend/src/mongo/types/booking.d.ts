@@ -42,12 +42,29 @@ export default interface IBooking extends Document {
 	allocated_guide?: Types.ObjectId;
 	// Package-tour bookings reuse this document but set booking_type='package'
 	// and carry the package reference, trip end date, and advance/balance split.
-	booking_type?: 'guide' | 'package';
+	//
+	// 'guide_direct' is the same shape again for the flow where a tourist picks a
+	// specific guide off their profile and pays an advance against that guide's
+	// published rate — no admin allocation step, the guide is set at creation.
+	booking_type?: 'guide' | 'package' | 'guide_direct';
 	package?: Types.ObjectId;
 	end_date?: Date;
 	advance_paid?: number;
 	balance_due?: number;
-	status: 'payment-pending' | 'successful' | 'confirmed' | 'allocated' | 'completed';
+	/** Set once the balance has been collected; balance_due goes to 0 alongside it. */
+	balance_paid_at?: Date;
+	/** Razorpay order for the in-flight balance payment, matched at verify time. */
+	balance_order_id?: string;
+	cancellation?: {
+		reason?: string;
+		requestedBy?: Types.ObjectId;
+		cancelledAt?: Date;
+		refundRequest?: Types.ObjectId;
+	};
+	status: 'payment-pending' | 'successful' | 'confirmed' | 'allocated' | 'completed' | 'cancelled';
+	bookingCode?: string;
+	statusHistory?: { status: string; at?: Date; by?: Types.ObjectId; note?: string }[];
+	deletedAt?: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
 }

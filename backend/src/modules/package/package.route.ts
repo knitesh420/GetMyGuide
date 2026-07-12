@@ -17,11 +17,25 @@ const upload = multer({ storage });
 */
 router.get('/', PackageController.getPackages);
 
-router.get('/:id', PackageController.getPackageById);
-
 /*
  ADMIN ONLY
+
+ Must be declared before '/:id', or Express matches 'admin' as an id.
+
+ The public listing above hard-filters to status: 'active'. The admin panel
+ cannot use it: hiding a service would drop it from the admin's own list too,
+ leaving no way to ever bring it back. This route returns every package,
+ whatever its status.
 */
+router.get(
+	'/admin/all',
+	VerifySession,
+	VerifyMinLevel('admin'),
+	PackageController.getAllPackagesForAdmin
+);
+
+router.get('/:id', PackageController.getPackageById);
+
 router.post(
 	'/',
 	VerifySession,

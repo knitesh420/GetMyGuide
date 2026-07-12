@@ -1,8 +1,10 @@
+import BalancePaymentService from '@services/balancePayment';
 import BookingService from '@services/booking';
 import { JWTPayload } from '@services/jwt';
 import { NextFunction, Request, Response } from 'express';
 import { Types } from 'mongoose';
-import { Respond } from 'node-be-utilities';
+import { Respond } from '@utils/respond';
+import { PaymentVerifyValidationResult } from '../tourguide/tourguide.validator';
 import {
 	AllocateGuideValidationResult,
 	CreateBookingValidationResult,
@@ -292,6 +294,31 @@ async function verifyPackageBooking(req: Request, res: Response, next: NextFunct
 	}
 }
 
+/**
+ * Collect the balance left on a booking that was confirmed with an advance.
+ * Shared with the direct-booking flow — both split payment the same way, so both
+ * settle through BalancePaymentService rather than each rolling their own.
+ */
+async function createBalanceOrder(req: Request, res: Response, next: NextFunction) {
+	try {
+		const order = await BalancePaymentService.createOrder(req.locals.id!, req.locals.user!);
+		return Respond({ res, status: 200, data: order });
+	} catch (error) {
+		return next(error);
+	}
+}
+
+async function verifyBalancePayment(req: Request, res: Response, next: NextFunction) {
+	try {
+		const payload = req.locals.data as PaymentVerifyValidationResult;
+		const booking = await BalancePaymentService.verify(req.locals.id!, payload, req.locals.user!);
+
+		return Respond({ res, status: 200, data: booking });
+	} catch (error) {
+		return next(error);
+	}
+}
+
 const Controller = {
 	createCustomisedBooking,
 	createGuestBooking,
@@ -307,6 +334,8 @@ const Controller = {
 	getTransactionStatus,
 	getRazorpayKey,
 	deleteBooking,
+	createBalanceOrder,
+	verifyBalancePayment,
 };
 
 export default Controller;

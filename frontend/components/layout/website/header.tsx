@@ -38,12 +38,20 @@ export function Header() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   const { language, setLanguage, t } = useLanguage();
   const pathname = usePathname();
   const router = useRouter();
   const profileRef = useRef<HTMLDivElement>(null);
-  const { user, isAuthenticated, loading, logout, fetchCurrentUser } = useAuth();
+  const { user, isAuthenticated, loading, logout } = useAuth();
+
+  // The session lives in an HTTP-only cookie that SSR never reads, so the
+  // server always renders the signed-out header. AuthInitializer dispatches
+  // validate-auth from a layout above us, which can land mid-hydration — so
+  // auth-dependent markup stays server-identical until we're mounted.
+  const signedIn = mounted && isAuthenticated === true;
+  const busy = mounted && loading;
 
   const navigationItems = [
     { href: "/", labelKey: "nav_home", icon: Home },
@@ -58,8 +66,8 @@ export function Header() {
   ];
 
   useEffect(() => {
-    if (!isAuthenticated) fetchCurrentUser();
-  }, [isAuthenticated, fetchCurrentUser]);
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 50);
@@ -87,7 +95,7 @@ export function Header() {
     if (user) {
       const dashboardPath =
         user.role === "guide" ? "/dashboard/guide"
-        : user.role === "admin" || user.role === "manager" ? "/admin"
+        : user.role === "admin" ? "/dashboard/admin"
         : "/dashboard/user";
       router.push(dashboardPath);
       setIsProfileOpen(false);
@@ -121,6 +129,7 @@ export function Header() {
                   src={IMAGES.logo}
                   alt="GetMyGuide"
                   fill
+                  sizes="(min-width: 1024px) 56px, 48px"
                   className="object-contain rounded-lg"
                   priority
                 />
@@ -210,14 +219,14 @@ export function Header() {
                 <motion.button
                   onClick={() => setIsProfileOpen(!isProfileOpen)}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all"
-                  disabled={loading}
+                  disabled={busy}
                   whileTap={{ scale: 0.97 }}
                 >
                   <div className="relative">
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${isAuthenticated ? "bg-primary" : "bg-gray-100"}`}>
-                      <User className={`w-3.5 h-3.5 ${isAuthenticated ? "text-white" : "text-gray-600"}`} />
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${signedIn ? "bg-primary" : "bg-gray-100"}`}>
+                      <User className={`w-3.5 h-3.5 ${signedIn ? "text-white" : "text-gray-600"}`} />
                     </div>
-                    {isAuthenticated && (
+                    {signedIn && (
                       <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-white" />
                     )}
                   </div>
@@ -233,7 +242,7 @@ export function Header() {
                       exit={{ opacity: 0, y: 8, scale: 0.95 }}
                       transition={{ duration: 0.18 }}
                     >
-                      {!isAuthenticated ? (
+                      {!signedIn ? (
                         <>
                           <div className="px-4 py-2.5 border-b border-gray-100">
                             <p className="text-xs font-semibold text-gray-900">{t("profile_welcome")}</p>
@@ -270,11 +279,11 @@ export function Header() {
                             <span className="font-semibold">{t("profile_dashboard")}</span>
                           </button>
                           <div className="mx-4 my-1 h-px bg-gray-100" />
-                          <button onClick={handleLogout} disabled={loading} className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
+                          <button onClick={handleLogout} disabled={busy} className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
                             <div className="w-7 h-7 bg-red-50 rounded-lg flex items-center justify-center">
                               <LogOut className="w-3.5 h-3.5 text-red-500" />
                             </div>
-                            <span className="font-semibold">{loading ? t("profile_logging_out") : t("profile_logout")}</span>
+                            <span className="font-semibold">{busy ? t("profile_logging_out") : t("profile_logout")}</span>
                           </button>
                         </>
                       )}
@@ -365,7 +374,7 @@ export function Header() {
                 </div>
 
                 {/* Mobile auth */}
-                {!isAuthenticated ? (
+                {!signedIn ? (
                   <button
                     onClick={handleLogin}
                     className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-primary bg-primary/8 rounded-xl hover:bg-primary/12 transition-colors"
@@ -383,9 +392,9 @@ export function Header() {
                       <Settings className="w-4 h-4 text-gray-500" />
                       <span className="font-medium">{t("profile_dashboard")}</span>
                     </button>
-                    <button onClick={handleLogout} disabled={loading} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-xl transition-colors">
+                    <button onClick={handleLogout} disabled={busy} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-xl transition-colors">
                       <LogOut className="w-4 h-4" />
-                      <span className="font-medium">{loading ? t("profile_logging_out") : t("profile_logout")}</span>
+                      <span className="font-medium">{busy ? t("profile_logging_out") : t("profile_logout")}</span>
                     </button>
                   </div>
                 )}

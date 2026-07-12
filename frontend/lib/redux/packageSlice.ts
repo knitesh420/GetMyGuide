@@ -2,11 +2,12 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { AdminPackage } from '@/types/admin'; // Types ko common location se import karein
 import {
   fetchPackages,
+  fetchPackagesForAdmin,
   addPackage,
   updatePackage,
   deletePackage,
   fetchPackageById,
-  fetchRecommendedPackages 
+  fetchRecommendedPackages
 } from './thunks/admin/packageThunks'; // Package thunks ko import karein
 
 // ✅ Define a state shape specifically for this slice
@@ -44,6 +45,24 @@ const packageSlice = createSlice({
         state.items = action.payload;
       })
       .addCase(fetchPackages.rejected, (state, action) => {
+        state.loading = 'failed';
+        state.currentAction = null;
+        state.error = action.payload as string;
+      })
+
+      // Fetch Packages (admin — includes inactive). Lands in the same `items`
+      // list as the public fetch; the two are never in flight on the same page.
+      .addCase(fetchPackagesForAdmin.pending, (state) => {
+        state.loading = 'pending';
+        state.currentAction = 'fetching';
+        state.error = null;
+      })
+      .addCase(fetchPackagesForAdmin.fulfilled, (state, action: PayloadAction<AdminPackage[]>) => {
+        state.loading = 'succeeded';
+        state.currentAction = null;
+        state.items = action.payload;
+      })
+      .addCase(fetchPackagesForAdmin.rejected, (state, action) => {
         state.loading = 'failed';
         state.currentAction = null;
         state.error = action.payload as string;

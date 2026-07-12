@@ -1,4 +1,4 @@
-import { AccountDB, AssignmentDB, BookingDB, GuideDB } from '@mongo';
+import { AccountDB, AssignmentDB, BookingDB, GuideDB, TouristDB } from '@mongo';
 import IBooking from '@mongo/types/booking';
 import {
 	sendBookingAllocatedGuideEmail,
@@ -402,7 +402,7 @@ class AssignmentService {
 		const accountIds = guideAccounts.map((g) => g._id);
 
 		const guideProfiles = await GuideDB.find({ accountId: { $in: accountIds } })
-			.select('accountId city languages isVisible membershipExpiryDate')
+			.select('accountId guideCode city languages isVisible membershipExpiryDate')
 			.lean();
 		const profileByAccountId = new Map(guideProfiles.map((p) => [p.accountId.toString(), p]));
 
@@ -410,6 +410,7 @@ class AssignmentService {
 			const profile = profileByAccountId.get(account._id.toString());
 			return {
 				accountId: account._id.toString(),
+				guideCode: profile?.guideCode ?? null,
 				name: account.name,
 				email: account.email,
 				phone: account.phone,
@@ -419,6 +420,51 @@ class AssignmentService {
 				membershipExpiryDate: profile?.membershipExpiryDate ?? null,
 			};
 		});
+	}
+
+	/**
+	 * Enrich lean, populated assignments in place with the human-facing business
+	 * codes that don't live on the populated documents themselves: the guide's
+	 * `guideCode` (on the Guide profile, keyed by the guide's Account id) and the
+	 * tourist's `touristCode` (on the Tourist profile, keyed by booking.linked_to).
+	 * Bookings from the guest flow have no linked_to, so touristCode stays null.
+	 */
+	private async attachBusinessCodes(assignments: Record<string, any>[]): Promise<void> {
+		const guideAccountIds = new Set<string>();
+		const touristAccountIds = new Set<string>();
+		for (const a of assignments) {
+			if (a.guide?._id) guideAccountIds.add(a.guide._id.toString());
+			if (a.booking?.linked_to) touristAccountIds.add(a.booking.linked_to.toString());
+		}
+
+		const [guideProfiles, touristProfiles] = await Promise.all([
+			guideAccountIds.size
+				? GuideDB.find({ accountId: { $in: [...guideAccountIds] } })
+						.select('accountId guideCode')
+						.lean()
+				: Promise.resolve([]),
+			touristAccountIds.size
+				? TouristDB.find({ accountId: { $in: [...touristAccountIds] } })
+						.select('accountId touristCode')
+						.lean()
+				: Promise.resolve([]),
+		]);
+
+		const guideCodeByAccount = new Map(
+			guideProfiles.map((p) => [p.accountId.toString(), p.guideCode ?? null])
+		);
+		const touristCodeByAccount = new Map(
+			touristProfiles.map((p) => [p.accountId.toString(), p.touristCode ?? null])
+		);
+
+		for (const a of assignments) {
+			if (a.guide?._id) {
+				a.guide.guideCode = guideCodeByAccount.get(a.guide._id.toString()) ?? null;
+			}
+			if (a.booking?.linked_to) {
+				a.booking.touristCode = touristCodeByAccount.get(a.booking.linked_to.toString()) ?? null;
+			}
+		}
 	}
 
 	async getAll(
@@ -433,7 +479,7 @@ class AssignmentService {
 		const skip = (page - 1) * limit;
 		const [data, total] = await Promise.all([
 			AssignmentDB.find(query)
-				.populate('booking', 'tourist_info travel_details linked_to status')
+				.populate('booking', 'tourist_info travel_details linked_to status bookingCode')
 				.populate('guide', 'name email phone')
 				.populate('assignedBy', 'name email')
 				.sort({ createdAt: -1 })
@@ -442,6 +488,8 @@ class AssignmentService {
 				.lean(),
 			AssignmentDB.countDocuments(query),
 		]);
+
+		await this.attachBusinessCodes(data);
 
 		return { data, total, page, totalPages: Math.ceil(total / limit) || 1 };
 	}
@@ -453,7 +501,7 @@ class AssignmentService {
 		const skip = (page - 1) * limit;
 		const [data, total] = await Promise.all([
 			AssignmentDB.find(query)
-				.populate('booking', 'tourist_info travel_details linked_to status')
+				.populate('booking', 'tourist_info travel_details linked_to status bookingCode')
 				.sort({ createdAt: -1 })
 				.skip(skip)
 				.limit(limit)

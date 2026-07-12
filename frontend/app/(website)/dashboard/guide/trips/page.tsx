@@ -118,13 +118,19 @@ export default function GuideTripsPage() {
         ) : (
           <GuideTable>
             <GuideTableHead
-              columns={["Destination", "Tourist", "Date", "Status", "Action"]}
+              columns={["Ref", "Destination", "Tourist", "Date", "Status", "Action"]}
             />
             <tbody>
               {myTrips.map((trip) => {
                 const booking = asBooking(trip.booking);
                 return (
                   <GuideTableRow key={trip._id}>
+                    <GuideTableCell>
+                      <div className="font-mono text-xs text-slate-500">
+                        <div>{trip.tripCode ?? "—"}</div>
+                        <div>{booking?.bookingCode ?? "—"}</div>
+                      </div>
+                    </GuideTableCell>
                     <GuideTableCell>
                       <GuideCellStack
                         primary={booking?.travel_details.city ?? "Trip"}

@@ -391,23 +391,30 @@ was defined but never called). Guides who came through that flow can still get i
 **Forgot Password** flow (`/forgot-password`), which is role-agnostic and sets `emailVerified: true`
 as a side effect of a successful reset. That remains their migration path.
 
-`GuideEnrollment` is **retained read-only**, not dropped. `getGuideProfile` still falls back to the
-enrollment's `type` for guides whose `Guide` record predates that field — deleting the model would
-silently downgrade legacy escort guides to `normal`, and `isCertified` keys off it. Admins still
-read these records via `GET /guide/list-all` and `GET /guide/enroll-status/:id` (both admin-only;
-the latter used to be unauthenticated while the public flow polled it).
+**`GuideEnrollment` has been removed from the application.** `guides` is now the single source of
+truth for guide data: profile, KYC documents and membership state all live on the `Guide` document,
+and every read path (`getGuideProfile`, `getGuideById`, `getAllGuidesForAdmin`, the admin panel)
+reads only from it. The model, its types, its routes (`/guide/list-all`, `/guide/enroll-status/:id`,
+`/guide/enrollment/:id`, `/guide/me`) and the enrollment branch of the payment webhook are all gone.
+
+Getting there required a backfill, because the earlier `migrateGuideMembership.ts` created the
+`Guide` rows but only copied `languages`, `city` and `photo` — it never copied `type`, `pan`,
+`licence` or `aadhar`, which were still being read off the enrollment at runtime.
+**`backfillGuideFromEnrollment.ts`** (see [Scripts](#scripts)) copies those onto the `Guide`
+(`licence` + `aadhar` → `identityProofs`, in that order) and **must be run against a database before
+this code is deployed to it** — without it, every legacy escort guide silently downgrades to
+`normal` and their KYC documents disappear from the admin panel.
+
+The `guideenrollments` **collection itself is not dropped** — it is left in Mongo as a cold archive
+(nothing reads or writes it), so the backfill remains re-runnable and any enrollment that never
+became an `Account` is still recoverable.
 
 The old flow had **no membership concept** — it was a flat one-time ₹500 fee, and a guide who paid
 through it stayed permanently `status: 'verified'` with no expiry, using the *old* visibility
-definition (`Account.status === 'verified'`). A one-time migration script
-(`migrateGuideMembership.ts`, already run — see below) backfilled a `Guide` document for every
-guide who came through this path, granting them `isVisible: true` and a **fresh 30-day membership
-window starting from the day the migration ran** (a goodwill grace period, since they'd already
-paid once under the old model), with `registrationCompleted: true` so they're never forced through
-the registration form as a blocking gate.
-
-`GuideEnrollment` (the KYC document record from this flow) is kept as a permanent historical/audit
-record — it is not deleted or repurposed by the newer `Guide` collection.
+definition (`Account.status === 'verified'`). A one-time migration granted every such guide
+`isVisible: true` and a **fresh 30-day membership window starting from the day it ran** (a goodwill
+grace period, since they'd already paid once under the old model), with `registrationCompleted:
+true` so they're never forced through the registration form as a blocking gate.
 
 ---
 
@@ -435,10 +442,8 @@ method:
 2. **Asynchronous**: Razorpay's webhook (`POST /payment/webhook` → `PaymentService
    .handleWebhookEvent` → `handlePaymentCaptured` → `updateRegistrationStatus`) independently
    confirms the same payment, and routes membership payments (`reference_type ===
-  'guide_membership'`) to the same `finalizeMembershipPaymentByGuideId` method — this branch was
-   specifically added because the *existing* webhook code only knew how to update the *old*
-  `GuideEnrollment` collection; without it, a webhook-driven membership confirmation would
-   silently no-op against the wrong collection.
+  'guide_membership'`) to the same `finalizeMembershipPaymentByGuideId` method. `reference_id` on
+   those transactions is a **`Guide` document id**, not an `Account` id.
 
 Both paths check the `Transaction`'s status **before** finalizing — whichever one observes the
 transaction still `pending` first is the only one that flips it and extends the membership; the
@@ -487,8 +492,7 @@ random token). That change was intentional and confirmed — see the note in
 |---|---|
 | `Account` | Every user — tourist, guide, or admin. See [Authentication](#authentication--authorization) for fields. |
 | `PendingRegistration` | Transient, OTP-gated signup-in-progress (30-min TTL). |
-| `Guide` | New account-based guide profile + 30-day membership state. |
-| `GuideEnrollment` | Legacy anonymous KYC submission record (permanent historical record). |
+| `Guide` | The guide profile: KYC, identity documents, and 30-day membership state. Sole source of guide data. |
 | `Tourist` | New account-based tourist travel-preference profile. |
 | `Booking` | Tour-guide bookings (both guest and authenticated-tourist). |
 | `Transaction` | Generic, polymorphic Razorpay payment ledger — shared by guide enrollment, guide membership, and bookings (`reference_type`/`type` distinguish the purpose). |
@@ -531,18 +535,17 @@ admin).
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| POST | `/guide/enroll` | public | Legacy anonymous KYC submission |
-| POST | `/guide/confirm-payment` | public | Legacy — creates GuideEnrollment + Account |
-| GET | `/guide/profile` | VerifySession | Own profile, merged Account+Guide+legacy enrollment |
-| PUT | `/guide/profile` | VerifyMinLevel('guide') | Create/update profile (multipart) |
+| GET | `/guide/profile` | VerifySession | Own profile (Account + Guide) |
+| PUT | `/guide/profile` | VerifyMinLevel('guide') | One-time registration (multipart: KYC + files) |
+| PATCH | `/guide/profile` | VerifyMinLevel('guide') | Post-registration edit — phone/city/type/languages only |
 | PUT | `/guide/availability` | VerifySession | Unavailable dates |
 | POST | `/guide/membership/create-order` | VerifyMinLevel('guide'), idempotency | Membership Razorpay order |
 | POST | `/guide/membership/confirm-payment` | VerifyMinLevel('guide') | Finalize membership |
-| GET | `/guide/all` | public | Public listing — Guide-first, isVisible + unexpired |
+| GET | `/guide/all` | public | Public listing — isVisible + unexpired membership |
+| GET | `/guide/admin/all` | VerifyMinLevel('admin') | Every guide (active + inactive) + profile, KYC, membership. Powers the admin panel. |
+| POST | `/guide/contact-inquiry` | public | Contact form |
+| GET | `/guide/contact-inquiries` | VerifyMinLevel('admin') | List contact inquiries |
 | GET | `/guide/:id` | public | Single guide profile, not visibility-gated |
-| GET | `/guide/me` | VerifySession | Own legacy GuideEnrollment record |
-| GET | `/guide/list-all` | VerifyMinLevel('admin') | All enrollments (PII + KYC refs) |
-| DELETE | `/guide/enrollment/:id` | VerifyMinLevel('admin') | Delete an enrollment |
 | DELETE | `/guide/:id` | VerifyMinLevel('admin') | Deactivate a guide account |
 
 ### `/tourist`
@@ -730,11 +733,16 @@ Located in `backend/src/scripts/`, run via
   pre-existing `Account` that lacked the field. **Already run** against production. Must always
   run before the `emailVerified` login gate is active against any given database (Mongoose schema
   defaults don't retroactively apply to existing documents).
-- **`migrateGuideMembership.ts`** — one-time: backfills a `Guide` document (with a fresh 30-day
-  grace-period membership) for every pre-existing `Account{role:'guide', status:'verified',
-  isActive:true}`, sourcing profile fields from their old `GuideEnrollment` record where one
-  exists. **Already run** against production. Idempotent — safe to re-run (skips guides that
-  already have a `Guide` doc).
+- **`backfillGuideFromEnrollment.ts`** — copies the fields that used to live only on
+  `GuideEnrollment` onto the `Guide` document: `type`, `pan`, and `licence` + `aadhar` →
+  `identityProofs` (in that order), plus `languages`/`city`/`profileImage` where blank. **Must be
+  run against a database before the GuideEnrollment-removal code is deployed to it** — otherwise
+  every legacy escort guide silently becomes `normal` and their KYC documents vanish from the admin
+  panel. Dry run by default; pass `--commit` to write. Idempotent: only fills fields that are
+  currently empty, so it never overwrites what a guide set through the profile form. Its dry run
+  also reports any orphan enrollments (no matching `Account`), which have nowhere to migrate to.
+  (Supersedes the deleted `migrateGuideMembership.ts`, which created the `Guide` rows in the first
+  place but copied only `languages`, `city` and `photo`.)
 - **`seedAdmin.ts`** — the *only* supported way to create an admin account (reads
   `ADMIN_NAME/EMAIL/PHONE/PASSWORD` from env). Public signup can never create an admin.
 
@@ -747,18 +755,17 @@ Documented here so it isn't mistaken for something broken or in-scope for future
 - `register-tourist` is intentionally anonymous/account-less — see its section above. Don't "fix"
   it to require login; that would remove functionality walk-up users rely on. (`register-guide`
   **is** now auth-gated — that was a deliberate change, see its section above.)
-- `GuideEnrollment` documents are retained read-only. Do not drop the model: `getGuideProfile`
-  falls back to `enrollment.type` for `Guide` records written before that field existed, and
-  `isCertified` keys off it, so removing it silently downgrades legacy escort guides to `normal`.
+- The `guideenrollments` **collection** still exists in Mongo but nothing in the application reads
+  or writes it — the model, routes and fallbacks were removed once
+  `backfillGuideFromEnrollment.ts` copied its data onto `Guide`. It is kept as a cold archive
+  (the backfill stays re-runnable, and enrollments that never became an `Account` remain
+  recoverable). Don't reintroduce a model for it; add to `Guide` instead.
 - Guides who came through the removed anonymous flow have an auto-generated password that was
   never emailed to them. The OTP forgot-password flow is the accepted remediation path.
 - `sendPaymentLinkEmail` / `PaymentLinkTemplate`, `sendGuideCredentialsEmail` /
   `GuideCredentialsTemplate`, and `sendGuidePaymentConfirmationEmail` are defined but never called
   — remnants of the abandoned "admin reviews KYC, then emails a payment link" design and of the
   removed anonymous enrolment flow.
-- `payment.ts`'s webhook still routes `type: 'guide' | 'enrollment'` transactions to
-  `GuideEnrollmentDB`. Nothing creates those transactions any more; the branch is kept so any
-  in-flight Razorpay webhook from the old flow still settles.
 - `POST /session/signup` (plain, non-OTP signup) still exists and works, but no frontend page
   calls it — superseded by the OTP-registration flow. Left mounted rather than deleted, in case
   anything external still depends on it.

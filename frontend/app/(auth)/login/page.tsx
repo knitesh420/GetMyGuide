@@ -30,10 +30,18 @@ export default function LoginPage() {
 
   const router = useRouter();
 
-  // Redirect if already authenticated
+  // Redirect if already authenticated. Routed by role: an admin belongs on
+  // /dashboard/admin (the panel with the full sidebar), not the legacy /admin
+  // page, and this login form is not admin-only.
   useEffect(() => {
     if (isAuthenticated && user) {
-      router.push("/admin");
+      const home =
+        user.role === "guide"
+          ? "/dashboard/guide"
+          : user.role === "admin"
+            ? "/dashboard/admin"
+            : "/dashboard/user";
+      router.push(home);
     }
   }, [isAuthenticated, user, router]);
 

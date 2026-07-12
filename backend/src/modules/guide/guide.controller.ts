@@ -1,44 +1,17 @@
 import GuideService from '@services/guide';
+import TourGuideService from '@services/tourguide';
 import { uploadMulterImage } from '@utils/cloudinaryUpload';
 import { NextFunction, Request, Response } from 'express';
-import { BadRequestError, Respond } from 'node-be-utilities';
+import { BadRequestError } from 'node-be-utilities';
+import { Respond } from '@utils/respond';
 import {
+	GuideBankDetailsValidationResult,
+	GuidePricingValidationResult,
 	GuideProfilePatchValidationResult,
 	GuideProfileValidationResult,
+	GuideRejectValidationResult,
 	MembershipConfirmPaymentValidationResult,
 } from './guide.validator';
-
-async function listAll(req: Request, res: Response, next: NextFunction) {
-	try {
-		const query = req.query.query as string | undefined;
-		const enrollments = await GuideService.getAllEnrollments(query);
-
-		return Respond({
-			res,
-			status: 200,
-			data: {
-				enrollments,
-			},
-		});
-	} catch (error) {
-		return next(error);
-	}
-}
-
-async function getEnrollStatus(req: Request, res: Response, next: NextFunction) {
-	try {
-		const enrollmentId = req.locals.id!;
-		const enrollment = await GuideService.getEnrollmentById(enrollmentId);
-
-		return Respond({
-			res,
-			status: 200,
-			data: enrollment,
-		});
-	} catch (error) {
-		return next(error);
-	}
-}
 
 async function createContactInquiry(req: Request, res: Response, next: NextFunction) {
 	try {
@@ -93,22 +66,6 @@ async function deleteGuide(req: Request, res: Response, next: NextFunction) {
 		const guideId = req.locals.id!;
 
 		const result = await GuideService.deactivateGuide(guideId);
-
-		return Respond({
-			res,
-			status: 200,
-			data: result,
-		});
-	} catch (error) {
-		return next(error);
-	}
-}
-
-async function deleteEnrollment(req: Request, res: Response, next: NextFunction) {
-	try {
-		const enrollmentId = req.locals.id!;
-
-		const result = await GuideService.deleteEnrollment(enrollmentId);
 
 		return Respond({
 			res,
@@ -282,6 +239,22 @@ async function getAllApprovedGuides(req: Request, res: Response, next: NextFunct
 	}
 }
 
+async function getAllGuidesForAdmin(req: Request, res: Response, next: NextFunction) {
+	try {
+		const guides = await GuideService.getAllGuidesForAdmin();
+
+		// Wrap the array under `data`: Respond() spreads its `data` onto the top
+		// level of the body, so a bare array must not be passed straight to it.
+		return Respond({
+			res,
+			status: 200,
+			data: { data: guides },
+		});
+	} catch (error) {
+		return next(error);
+	}
+}
+
 async function getGuideByIdPublic(req: Request, res: Response, next: NextFunction) {
 	try {
 		const guideId = req.params.id as string;
@@ -297,34 +270,109 @@ async function getGuideByIdPublic(req: Request, res: Response, next: NextFunctio
 	}
 }
 
-async function getMyGuideEnrollment(req: Request, res: Response, next: NextFunction) {
+// ---- Admin KYC review ------------------------------------------------------
+
+async function approveGuide(req: Request, res: Response, next: NextFunction) {
 	try {
-		const user = req.locals.user;
+		const guide = await GuideService.approveGuide(
+			req.params.id as string,
+			req.locals.user!.userId
+		);
 
-		if (!user || !user.email) {
-			return next(new BadRequestError('User not authenticated'));
-		}
+		return Respond({ res, status: 200, data: guide });
+	} catch (error) {
+		return next(error);
+	}
+}
 
-		const enrollment = await GuideService.getMyGuideEnrollment(user.email);
+async function rejectGuide(req: Request, res: Response, next: NextFunction) {
+	try {
+		const { reason } = req.locals.data as GuideRejectValidationResult;
+		const guide = await GuideService.rejectGuide(
+			req.params.id as string,
+			reason,
+			req.locals.user!.userId
+		);
 
-		return Respond({
-			res,
-			status: 200,
-			data: enrollment as any,
+		return Respond({ res, status: 200, data: guide });
+	} catch (error) {
+		return next(error);
+	}
+}
+
+async function getPendingApprovals(req: Request, res: Response, next: NextFunction) {
+	try {
+		const guides = await GuideService.getPendingApprovals();
+		return Respond({ res, status: 200, data: guides });
+	} catch (error) {
+		return next(error);
+	}
+}
+
+// ---- Rates & payout details ------------------------------------------------
+
+async function getPricingDetails(req: Request, res: Response, next: NextFunction) {
+	try {
+		const pricing = await GuideService.getPricingDetails(req.params.id as string);
+		return Respond({ res, status: 200, data: pricing });
+	} catch (error) {
+		return next(error);
+	}
+}
+
+async function updatePricing(req: Request, res: Response, next: NextFunction) {
+	try {
+		const { halfDay, fullDay } = req.locals.data as GuidePricingValidationResult;
+		const pricing = await GuideService.updatePricing(req.locals.user!.userId, {
+			halfDay,
+			fullDay,
 		});
+
+		return Respond({ res, status: 200, data: pricing });
+	} catch (error) {
+		return next(error);
+	}
+}
+
+async function updateBankDetails(req: Request, res: Response, next: NextFunction) {
+	try {
+		const data = req.locals.data as GuideBankDetailsValidationResult;
+		const bankDetails = await GuideService.updateBankDetails(req.locals.user!.userId, data);
+
+		return Respond({ res, status: 200, data: bankDetails });
+	} catch (error) {
+		return next(error);
+	}
+}
+
+// ---- The calling guide's own bookings --------------------------------------
+
+async function getMyBookings(req: Request, res: Response, next: NextFunction) {
+	try {
+		const result = await TourGuideService.getMyGuideBookings(req.locals.user!.userId);
+		return Respond({ res, status: 200, data: result });
+	} catch (error) {
+		return next(error);
+	}
+}
+
+async function getMyBookingById(req: Request, res: Response, next: NextFunction) {
+	try {
+		const booking = await TourGuideService.getMyGuideBookingById(
+			req.locals.user!.userId,
+			req.params.id as string
+		);
+
+		return Respond({ res, status: 200, data: booking });
 	} catch (error) {
 		return next(error);
 	}
 }
 
 const Controller = {
-	listAll,
-	getEnrollStatus,
 	createContactInquiry,
 	getContactInquiries,
 	deleteGuide,
-	deleteEnrollment,
-	getMyGuideEnrollment,
 	getGuideProfile,
 	updateGuideProfile,
 	patchGuideProfile,
@@ -332,7 +380,16 @@ const Controller = {
 	confirmMembershipPayment,
 	updateAvailability,
 	getAllApprovedGuides,
+	getAllGuidesForAdmin,
 	getGuideByIdPublic,
+	approveGuide,
+	rejectGuide,
+	getPendingApprovals,
+	getPricingDetails,
+	updatePricing,
+	updateBankDetails,
+	getMyBookings,
+	getMyBookingById,
 };
 
 export default Controller;

@@ -19,7 +19,7 @@ export default function AdminReviewsPage() {
   const { adminReviews, loading } = useSelector((state: RootState) => state.reviews);
 
   useEffect(() => {
-    if (isAuthenticated && user && user.role !== "admin" && user.role !== "manager") {
+    if (isAuthenticated && user && user.role !== "admin") {
       router.replace("/dashboard");
     }
   }, [isAuthenticated, user, router]);
@@ -30,7 +30,7 @@ export default function AdminReviewsPage() {
   }, [dispatch, isAuthenticated]);
 
   if (authLoading || !isAuthenticated) return null;
-  if (user && user.role !== "admin" && user.role !== "manager") return null;
+  if (user && user.role !== "admin") return null;
 
   const handleToggleHide = async (id: string, isHidden: boolean) => {
     const result = await dispatch(toggleHideReview({ id, isHidden: !isHidden }));

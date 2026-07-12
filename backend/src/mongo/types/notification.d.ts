@@ -9,7 +9,17 @@ export type NotificationType =
 	| 'membership_expiring'
 	| 'payment_successful'
 	| 'booking_updated'
-	| 'review_received';
+	| 'review_received'
+	| 'guide_approved'
+	| 'guide_rejected'
+	| 'booking_cancelled'
+	| 'refund_requested'
+	| 'refund_processed'
+	| 'refund_rejected'
+	| 'balance_due'
+	| 'earning_credited'
+	| 'payout_paid'
+	| 'new_message';
 
 export default interface INotification extends Document {
 	_id: Types.ObjectId;

@@ -1,27 +1,10 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
 import { apiService } from "@/lib/service/api";
+import { toPaginated } from "@/lib/redux/thunks/paginate";
 import { PaginatedResult, Trip } from "@/lib/data";
 
 const handleError = (err: any) =>
   err.response?.data?.message || err.message || "An error occurred";
-
-// The backend's Respond() helper spreads its payload onto the top level, so a
-// paginated list arrives as { data: [...], total, page, totalPages } directly
-// on the response body — `response.data` is the array, not a nested envelope.
-// Rebuild the PaginatedResult the reducers expect from those flat fields.
-function toPaginated<T>(response: {
-  data?: T[];
-  total?: number;
-  page?: number;
-  totalPages?: number;
-}): PaginatedResult<T> {
-  return {
-    data: response.data ?? [],
-    total: response.total ?? 0,
-    page: response.page ?? 1,
-    totalPages: response.totalPages ?? 0,
-  };
-}
 
 export const fetchAllTrips = createAsyncThunk<
   PaginatedResult<Trip>,

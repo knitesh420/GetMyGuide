@@ -24,6 +24,7 @@ const GuideLeaveSchema = new mongoose.Schema<IGuideLeave>(
 		reason: {
 			type: String,
 			trim: true,
+			maxlength: 2000,
 		},
 		status: {
 			type: String,

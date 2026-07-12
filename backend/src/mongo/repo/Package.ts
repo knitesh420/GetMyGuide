@@ -136,11 +136,23 @@ const PackageSchema = new mongoose.Schema<IPackage>(
 			type: [String],
 			default: [],
 		},
+		deletedAt: {
+			type: Date,
+			default: null,
+		},
 	},
 	{
 		timestamps: true,
 	}
 );
+
+// Hide soft-deleted packages from every find; { deletedAt: null } matches absent
+// documents too, so legacy packages remain visible.
+PackageSchema.pre(/^find/, function (this: mongoose.Query<unknown, IPackage>) {
+	if (this.getFilter().deletedAt === undefined) {
+		this.where({ deletedAt: null });
+	}
+});
 
 const PackageDB = (mongoose.models['Package'] as mongoose.Model<IPackage>) ?? mongoose.model<IPackage>('Package', PackageSchema);
 

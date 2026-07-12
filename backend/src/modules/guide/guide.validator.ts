@@ -191,3 +191,91 @@ export async function ContactInquiryValidator(req: Request, res: Response, next:
 
 	return next(new BadRequestError(message));
 }
+
+export type GuideRejectValidationResult = {
+	reason: string;
+};
+
+export async function GuideRejectValidator(req: Request, res: Response, next: NextFunction) {
+	const reqValidator = z.object({
+		// The guide is told this verbatim, so it has to actually say something.
+		reason: z
+			.string()
+			.trim()
+			.min(10, 'Tell the guide what was wrong with their documents (at least 10 characters)')
+			.max(2000),
+	});
+
+	const reqValidatorResult = reqValidator.safeParse(req.body);
+
+	if (reqValidatorResult.success) {
+		req.locals.data = reqValidatorResult.data;
+		return next();
+	}
+
+	const message = reqValidatorResult.error.issues.map((err) => `${err.path.join('.')}: ${err.message}`).join(', ');
+	return next(new BadRequestError(message));
+}
+
+export type GuidePricingValidationResult = {
+	halfDay: number;
+	fullDay: number;
+};
+
+export async function GuidePricingValidator(req: Request, res: Response, next: NextFunction) {
+	const reqValidator = z.object({
+		halfDay: z.coerce.number().min(0, 'Half-day rate cannot be negative'),
+		// Direct bookings are priced off this, so a zero rate would mean free trips.
+		fullDay: z.coerce.number().positive('Enter your full-day rate'),
+	});
+
+	const reqValidatorResult = reqValidator.safeParse(req.body);
+
+	if (reqValidatorResult.success) {
+		req.locals.data = reqValidatorResult.data;
+		return next();
+	}
+
+	const message = reqValidatorResult.error.issues.map((err) => `${err.path.join('.')}: ${err.message}`).join(', ');
+	return next(new BadRequestError(message));
+}
+
+export type GuideBankDetailsValidationResult = {
+	accountHolderName?: string;
+	accountNumber?: string;
+	ifsc?: string;
+	upiId?: string;
+};
+
+export async function GuideBankDetailsValidator(req: Request, res: Response, next: NextFunction) {
+	const reqValidator = z
+		.object({
+			accountHolderName: z.string().trim().min(2).max(200).optional(),
+			accountNumber: z.string().trim().regex(/^\d{6,20}$/, 'Enter a valid account number').optional(),
+			ifsc: z
+				.string()
+				.trim()
+				.toUpperCase()
+				.regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, 'Enter a valid IFSC code')
+				.optional(),
+			upiId: z
+				.string()
+				.trim()
+				.regex(/^[\w.\-]{2,256}@[a-zA-Z]{2,64}$/, 'Enter a valid UPI ID')
+				.optional(),
+		})
+		// A payout has to be sendable somewhere: bank details or a UPI ID, not neither.
+		.refine((data) => (data.accountNumber && data.ifsc) || data.upiId, {
+			message: 'Provide either an account number with IFSC, or a UPI ID',
+		});
+
+	const reqValidatorResult = reqValidator.safeParse(req.body);
+
+	if (reqValidatorResult.success) {
+		req.locals.data = reqValidatorResult.data;
+		return next();
+	}
+
+	const message = reqValidatorResult.error.issues.map((err) => `${err.path.join('.')}: ${err.message}`).join(', ');
+	return next(new BadRequestError(message));
+}

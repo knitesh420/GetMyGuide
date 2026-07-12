@@ -110,6 +110,69 @@ class UserService {
 			message: 'Tourist account activated successfully',
 		};
 	}
+
+	/**
+	 * The calling account. Deliberately narrow: name/contact/role/status only.
+	 * Never the password hash or tokenVersion, both of which live on the same
+	 * document and would leak straight into a client store if returned.
+	 */
+	async getMe(userId: string) {
+		const account = await AccountDB.findById(userId)
+			.select('name email phone countryCode role isActive status emailVerified createdAt')
+			.lean();
+
+		if (!account) {
+			throw new NotFoundError('Account not found');
+		}
+
+		return account;
+	}
+
+	/** Admin: every account, filterable by role. */
+	async getAllAccounts(
+		filters: { role?: 'tourist' | 'guide' | 'admin'; search?: string } = {},
+		limit: number = 20,
+		page: number = 1
+	) {
+		const query: Record<string, unknown> = {};
+		if (filters.role) query.role = filters.role;
+
+		if (filters.search) {
+			// Escape the search term before it becomes a regex — an unescaped '('
+			// or '*' from a query string is a 500 at best and a ReDoS at worst.
+			const escaped = filters.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+			query.$or = [
+				{ name: { $regex: escaped, $options: 'i' } },
+				{ email: { $regex: escaped, $options: 'i' } },
+				{ phone: { $regex: escaped, $options: 'i' } },
+			];
+		}
+
+		const skip = (page - 1) * limit;
+		const [accounts, total] = await Promise.all([
+			AccountDB.find(query)
+				.select('name email phone role isActive status createdAt')
+				.sort({ createdAt: -1 })
+				.skip(skip)
+				.limit(limit)
+				.lean(),
+			AccountDB.countDocuments(query),
+		]);
+
+		return {
+			data: accounts,
+			pagination: {
+				page,
+				limit,
+				total,
+				totalPages: Math.ceil(total / limit) || 1,
+			},
+		};
+	}
+
+	async getAccountsByRole(role: 'tourist' | 'guide' | 'admin', limit: number = 20, page: number = 1) {
+		return this.getAllAccounts({ role }, limit, page);
+	}
 }
 
 export default new UserService();

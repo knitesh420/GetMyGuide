@@ -1,6 +1,6 @@
 import TripService from '@services/trip';
 import { NextFunction, Request, Response } from 'express';
-import { Respond } from 'node-be-utilities';
+import { Respond } from '@utils/respond';
 import {
 	TripCancelValidationResult,
 	TripCompleteValidationResult,

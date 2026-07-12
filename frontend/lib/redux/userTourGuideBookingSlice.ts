@@ -17,8 +17,15 @@ import { fetchUserBookings,
 interface UserBookingsState {
   bookings: Booking[];
   loading: boolean;
-  currentBooking: Booking | null; 
+  currentBooking: Booking | null;
   error: string | null;
+  /**
+   * Bookings with a cancellation request awaiting an admin decision. Asking to
+   * cancel no longer cancels anything, so the booking itself is unchanged — this
+   * is the only thing that marks it, and it is what the UI must key off to avoid
+   * telling the tourist their trip is off when it is not.
+   */
+  pendingCancellation: string[];
   pagination: {
     page: number;
     totalPages: number;
@@ -31,6 +38,7 @@ const initialState: UserBookingsState = {
   loading: false,
   currentBooking: null,
   error: null,
+  pendingCancellation: [],
   pagination: {
     page: 1,
     totalPages: 1,
@@ -85,11 +93,12 @@ const userTourGuideBookingSlice = createSlice({
         state.error = action.payload as string;
       })
 
-      // 🔥 NEW CASE for ADMIN cancelling a booking
-      .addCase(cancelBookingByAdmin.fulfilled, (state, action: PayloadAction<Booking>) => {
-        const index = state.bookings.findIndex(b => b._id === action.payload._id);
-        if (index !== -1) {
-          state.bookings[index] = action.payload;
+      // An admin asking to cancel goes through the same review queue as anyone
+      // else, so the booking is untouched here too — only flagged as pending.
+      .addCase(cancelBookingByAdmin.fulfilled, (state, action) => {
+        const bookingId = action.meta.arg.bookingId;
+        if (!state.pendingCancellation.includes(bookingId)) {
+          state.pendingCancellation.push(bookingId);
         }
       })
       .addCase(reassignGuideThunk.pending, (state) => {
@@ -176,13 +185,15 @@ const userTourGuideBookingSlice = createSlice({
         state.error = action.payload as string;
       })
 
-      // --- Cancelling a booking ---
-      .addCase(cancelBooking.fulfilled, (state, action: PayloadAction<Booking>) => {
-        const updatedBooking = action.payload;
-        state.currentBooking = updatedBooking;
-        state.bookings = state.bookings.map((b) =>
-          b._id === updatedBooking._id ? updatedBooking : b
-        );
+      // --- Requesting cancellation ---
+      // This opens a request; it does NOT cancel the booking. Deliberately does
+      // not touch `bookings` or `currentBooking`: striking the trip through here
+      // would tell the tourist it is off while it is still very much on.
+      .addCase(cancelBooking.fulfilled, (state, action) => {
+        const bookingId = action.meta.arg.bookingId;
+        if (!state.pendingCancellation.includes(bookingId)) {
+          state.pendingCancellation.push(bookingId);
+        }
       });
   },
 });

@@ -47,6 +47,21 @@ export const GUIDE_MEMBERSHIP_DURATION_DAYS = 30;
 export const GUIDE_PAYMENT_LINK_BASE_URL =
 	process.env.GUIDE_PAYMENT_LINK_BASE_URL ?? 'localhost/system/guide-verification-payment';
 
+// ---- Bookings that split payment into an advance + a balance ---------------
+// Package tours and direct guide bookings both take this fraction up front; the
+// remainder is collected from the tourist before the trip starts.
+export const BOOKING_ADVANCE_RATE = 0.2;
+
+// ---- Guide earnings & payouts ---------------------------------------------
+// Platform commission on a completed trip, as a percentage of the booking price.
+// Snapshotted onto each Earning, so changing this never rewrites past ledger rows.
+export const PLATFORM_COMMISSION_RATE = Number(process.env.PLATFORM_COMMISSION_RATE ?? 20);
+
+// An earning stays 'pending' for this long after trip completion before it turns
+// 'payable' and shows up in the admin payout queue. The window exists so a
+// dispute or refund can reverse the earning before any money leaves.
+export const EARNING_HOLD_DAYS = Number(process.env.EARNING_HOLD_DAYS ?? 3);
+
 export enum Cookie {
 	Auth = 'auth-cookie',
 	Refresh = 'refresh-cookie',

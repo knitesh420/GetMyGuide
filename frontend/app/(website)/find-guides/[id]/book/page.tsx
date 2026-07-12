@@ -48,57 +48,27 @@ export default function BookGuidePage() {
     }
   }, [dispatch, guideId]); // Removed 'guide' from dependency array to prevent re-fetching loops
 
-  const selectedLocation = useMemo(() => {
-    if (!pricingDetails || !locationName) return null;
-    return pricingDetails.locations.find(
-      loc => loc.placeName.trim().toLowerCase() === locationName.trim().toLowerCase()
-    ) || null;
-  }, [pricingDetails, locationName]);
+  /**
+   * The price comes from the guide's published day rate, and it is the server
+   * that multiplies it out — the same `quote` endpoint the checkout page and the
+   * payment step both call, so all three agree by construction rather than by
+   * three copies of the same arithmetic staying in sync.
+   */
+  const numberOfDays = useMemo(() => {
+    if (!date?.from || !date?.to) return 0;
+    return Math.max(0, differenceInCalendarDays(date.to, date.from) + 1);
+  }, [date]);
 
-  const selectedLanguage = useMemo(() => {
-    if (!pricingDetails || !languageName) return null;
-    return pricingDetails.languages.find(
-      lang => lang.languageName.trim().toLowerCase() === languageName.trim().toLowerCase()
-    ) || null;
-  }, [pricingDetails, languageName]);
-
-  const totalPrice = useMemo(() => {
-    if (!selectedLocation || !date?.from || !date?.to || numTravelers <= 0) {
-      return 0;
-    }
-
-    const numberOfDays = differenceInCalendarDays(date.to, date.from) + 1;
-    if (numberOfDays <= 0) return 0;
-
-    let locationPricePerDay = 0;
-    if (numTravelers >= 1 && numTravelers <= 5) {
-      locationPricePerDay = selectedLocation.pricing?.smallGroup?.price ?? 0;
-    } else if (numTravelers >= 6 && numTravelers <= 14) {
-      locationPricePerDay = selectedLocation.pricing?.mediumGroup?.price ?? 0;
-    } else if (numTravelers >= 15) {
-      locationPricePerDay = selectedLocation.pricing?.largeGroup?.price ?? 0;
-    }
-
-    let languageChargePerDay = 0;
-    if (selectedLanguage) {
-      if (numTravelers >= 1 && numTravelers <= 14) {
-        languageChargePerDay = selectedLanguage.pricing?.standardGroup?.price ?? 0;
-      } else if (numTravelers >= 15) {
-        languageChargePerDay = selectedLanguage.pricing?.largeGroup?.price ?? 0;
-      }
-    }
-
-    const total = (locationPricePerDay + languageChargePerDay) * numberOfDays;
-
-    return total;
-
-  }, [selectedLocation, selectedLanguage, numTravelers, date]);
-
+  const dayRate = pricingDetails?.pricing?.fullDay ?? 0;
+  const totalPrice = dayRate > 0 && numberOfDays > 0 ? dayRate * numberOfDays : 0;
 
   const handleProceedToCheckout = () => {
-    // Small change: Check totalPrice directly
+    if (!pricingDetails?.bookable) {
+      alert(pricingDetails?.unavailableReason ?? "This guide cannot be booked directly right now.");
+      return;
+    }
     if (totalPrice <= 0) {
-      alert("Could not calculate a valid price. Please check the selected options or contact support.");
+      alert("Please choose your travel dates.");
       return;
     }
     if (!guide || !locationName || !languageName || !date?.from || !date?.to || !fullName || !email || !phone) {
@@ -106,6 +76,8 @@ export default function BookGuidePage() {
       return;
     }
 
+    // No totalPrice in the query string: the server prices the booking, and a
+    // number in a URL is a number the tourist can edit.
     const queryParams = new URLSearchParams({
       guideId: guide._id,
       guideName: guide.name,
@@ -114,7 +86,6 @@ export default function BookGuidePage() {
       startDate: date.from.toISOString(),
       endDate: date.to.toISOString(),
       numTravelers: String(numTravelers),
-      totalPrice: String(totalPrice),
       guidePhoto: guide.photo || '/placeholder-avatar.png',
       fullName,
       email,
@@ -129,13 +100,30 @@ export default function BookGuidePage() {
     return <PageSkeleton />;
   }
   
-  if (!locationName || !languageName || (!pricingLoading && pricingDetails && (!selectedLocation || !selectedLanguage))) {
+  if (!locationName || !languageName) {
     return (
       <div className="min-h-screen flex items-center justify-center text-center p-4">
         <div>
           <h2 className="text-2xl font-bold">Invalid Booking Request</h2>
-          <p className="text-muted-foreground mt-2">The location or language is missing or not offered by this guide. Please start your search again.</p>
+          <p className="text-muted-foreground mt-2">The location or language is missing. Please start your search again.</p>
           <Button asChild className="mt-4"><a href="/find-guides">Find a Guide</a></Button>
+        </div>
+      </div>
+    );
+  }
+
+  // A guide is only directly bookable once an admin has verified them AND they
+  // have published a day rate. Say which is missing rather than showing an empty
+  // price and a dead button.
+  if (!pricingLoading && pricingDetails && !pricingDetails.bookable) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-center p-4">
+        <div>
+          <h2 className="text-2xl font-bold">This guide can&apos;t be booked directly yet</h2>
+          <p className="text-muted-foreground mt-2">
+            {pricingDetails.unavailableReason ?? "Please try another guide."}
+          </p>
+          <Button asChild className="mt-4"><a href="/find-guides">Find another guide</a></Button>
         </div>
       </div>
     );

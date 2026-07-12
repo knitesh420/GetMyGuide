@@ -1,5 +1,5 @@
 import { RAZORPAY_WEBHOOK_SECRET } from '@config/const';
-import { AccountDB, GuideEnrollmentDB, TransactionDB } from '@mongo';
+import { AccountDB, TransactionDB } from '@mongo';
 import WebhookEventDB from '@mongo/repo/WebhookEvent';
 import RazorpayProvider from '@provider/razorpay';
 import GuideService from '@services/guide';
@@ -148,9 +148,8 @@ class PaymentService {
 	}
 
 	/**
-	 * Update the registration record (Guide membership, GuideEnrollment, or
-	 * Account) with retry. If all retries fail, marks transaction as
-	 * PENDING_VERIFICATION.
+	 * Update the registration record (Guide membership or Account) with retry.
+	 * If all retries fail, marks transaction as PENDING_VERIFICATION.
 	 */
 	private async updateRegistrationStatus(
 		referenceId: string,
@@ -162,15 +161,11 @@ class PaymentService {
 			try {
 				if (referenceType === 'guide_membership') {
 					// Recurring guide membership payment — reference_id is a Guide
-					// document id, NOT a GuideEnrollment id. Must be routed here
-					// separately or this would silently no-op against the wrong
-					// collection.
+					// document id.
 					await GuideService.finalizeMembershipPaymentByGuideId(
 						referenceId,
 						status === 'completed' ? 'success' : 'failed'
 					);
-				} else if (type === 'guide' || type === 'enrollment') {
-					await GuideEnrollmentDB.findByIdAndUpdate(referenceId, { status });
 				} else if (type === 'tourist' || type === 'booking') {
 					const accountStatus = status === 'completed' ? 'success' : 'failed';
 					await AccountDB.findByIdAndUpdate(referenceId, {

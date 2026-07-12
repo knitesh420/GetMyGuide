@@ -1,4 +1,4 @@
-import { AccountDB, BookingDB, PackageDB, TransactionDB } from '@mongo';
+import { AccountDB, BookingDB, PackageDB, TouristDB, TransactionDB } from '@mongo';
 import IBooking from '@mongo/types/booking';
 import IPackage from '@mongo/types/package';
 import {
@@ -128,6 +128,12 @@ interface TransformedBooking {
 	// Populated only for package bookings (for the confirmation screen).
 	package_info?: { title: string };
 	guide_info?: { name: string; photo?: string };
+	// Human-facing business code (BK######). Absent on documents that predate
+	// the code field and have not been backfilled yet.
+	bookingCode?: string;
+	// The linked tourist's business code (TO######). Only enriched on the admin
+	// listing (getAllBookings) — guest bookings have no linked tourist.
+	touristCode?: string | null;
 	status: string;
 	createdAt: Date;
 	updatedAt: Date;
@@ -149,6 +155,7 @@ function transformBooking(booking: IBooking): TransformedBooking {
 		end_date: booking.end_date,
 		advance_paid: booking.advance_paid,
 		balance_due: booking.balance_due,
+		bookingCode: booking.bookingCode,
 		status: booking.status,
 		createdAt: booking.createdAt,
 		updatedAt: booking.updatedAt,
@@ -648,7 +655,27 @@ class BookingService {
 	async getAllBookings(): Promise<TransformedBooking[]> {
 		const bookings = await BookingDB.find().sort({ createdAt: -1 }).lean();
 
-		return bookings.map((booking: IBooking) => transformBooking(booking));
+		// Enrich each row with the linked tourist's business code (TO######) so
+		// the admin listing can show it. Guest bookings have no linked_to, so
+		// they keep touristCode = null. Batched to avoid an N+1 lookup.
+		const touristAccountIds = [
+			...new Set(bookings.filter((b) => b.linked_to).map((b) => b.linked_to!.toString())),
+		];
+		const touristProfiles = touristAccountIds.length
+			? await TouristDB.find({ accountId: { $in: touristAccountIds } })
+					.select('accountId touristCode')
+					.lean()
+			: [];
+		const touristCodeByAccount = new Map(
+			touristProfiles.map((p) => [p.accountId.toString(), p.touristCode ?? null])
+		);
+
+		return bookings.map((booking: IBooking) => ({
+			...transformBooking(booking),
+			touristCode: booking.linked_to
+				? touristCodeByAccount.get(booking.linked_to.toString()) ?? null
+				: null,
+		}));
 	}
 
 	/**

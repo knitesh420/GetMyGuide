@@ -28,6 +28,8 @@ class TouristService {
 		return {
 			_id: account._id.toString(),
 			user: account._id.toString(),
+			// Human-facing business code (TO######) — null until backfilled.
+			touristCode: tourist?.touristCode ?? null,
 			name: account.name,
 			email: account.email,
 			mobile: account.phone,
@@ -74,6 +76,43 @@ class TouristService {
 		});
 
 		return this.getTouristProfile(accountId);
+	}
+
+	/**
+	 * Admin listing of every tourist account joined with its Tourist profile —
+	 * returns the business code (TO######), contact details, nationality and
+	 * registration status for the admin management table. Batched to avoid an
+	 * N+1 lookup across the two collections.
+	 */
+	async getAllTouristsForAdmin() {
+		const accounts = await AccountDB.find({ role: 'tourist' })
+			.select('name email phone isActive status createdAt')
+			.sort({ createdAt: -1 })
+			.lean();
+		const accountIds = accounts.map((a) => a._id);
+
+		const profiles = await TouristDB.find({ accountId: { $in: accountIds } })
+			.select('accountId touristCode nationality preferredLanguages numberOfTravelers registrationCompleted')
+			.lean();
+		const profileByAccountId = new Map(profiles.map((p) => [p.accountId.toString(), p]));
+
+		return accounts.map((account) => {
+			const profile = profileByAccountId.get(account._id.toString());
+			return {
+				accountId: account._id.toString(),
+				touristCode: profile?.touristCode ?? null,
+				name: account.name,
+				email: account.email,
+				phone: account.phone,
+				isActive: account.isActive,
+				status: account.status,
+				nationality: profile?.nationality ?? '',
+				preferredLanguages: profile?.preferredLanguages ?? [],
+				numberOfTravelers: profile?.numberOfTravelers ?? 0,
+				registrationCompleted: profile?.registrationCompleted ?? false,
+				createdAt: account.createdAt,
+			};
+		});
 	}
 }
 

@@ -54,6 +54,9 @@ function MyBookingCard({ booking }: { booking: AdminBookingSummary }) {
             <h3 className="font-bold text-2xl mt-1 text-foreground">
               {booking.travel_details.city}
             </h3>
+            <p className="mt-1 font-mono text-xs text-muted-foreground">
+              Booking ID: {booking.bookingCode ?? "—"}
+            </p>
           </div>
           <Badge
             variant={getStatusVariant(booking.status)}

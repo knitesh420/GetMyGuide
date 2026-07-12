@@ -73,6 +73,10 @@ export default function UserTripsPage() {
                   <TripStatusBadge status={trip.status} />
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground space-y-1">
+                  <p className="font-mono text-xs">
+                    {trip.tripCode ? `Trip ID: ${trip.tripCode} · ` : ""}
+                    Booking: {booking?.bookingCode ?? "—"}
+                  </p>
                   {booking?.travel_details.date && (
                     <p>Date: {new Date(booking.travel_details.date).toLocaleDateString()}</p>
                   )}

@@ -1,7 +1,8 @@
 import GuideAvailabilityService from '@services/guideAvailability';
 import { startOfDay, endOfDay } from '@utils/bookingOccupiedRange';
 import { NextFunction, Request, Response } from 'express';
-import { BadRequestError, Respond } from 'node-be-utilities';
+import { BadRequestError } from 'node-be-utilities';
+import { Respond } from '@utils/respond';
 import { CreateLeaveValidationResult, GuidesAvailabilityQueryValidationResult } from './guideAvailability.validator';
 
 async function createLeave(req: Request, res: Response, next: NextFunction) {

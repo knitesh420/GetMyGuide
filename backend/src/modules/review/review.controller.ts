@@ -1,6 +1,6 @@
 import ReviewService from '@services/review';
 import { NextFunction, Request, Response } from 'express';
-import { Respond } from 'node-be-utilities';
+import { Respond } from '@utils/respond';
 import {
 	ReviewCreateValidationResult,
 	ReviewHideValidationResult,

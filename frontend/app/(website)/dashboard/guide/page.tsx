@@ -222,6 +222,9 @@ export default function GuideDashboardPage() {
                 {name}
               </h1>
               <div className="mt-3 flex flex-wrap items-center gap-2">
+                <HeroPill icon={BadgeInfo}>
+                  <span className="font-mono">Guide ID: {profile?.guideCode ?? "—"}</span>
+                </HeroPill>
                 <HeroPill icon={isMembershipActive ? ShieldCheck : AlertTriangle}>
                   {isMembershipActive ? "Membership active" : "Not listed"}
                 </HeroPill>

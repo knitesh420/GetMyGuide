@@ -19,6 +19,13 @@ import tripReducer from "@/lib/redux/tripSlice";
 import notificationReducer from "@/lib/redux/notificationSlice";
 import reviewReducer from "@/lib/redux/reviewSlice";
 import reportReducer from "@/lib/redux/reportSlice";
+import adminGuidesReducer from "@/lib/redux/adminGuidesSlice";
+import adminTouristsReducer from "@/lib/redux/adminTouristsSlice";
+import touristDashboardReducer from "@/lib/redux/touristDashboardSlice";
+import earningReducer from "@/lib/redux/earningSlice";
+import refundReducer from "@/lib/redux/refundSlice";
+import messageReducer from "@/lib/redux/messageSlice";
+import invoiceReducer from "@/lib/redux/invoiceSlice";
 export const store = configureStore({
   reducer: {
     auth: authReducer,
@@ -41,6 +48,13 @@ export const store = configureStore({
     notifications: notificationReducer,
     reviews: reviewReducer,
     reports: reportReducer,
+    adminGuides: adminGuidesReducer,
+    adminTourists: adminTouristsReducer,
+    touristDashboard: touristDashboardReducer,
+    earnings: earningReducer,
+    refunds: refundReducer,
+    messages: messageReducer,
+    invoices: invoiceReducer,
   },
 });
 

@@ -6,30 +6,20 @@ import Controller from './guide.controller';
 import { parseGuideProfileFormData } from './guide.middleware';
 import {
 	ContactInquiryValidator,
+	GuideBankDetailsValidator,
+	GuidePricingValidator,
 	GuideProfilePatchValidator,
 	GuideProfileValidator,
+	GuideRejectValidator,
 	MembershipConfirmPaymentValidator,
 } from './guide.validator';
 
 const router = express.Router();
 
-// ---- Legacy enrollment records (read-only) --------------------------------
-// The anonymous KYC-and-pay write path (enroll → Razorpay → confirm-payment)
-// is gone: registration is now account-first via PUT /guide/profile below.
-// GuideEnrollment documents are retained and still read — `getGuideProfile`
-// falls back to them for the `type` of guides who predate the Guide model, so
-// dropping them would silently downgrade legacy escort guides to normal. The
-// read routes below are what the admin panel uses to review those records.
-
-// Admin only - list all enrollments (includes PII + KYC document references)
-router.route('/list-all').get(VerifySession, VerifyMinLevel('admin'), Controller.listAll);
-
-// Admin only - read one enrollment. This was an unauthenticated route while the
-// public enrol-and-pay flow needed to poll it; nothing polls it now, and it
-// returns PII + KYC document references, so it is gated with the list above.
-router
-	.route('/enroll-status/:id')
-	.get(VerifySession, VerifyMinLevel('admin'), IDValidator, Controller.getEnrollStatus);
+// The `guides` collection is the sole source of guide data. The retired
+// GuideEnrollment model (anonymous enrol-and-pay flow) has been removed: its
+// `type`, `pan`, `licence` and `aadhar` were backfilled onto Guide by
+// scripts/backfillGuideFromEnrollment.ts, so nothing reads it any more.
 
 // Guide profile & availability (authenticated guide)
 //
@@ -67,8 +57,38 @@ router
 		Controller.confirmMembershipPayment
 	);
 
-// Public - get all approved guides
+// ---- Guide rates & payout destination ------------------------------------
+// Rates are what direct bookings (/tourguide) are priced from; bank details are
+// where the admin sends a payout. Both are the guide's own to set.
+router
+	.route('/pricing')
+	.put(VerifySession, VerifyMinLevel('guide'), GuidePricingValidator, Controller.updatePricing);
+
+router
+	.route('/bank-details')
+	.put(VerifySession, VerifyMinLevel('guide'), GuideBankDetailsValidator, Controller.updateBankDetails);
+
+// ---- The calling guide's own bookings ------------------------------------
+// Registered before '/:id' so 'my-bookings' is not read as a guide id.
+router.route('/my-bookings').get(VerifySession, VerifyMinLevel('guide'), Controller.getMyBookings);
+router
+	.route('/my-bookings/:id')
+	.get(VerifySession, VerifyMinLevel('guide'), IDValidator, Controller.getMyBookingById);
+
+// Public - get all approved guides. '/all-guides' is an alias the frontend also
+// calls; both hit the same handler rather than drifting apart.
 router.route('/all').get(Controller.getAllApprovedGuides);
+router.route('/all-guides').get(Controller.getAllApprovedGuides);
+
+// Admin only - list every guide (active + inactive) with profile, business
+// code, and membership state for the admin management table.
+router.route('/admin/all').get(VerifySession, VerifyMinLevel('admin'), Controller.getAllGuidesForAdmin);
+
+// Admin only - the KYC review inbox: guides who have submitted documents and
+// are waiting on a decision.
+router
+	.route('/admin/pending-approvals')
+	.get(VerifySession, VerifyMinLevel('admin'), Controller.getPendingApprovals);
 
 // Contact inquiry routes
 router.route('/contact-inquiry').post(ContactInquiryValidator, Controller.createContactInquiry);
@@ -78,13 +98,24 @@ router
 	.route('/contact-inquiries')
 	.get(VerifySession, VerifyMinLevel('admin'), Controller.getContactInquiries);
 
-// Protected route - get current user's guide enrollment
-router.route('/me').get(VerifySession, Controller.getMyGuideEnrollment);
-
-// Admin: delete an enrollment (before it becomes an account)
+// ---- Admin KYC decisions on a specific guide ------------------------------
+// Before '/:id' so the verbs are not swallowed by the id matcher.
 router
-	.route('/enrollment/:id')
-	.delete(VerifySession, VerifyMinLevel('admin'), IDValidator, Controller.deleteEnrollment);
+	.route('/:id/approve')
+	.patch(VerifySession, VerifyMinLevel('admin'), IDValidator, Controller.approveGuide);
+
+router
+	.route('/:id/reject')
+	.patch(
+		VerifySession,
+		VerifyMinLevel('admin'),
+		IDValidator,
+		GuideRejectValidator,
+		Controller.rejectGuide
+	);
+
+// Public — what this guide charges, and whether they can be booked directly.
+router.route('/:id/pricing-details').get(IDValidator, Controller.getPricingDetails);
 
 // Public GET + Admin DELETE for guide by ID
 router

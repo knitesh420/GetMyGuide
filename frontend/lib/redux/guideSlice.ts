@@ -7,7 +7,8 @@ import {
   patchMyGuideProfile,
   getAllGuides,
   getGuideById,
-  toggleGuideApproval,
+  approveGuide,
+  rejectGuide,
   deleteGuide,
   updateMyAvailability,
   fetchGuidePricingDetails ,
@@ -173,17 +174,20 @@ const guideSlice = createSlice({
       .addCase(getGuideById.rejected, setRejected)
       
 
-      // Handle Toggle Approval
-      .addCase(toggleGuideApproval.pending, setPending)
-      .addCase(toggleGuideApproval.fulfilled, (state, action) => {
+      // Admin KYC decisions. Both return the Guide *profile* document, whose _id
+      // is not the account id the `guides` list is keyed by — so there is nothing
+      // to splice in here. The pages that call these refetch their own list.
+      .addCase(approveGuide.pending, setPending)
+      .addCase(approveGuide.fulfilled, (state) => {
         state.loading = false;
-        const index = state.guides.findIndex((g) => g._id === action.payload._id);
-        if (index !== -1) state.guides[index] = action.payload;
-        if (state.currentGuide?._id === action.payload._id) {
-          state.currentGuide = action.payload;
-        }
       })
-      .addCase(toggleGuideApproval.rejected, setRejected)
+      .addCase(approveGuide.rejected, setRejected)
+
+      .addCase(rejectGuide.pending, setPending)
+      .addCase(rejectGuide.fulfilled, (state) => {
+        state.loading = false;
+      })
+      .addCase(rejectGuide.rejected, setRejected)
 
       // Handle Delete Guide
       .addCase(deleteGuide.pending, setPending)

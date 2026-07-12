@@ -4,7 +4,12 @@ import { FC, useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/lib/store';
-import { createAndVerifyBooking, BookingCreationData } from '@/lib/redux/thunks/tourGuideBooking/tourGuideBookingThunk';
+import {
+  createAndVerifyBooking,
+  fetchBookingQuote,
+  BookingCreationData,
+  BookingQuote,
+} from '@/lib/redux/thunks/tourGuideBooking/tourGuideBookingThunk';
 import { clearBookingState } from '@/lib/redux/tourGuideBookingSlice';
 
 import Image from 'next/image';
@@ -27,6 +32,12 @@ const CheckoutPage: FC = () => {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
 
+  // The price is deliberately NOT read from the URL. It is quoted by the server
+  // from the guide's published rate, and re-derived there again at payment — a
+  // `totalPrice` query param would just be a number the tourist could edit.
+  const [quote, setQuote] = useState<BookingQuote | null>(null);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+
   // --- Extract data from URL ---
   const bookingDetails = useMemo(() => ({
     guideId: searchParams.get('guideId')!,
@@ -36,11 +47,8 @@ const CheckoutPage: FC = () => {
     startDate: new Date(searchParams.get('startDate')!),
     endDate: new Date(searchParams.get('endDate')!),
     numTravelers: parseInt(searchParams.get('numTravelers') || '1', 10),
-    totalPrice: parseFloat(searchParams.get('totalPrice') || '0'),
     guidePhoto: searchParams.get('guidePhoto')!,
   }), [searchParams]);
-
-  const advanceAmount = Math.round(bookingDetails.totalPrice * 0.20);
 
   // --- Load Razorpay script dynamically ---
   useEffect(() => {
@@ -52,6 +60,27 @@ const CheckoutPage: FC = () => {
     // Clear any previous booking state when component mounts
     dispatch(clearBookingState());
   }, [dispatch]);
+
+  useEffect(() => {
+    if (!bookingDetails.guideId) return;
+
+    dispatch(
+      fetchBookingQuote({
+        guideId: bookingDetails.guideId,
+        startDate: bookingDetails.startDate.toISOString(),
+        endDate: bookingDetails.endDate.toISOString(),
+      }),
+    ).then((result) => {
+      if (fetchBookingQuote.fulfilled.match(result)) {
+        setQuote(result.payload);
+        setQuoteError(null);
+      } else {
+        setQuoteError((result.payload as string) || 'Could not price this booking.');
+      }
+    });
+  }, [dispatch, bookingDetails.guideId, bookingDetails.startDate, bookingDetails.endDate]);
+
+  const advanceAmount = quote?.advance ?? 0;
 
   const handlePlaceOrder = async () => {
     if (!fullName || !email || !phone) {
@@ -66,7 +95,6 @@ const CheckoutPage: FC = () => {
       startDate: bookingDetails.startDate.toISOString(),
       endDate: bookingDetails.endDate.toISOString(),
       numberOfTravelers: bookingDetails.numTravelers,
-      totalPrice: bookingDetails.totalPrice,
       contactInfo: { fullName, email, phone },
     };
 
@@ -105,11 +133,30 @@ const CheckoutPage: FC = () => {
                 <p><strong>Guests:</strong> {bookingDetails.numTravelers} traveler(s)</p>
               </div>
               <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg space-y-2">
-                <div className="flex justify-between"><span>Total Price:</span> <span>₹{bookingDetails.totalPrice.toLocaleString('en-IN')}</span></div>
-                <div className="flex justify-between font-bold text-lg">
-                  <span>Advance Payable (20%):</span>
-                  <span className="text-primary">₹{advanceAmount.toLocaleString('en-IN')}</span>
-                </div>
+                {quoteError ? (
+                  <p className="text-sm text-destructive">{quoteError}</p>
+                ) : !quote ? (
+                  <p className="text-sm text-muted-foreground">Working out your price…</p>
+                ) : (
+                  <>
+                    <div className="flex justify-between text-sm text-muted-foreground">
+                      <span>
+                        ₹{quote.dayRate.toLocaleString('en-IN')} × {quote.days} day
+                        {quote.days === 1 ? '' : 's'}
+                      </span>
+                      <span>₹{quote.totalPrice.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="flex justify-between"><span>Total Price:</span> <span>₹{quote.totalPrice.toLocaleString('en-IN')}</span></div>
+                    <div className="flex justify-between font-bold text-lg">
+                      <span>Advance Payable (20%):</span>
+                      <span className="text-primary">₹{advanceAmount.toLocaleString('en-IN')}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      The remaining ₹{quote.balance.toLocaleString('en-IN')} is payable before your
+                      trip.
+                    </p>
+                  </>
+                )}
               </div>
             </div>
 
@@ -129,7 +176,8 @@ const CheckoutPage: FC = () => {
                 <AlertCircle className="h-5 w-5" /> {error}
               </div>
             )}
-            <Button onClick={handlePlaceOrder} disabled={loading} className="w-full h-14 text-lg font-bold">
+            {/* No quote, no payment — the server would refuse the order anyway. */}
+            <Button onClick={handlePlaceOrder} disabled={loading || !quote} className="w-full h-14 text-lg font-bold">
               {loading ? <Loader2 className="mr-2 h-6 w-6 animate-spin" /> : <ShieldCheck className="mr-2 h-6 w-6" />}
               Pay Advance & Confirm Booking
             </Button>

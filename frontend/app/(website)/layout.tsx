@@ -1,6 +1,5 @@
 import type React from "react";
 import type { Metadata } from "next";
-import { Analytics } from "@vercel/analytics/next";
 import { Suspense } from "react";
 import { Header } from "@/components/layout/website/header";
 import { ConditionalFooter } from "@/components/layout/website/ConditionalFooter";
@@ -65,7 +64,6 @@ export default function RootLayout({
         phoneNumber="917470222666"
         message="Hi, I want to know more about GetMyGuide."
       />
-      <Analytics />
       <Script src="https://checkout.razorpay.com/v1/checkout.js" />
     </>
   );

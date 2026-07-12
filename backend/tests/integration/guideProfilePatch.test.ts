@@ -1,4 +1,4 @@
-import { AccountDB, GuideDB, GuideEnrollmentDB } from '@mongo';
+import { AccountDB, GuideDB } from '@mongo';
 import AuthService from '@services/auth';
 import { uploadMulterImage } from '@utils/cloudinaryUpload';
 import express from 'express';
@@ -186,7 +186,8 @@ describe('Guide profile: one-time registration, then limited edits', () => {
 	});
 
 	describe('legacy guides (Guide record predates the `type` field)', () => {
-		/** Writes a Guide doc with no `type` key at all, as production rows have. */
+		/** Writes a Guide doc with no `type` key at all, as production rows have.
+		 *  scripts/backfillGuideFromEnrollment.ts is what fills these in. */
 		const createLegacyGuideRecord = async () => {
 			await registerGuide();
 			await GuideDB.collection.updateOne(
@@ -199,24 +200,26 @@ describe('Guide profile: one-time registration, then limited edits', () => {
 			await createLegacyGuideRecord();
 
 			const guide = await GuideDB.findOne({ accountId });
-			// A schema `default` would be applied on hydration and mask the enrollment.
+			// No schema `default` — an un-backfilled row must stay distinguishable
+			// from one that genuinely chose 'normal'.
 			expect(guide!.type).toBeUndefined();
 		});
 
-		it('keeps an escort guide certified via their legacy enrollment', async () => {
+		it('reads an untyped guide as normal, and does not certify them', async () => {
 			await createLegacyGuideRecord();
-			await GuideEnrollmentDB.create({
-				name: GUIDE.name,
-				email: GUIDE.email,
-				phone: GUIDE.phone,
-				city: 'Delhi',
-				type: 'escort',
-				licence: 'licence.pdf',
-				aadhar: 'aadhar.pdf',
-				languages: ['English'],
-				photo: 'photo.jpg',
-				status: 'completed',
-			});
+
+			const res = await request(app)
+				.get('/guides/profile')
+				.set('Authorization', `Bearer ${token}`);
+
+			expect(res.body.type).toBe('normal');
+			expect(res.body.isCertified).toBe(false);
+		});
+
+		it('certifies an escort once the type is on the Guide record', async () => {
+			await createLegacyGuideRecord();
+			// What the backfill script writes.
+			await GuideDB.updateOne({ accountId }, { $set: { type: 'escort' } });
 
 			const res = await request(app)
 				.get('/guides/profile')

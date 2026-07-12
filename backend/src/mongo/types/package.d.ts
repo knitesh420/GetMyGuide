@@ -46,6 +46,8 @@ export default interface IPackage extends Document {
 	inclusions?: string[];
 	exclusions?: string[];
 
+	deletedAt?: Date | null;
+
 	createdAt: Date;
 	updatedAt: Date;
 }

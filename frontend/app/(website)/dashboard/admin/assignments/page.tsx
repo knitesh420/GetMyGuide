@@ -51,7 +51,7 @@ export default function AdminAssignmentsPage() {
   const [reassignId, setReassignId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isAuthenticated && user && user.role !== "admin" && user.role !== "manager") {
+    if (isAuthenticated && user && user.role !== "admin") {
       router.replace("/dashboard");
     }
   }, [isAuthenticated, user, router]);
@@ -64,7 +64,7 @@ export default function AdminAssignmentsPage() {
   }, [dispatch, isAuthenticated]);
 
   if (authLoading || !isAuthenticated) return null;
-  if (user && user.role !== "admin" && user.role !== "manager") return null;
+  if (user && user.role !== "admin") return null;
 
   const closeModal = () => {
     setModalOpen(false);
@@ -126,6 +126,10 @@ export default function AdminAssignmentsPage() {
                       {new Date(booking.travel_details.date).toLocaleDateString()} ·{" "}
                       {booking.travel_details.no_of_person} traveler(s)
                     </p>
+                    <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-xs text-muted-foreground">
+                      <span>Booking: {booking.bookingCode ?? "—"}</span>
+                      <span>Tourist: {booking.touristCode ?? "—"}</span>
+                    </p>
                   </div>
                   <Button
                     size="sm"
@@ -158,6 +162,7 @@ export default function AdminAssignmentsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Ref</TableHead>
                   <TableHead>City</TableHead>
                   <TableHead>Tourist</TableHead>
                   <TableHead>Guide</TableHead>
@@ -173,9 +178,23 @@ export default function AdminAssignmentsPage() {
                   const canReassign = assignment.status === "pending" || assignment.status === "declined";
                   return (
                     <TableRow key={assignment._id}>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        <div>{assignment.assignmentCode ?? "—"}</div>
+                        <div>{booking?.bookingCode ?? "—"}</div>
+                      </TableCell>
                       <TableCell>{booking?.travel_details.city ?? "—"}</TableCell>
-                      <TableCell>{booking?.tourist_info.name ?? "—"}</TableCell>
-                      <TableCell>{guide?.name ?? "—"}</TableCell>
+                      <TableCell>
+                        <div>{booking?.tourist_info.name ?? "—"}</div>
+                        <div className="font-mono text-xs text-muted-foreground">
+                          {booking?.touristCode ?? "—"}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div>{guide?.name ?? "—"}</div>
+                        <div className="font-mono text-xs text-muted-foreground">
+                          {guide?.guideCode ?? "—"}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <AssignmentStatusBadge status={assignment.status} />
                       </TableCell>

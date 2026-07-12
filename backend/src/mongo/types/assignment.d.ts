@@ -12,6 +12,7 @@ export default interface IAssignment extends Document {
 	declineReason?: string;
 	respondedAt?: Date;
 	previousAssignment?: Types.ObjectId;
+	assignmentCode?: string;
 	createdAt: Date;
 	updatedAt: Date;
 }

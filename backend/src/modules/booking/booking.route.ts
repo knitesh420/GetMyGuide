@@ -1,6 +1,7 @@
 import express from 'express';
 import { idempotency, VerifyMinLevel, VerifyRole, VerifySession } from '../../middleware';
 import IDValidator from '../../middleware/idValidator';
+import { PaymentVerifyValidator } from '../tourguide/tourguide.validator';
 import Controller from './booking.controller';
 import {
 	AllocateGuideValidator,
@@ -52,6 +53,16 @@ router
 router
 	.route('/package/verify')
 	.post(VerifySession, VerifyRole('tourist', 'admin'), Controller.verifyPackageBooking);
+
+// Collect the outstanding balance on any booking confirmed with an advance —
+// package tours and direct guide bookings alike. Registered before '/:id'.
+router
+	.route('/:id/balance/create-order')
+	.post(VerifySession, IDValidator, idempotency, Controller.createBalanceOrder);
+
+router
+	.route('/:id/balance/verify')
+	.post(VerifySession, IDValidator, PaymentVerifyValidator, Controller.verifyBalancePayment);
 
 // Admin routes
 router.route('/').get(VerifySession, VerifyMinLevel('admin'), Controller.getAllBookings);

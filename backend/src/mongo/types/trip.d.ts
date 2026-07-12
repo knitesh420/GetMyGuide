@@ -12,6 +12,8 @@ export default interface ITrip extends Document {
 	completedAt?: Date;
 	startNotes?: string;
 	completionNotes?: string;
+	tripCode?: string;
+	statusHistory?: { status: string; at?: Date; by?: Types.ObjectId; note?: string }[];
 	createdAt: Date;
 	updatedAt: Date;
 }

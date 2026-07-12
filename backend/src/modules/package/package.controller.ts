@@ -70,6 +70,26 @@ export class PackageController {
 		}
 	}
 
+	/**
+	 * Every package, including the inactive ones the public listing filters out.
+	 * The admin panel needs those: without them, switching a service to `inactive`
+	 * would remove it from the admin's own table and there would be no way left to
+	 * switch it back on.
+	 */
+	static async getAllPackagesForAdmin(req: Request, res: Response, next: NextFunction) {
+		try {
+			const packages = await Package.find({}).sort({ createdAt: -1 });
+
+			return res.status(200).json({
+				success: true,
+				count: packages.length,
+				data: packages,
+			});
+		} catch (error) {
+			next(error);
+		}
+	}
+
 	/*
    ==========================================
    GET SINGLE PACKAGE (PUBLIC)

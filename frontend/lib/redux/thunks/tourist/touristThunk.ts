@@ -5,12 +5,22 @@ import { TouristProfile } from "@/lib/data";
 const handleError = (err: any) =>
   err.response?.data?.message || err.message || "An error occurred";
 
+// The backend's Respond() helper does `res.json({ ...data, success: true })`, so
+// the profile's fields land on the top level of the body — `response.data` is
+// undefined. Reading it left `myProfile` unset, which blanked the dashboard and
+// stopped the onboarding form prefilling. Fall back to a nested `data` in case
+// an endpoint ever switches to a wrapped envelope.
+const unwrapProfile = (response: unknown): TouristProfile => {
+  const body = response as { data?: TouristProfile } & TouristProfile;
+  return body.data ?? body;
+};
+
 export const getMyTouristProfile = createAsyncThunk<TouristProfile, void>(
   "tourist/getMyProfile",
   async (_, { rejectWithValue }) => {
     try {
       const response = await apiService.get<TouristProfile>("/tourist/profile");
-      return response.data!;
+      return unwrapProfile(response);
     } catch (err: any) {
       return rejectWithValue(handleError(err));
     }
@@ -32,7 +42,7 @@ export const updateMyTouristProfile = createAsyncThunk<TouristProfile, TouristPr
   async (data, { rejectWithValue }) => {
     try {
       const response = await apiService.put<TouristProfile>("/tourist/profile", data);
-      return response.data!;
+      return unwrapProfile(response);
     } catch (err: any) {
       return rejectWithValue(handleError(err));
     }

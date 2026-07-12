@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/lib/hooks/useAuth";
 
-type Role = "tourist" | "guide" | "admin" | "user" | "manager";
+type Role = "tourist" | "guide" | "admin";
 
 interface RoleGuardProps {
   children: React.ReactNode;

@@ -1,15 +1,18 @@
-// lib/redux/thunks/booking/bookingThunk.ts
 import { createAsyncThunk } from "@reduxjs/toolkit";
 import { apiService } from "@/lib/service/api";
-import { tourGuideBooking as Booking } from "@/lib/data"; // Assuming Booking type is defined in data.ts
+import { tourGuideBooking as Booking } from "@/lib/data";
 
 const handleThunkError = (error: any, rejectWithValue: Function) => {
-  const message = error.response?.data?.message || error.message || "An unknown error occurred";
-  console.error("Thunk Error:", message, error);
+  const message =
+    error.response?.data?.message || error.message || "An unknown error occurred";
   return rejectWithValue(message);
 };
 
-// Define the shape of the data needed to create a booking
+/**
+ * What the tourist chooses. Note there is no price here: the backend derives it
+ * from the guide's published day rate, so the client cannot name its own price.
+ * The advance actually charged comes back on the order.
+ */
 export interface BookingCreationData {
   guideId: string;
   location: string;
@@ -17,7 +20,6 @@ export interface BookingCreationData {
   startDate: string;
   endDate: string;
   numberOfTravelers: number;
-  totalPrice: number;
   contactInfo: {
     fullName: string;
     email: string;
@@ -25,123 +27,145 @@ export interface BookingCreationData {
   };
 }
 
-// This single thunk handles the entire process:
-// 1. Creates the Razorpay order.
-// 2. Opens the Razorpay payment modal.
-// 3. On success, calls our backend to verify and create the booking document.
-export const createAndVerifyBooking = createAsyncThunk<
-  Booking, // This is what it returns on success
-  BookingCreationData, // This is the input
-  { rejectValue: string } // Type for rejection payload
->("booking/createAndVerify", async (bookingData, { rejectWithValue }) => {
+export interface BookingQuote {
+  guideId: string;
+  days: number;
+  dayRate: number;
+  totalPrice: number;
+  advance: number;
+  balance: number;
+}
+
+/** Price a direct booking before committing to it — drives the booking summary. */
+export const fetchBookingQuote = createAsyncThunk<
+  BookingQuote,
+  { guideId: string; startDate: string; endDate: string },
+  { rejectValue: string }
+>("tourGuideBooking/quote", async (params, { rejectWithValue }) => {
   try {
-    // Step 1: Create the Razorpay order from our backend
-    console.log("Creating Razorpay order for amount:", bookingData.totalPrice);
-    const orderResponse = await apiService.post<{ id: string; amount: number }>(
-      "/tourguide/create-order",
-      { totalPrice: bookingData.totalPrice }
-    );
-
-    const razorpayOrder = orderResponse.data;
-    if (!razorpayOrder || !razorpayOrder.id) {
-      return rejectWithValue("Failed to create Razorpay order.");
-    }
-
-    // Step 2: Open the Razorpay modal. We wrap this in a Promise.
-    return new Promise<Booking>((resolve, reject) => {
-      const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, // Ensure this is in your .env.local
-        amount: razorpayOrder.amount,
-        currency: "INR",
-        name: "TourBooker",
-        description: `Advance payment for booking with a guide.`,
-        order_id: razorpayOrder.id,
-        handler: async (response: any) => {
-          // Step 3: Payment was successful, now verify with our backend.
-          try {
-            console.log("Payment successful, verifying with backend...");
-            const verificationPayload = {
-              ...bookingData,
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-            };
-
-            const finalApiResponse = await apiService.post<Booking>(
-              "/tourguide/verify-and-create",
-              verificationPayload
-            );
-            
-            console.log("Backend verification successful, booking created:", finalApiResponse.data);
-            resolve(finalApiResponse.data!); // Resolve the promise with the final booking object
-          } catch (error: any) {
-            console.error("Backend verification failed:", error);
-            reject(error.message || "Failed to verify payment and create booking.");
-          }
-        },
-        prefill: {
-          name: bookingData.contactInfo.fullName,
-          email: bookingData.contactInfo.email,
-          contact: bookingData.contactInfo.phone,
-        },
-        theme: {
-          color: "#0052d4",
-        },
-        modal: {
-          ondismiss: () => {
-            console.log("Payment modal dismissed by user.");
-            reject("Payment was cancelled.");
-          },
-        },
-      };
-
-      // @ts-ignore
-      const rzp = new window.Razorpay(options);
-      rzp.open();
-    });
+    const query = new URLSearchParams(params).toString();
+    const response = await apiService.get<BookingQuote>(`/tourguide/quote?${query}`);
+    return response.data as BookingQuote;
   } catch (error: any) {
-    console.error("Error in booking process:", error);
-    return rejectWithValue(error.message || "An unknown error occurred during booking.");
+    return handleThunkError(error, rejectWithValue);
   }
 });
 
-export const createFinalPaymentOrder = createAsyncThunk(
+interface CreateOrderResponse {
+  id: string;
+  amount: number;
+  booking_data: string;
+  quote: BookingQuote;
+  razorpay_options: {
+    key: string;
+    amount: number;
+    currency: string;
+    order_id: string;
+    name: string;
+    description: string;
+  };
+}
+
+/**
+ * The whole advance-payment journey in one thunk: open the order, run Razorpay,
+ * then hand the signature back for verification. The booking only exists once
+ * the backend has verified that signature — never before.
+ */
+export const createAndVerifyBooking = createAsyncThunk<
+  Booking,
+  BookingCreationData,
+  { rejectValue: string }
+>("tourGuideBooking/createAndVerify", async (bookingData, { rejectWithValue }) => {
+  try {
+    const { contactInfo, ...orderInput } = bookingData;
+
+    const orderResponse = await apiService.post<CreateOrderResponse>(
+      "/tourguide/create-order",
+      orderInput,
+    );
+
+    const order = orderResponse.data;
+    if (!order?.id) {
+      return rejectWithValue("Could not start the payment. Please try again.");
+    }
+
+    return await new Promise<Booking>((resolve, reject) => {
+      const options = {
+        key: order.razorpay_options.key,
+        amount: order.razorpay_options.amount,
+        currency: order.razorpay_options.currency,
+        name: "GetMyGuide",
+        description: `Advance payment (₹${order.quote.advance} of ₹${order.quote.totalPrice})`,
+        order_id: order.id,
+        handler: async (response: any) => {
+          try {
+            const result = await apiService.post<Booking>("/tourguide/verify-and-create", {
+              // booking_data is the server's own payload echoed straight back; it is
+              // what lets the backend re-derive the exact price it quoted.
+              booking_data: order.booking_data,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+            resolve(result.data as Booking);
+          } catch (error: any) {
+            reject(
+              error.response?.data?.message ||
+                "We could not confirm your payment. Do not pay again — contact support with your payment id.",
+            );
+          }
+        },
+        prefill: {
+          name: contactInfo.fullName,
+          email: contactInfo.email,
+          contact: contactInfo.phone,
+        },
+        theme: { color: "#0052d4" },
+        modal: {
+          ondismiss: () => reject("Payment was cancelled."),
+        },
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+    });
+  } catch (error: any) {
+    return handleThunkError(error, rejectWithValue);
+  }
+});
+
+/** Step 1 of collecting the balance: open the order. */
+export const createFinalPaymentOrder = createAsyncThunk<any, string, { rejectValue: string }>(
   "tourGuideBooking/createFinalOrder",
-  async (bookingId: string, { rejectWithValue }) => {
+  async (bookingId, { rejectWithValue }) => {
     try {
-      // The backend response is { success: true, data: { ...order_details } }
-      const response = await apiService.post<{ data: any }>(
-        `/tourguide/${bookingId}/create-final-order`
-      );
-      if (response.success && response.data) {
-        return response.data; // This will be the Razorpay order object
-      }
-      throw new Error(response.message || "Failed to create final payment order");
+      const response = await apiService.post<any>(`/tourguide/${bookingId}/create-final-order`);
+      return response.data;
     } catch (error: any) {
       return handleThunkError(error, rejectWithValue);
     }
-  }
+  },
 );
 
-// Verifies the final payment after Razorpay handler returns
+/** Step 2: hand the signature back so the backend can settle the balance. */
 export const verifyFinalPayment = createAsyncThunk<
   Booking,
-  { bookingId: string; razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string; }
->(
-  "tourGuideBooking/verifyFinalPayment",
-  async (paymentData, { rejectWithValue }) => {
-    try {
-      const { bookingId, ...verificationDetails } = paymentData;
-      const response = await apiService.post<{ data: Booking }>(
-        `/tourguide/${bookingId}/verify-final-payment`,
-        verificationDetails
-      );
-      if (response.success && response.data) {
-        return response.data; // Returns the updated booking object
-      }
-      throw new Error(response.message || "Failed to verify final payment");
-    } catch (error: any) {
-      return handleThunkError(error, rejectWithValue);
-    }
+  {
+    bookingId: string;
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  },
+  { rejectValue: string }
+>("tourGuideBooking/verifyFinalPayment", async (paymentData, { rejectWithValue }) => {
+  try {
+    const { bookingId, ...verification } = paymentData;
+    const response = await apiService.post<Booking>(
+      `/tourguide/${bookingId}/verify-final-payment`,
+      verification,
+    );
+    return response.data as Booking;
+  } catch (error: any) {
+    return handleThunkError(error, rejectWithValue);
   }
-);
+});

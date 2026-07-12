@@ -1,6 +1,6 @@
 import NotificationService from '@services/notification';
 import { NextFunction, Request, Response } from 'express';
-import { Respond } from 'node-be-utilities';
+import { Respond } from '@utils/respond';
 import {
 	NotificationAdminListValidationResult,
 	NotificationListValidationResult,

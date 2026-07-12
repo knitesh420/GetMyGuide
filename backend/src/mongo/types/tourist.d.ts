@@ -15,6 +15,7 @@ export default interface ITourist extends Document {
 	about: string;
 	paymentStatus: 'pending' | 'success' | 'failed' | 'na';
 	registrationCompleted: boolean;
+	touristCode?: string;
 	createdAt: Date;
 	updatedAt: Date;
 }

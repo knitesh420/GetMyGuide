@@ -29,7 +29,7 @@ export default function AdminOverviewPage() {
   const { overview, bookingsTrend, loading } = useSelector((state: RootState) => state.reports);
 
   useEffect(() => {
-    if (isAuthenticated && user && user.role !== "admin" && user.role !== "manager") {
+    if (isAuthenticated && user && user.role !== "admin") {
       router.replace("/dashboard");
     }
   }, [isAuthenticated, user, router]);
@@ -41,7 +41,7 @@ export default function AdminOverviewPage() {
   }, [dispatch, isAuthenticated]);
 
   if (authLoading || !isAuthenticated) return null;
-  if (user && user.role !== "admin" && user.role !== "manager") return null;
+  if (user && user.role !== "admin") return null;
 
   return (
     <div className="flex-1 space-y-8 p-4 sm:p-6 md:p-8 bg-muted/40">

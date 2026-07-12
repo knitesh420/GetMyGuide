@@ -5,6 +5,7 @@ import { sendTripCompletedEmail, sendTripStartedEmail } from '@provider/email';
 import { Types } from 'mongoose';
 import { ConflictError, ForbiddenError, NotFoundError } from 'node-be-utilities';
 import ActivityLogService from './activityLog';
+import EarningService from './earning';
 import InvoiceService from './invoice';
 import NotificationService from './notification';
 
@@ -103,7 +104,14 @@ class TripService {
 		// first transition to ever do so, via a direct write (the same
 		// pattern booking.ts itself uses to touch other models directly).
 		const [booking, guide] = await Promise.all([
-			BookingDB.findByIdAndUpdate(trip.booking, { status: 'completed' }, { new: true }),
+			BookingDB.findByIdAndUpdate(
+				trip.booking,
+				{
+					$set: { status: 'completed' },
+					$push: { statusHistory: { status: 'completed', at: new Date() } },
+				},
+				{ new: true }
+			),
 			AccountDB.findById(guideUserId),
 		]);
 
@@ -141,6 +149,10 @@ class TripService {
 		} catch {
 			// non-blocking — trip already completed successfully
 		}
+
+		// Credits the guide's share of the booking to the earnings ledger. Never
+		// throws (see EarningService.accrueForTrip) and is idempotent on trip id.
+		await EarningService.accrueForTrip(trip);
 
 		return trip;
 	}
@@ -181,7 +193,7 @@ class TripService {
 		const skip = (page - 1) * limit;
 		const [data, total] = await Promise.all([
 			TripDB.find(query)
-				.populate('booking', 'tourist_info travel_details linked_to status')
+				.populate('booking', 'tourist_info travel_details linked_to status bookingCode')
 				.populate('guide', 'name email phone')
 				.sort({ createdAt: -1 })
 				.skip(skip)
@@ -200,7 +212,7 @@ class TripService {
 		const skip = (page - 1) * limit;
 		const [data, total] = await Promise.all([
 			TripDB.find(query)
-				.populate('booking', 'tourist_info travel_details linked_to status')
+				.populate('booking', 'tourist_info travel_details linked_to status bookingCode')
 				.sort({ createdAt: -1 })
 				.skip(skip)
 				.limit(limit)
@@ -217,13 +229,13 @@ class TripService {
 		// real Trip once a guide accepts. So we start from the tourist's bookings
 		// and fold in any Trip that already exists for each.
 		const bookings = await BookingDB.find({ linked_to: touristUserId })
-			.select('_id tourist_info travel_details linked_to status createdAt')
+			.select('_id tourist_info travel_details linked_to status createdAt bookingCode')
 			.sort({ createdAt: -1 })
 			.lean();
 		const bookingIds = bookings.map((b) => b._id);
 
 		const trips = await TripDB.find({ booking: { $in: bookingIds } })
-			.populate('booking', 'tourist_info travel_details linked_to status')
+			.populate('booking', 'tourist_info travel_details linked_to status bookingCode')
 			.populate('guide', 'name email phone')
 			.lean();
 
@@ -251,6 +263,7 @@ class TripService {
 					travel_details: b.travel_details,
 					linked_to: b.linked_to,
 					status: b.status,
+					bookingCode: b.bookingCode,
 				},
 				assignment: null,
 				guide: null,
@@ -269,7 +282,7 @@ class TripService {
 
 	async getById(tripId: Types.ObjectId, requestingUser: JWTPayload) {
 		const trip = await TripDB.findById(tripId)
-			.populate('booking', 'tourist_info travel_details linked_to status')
+			.populate('booking', 'tourist_info travel_details linked_to status bookingCode')
 			.populate('guide', 'name email phone');
 
 		if (!trip) {

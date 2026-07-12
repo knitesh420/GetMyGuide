@@ -15,6 +15,7 @@ export default interface ITransaction extends Document {
 	status: TransactionStatus;
 	amount: number;
 	currency: string;
+	paymentCode?: string;
 	createdAt: Date;
 	updatedAt: Date;
 }

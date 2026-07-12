@@ -1,9 +1,9 @@
 // app/(auth)/signup/page.tsx
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { Suspense, useEffect, useState, useCallback } from "react";
 import { toast } from "react-toastify";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSelector } from "react-redux";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,8 +41,13 @@ function validatePassword(password: string): string {
   return "";
 }
 
-export default function SignupPage() {
+function SignupContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // /register-guide sends people here with ?role=guide when they submit the
+  // registration form signed out — land them on the Guide option already chosen.
+  const presetRole = searchParams.get("role") === "guide" ? "guide" : "tourist";
+
   const { sendRegistrationOtp, loading, clearAuthError } = useAuth();
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
 
@@ -52,7 +57,7 @@ export default function SignupPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [accountType, setAccountType] = useState<"tourist" | "guide">("tourist");
+  const [accountType, setAccountType] = useState<"tourist" | "guide">(presetRole);
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -226,5 +231,13 @@ export default function SignupPage() {
         </p>
       </form>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupContent />
+    </Suspense>
   );
 }

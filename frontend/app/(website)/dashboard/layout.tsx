@@ -10,17 +10,17 @@ import { useAuth } from "@/lib/hooks/useAuth";
 // RBAC on every API call; this is a UX guard so users don't land on a shell
 // they have no access to (and fire a wall of 403s).
 const SECTION_ROLES: Record<string, string[]> = {
-  "/dashboard/admin": ["admin", "manager"],
+  "/dashboard/admin": ["admin"],
   "/dashboard/guide": ["guide"],
-  "/dashboard/user": ["user", "tourist"],
+  "/dashboard/user": ["tourist"],
 };
 
 // Where to send a user who lands on a section they aren't allowed to see.
+// Admins go to /dashboard/admin, not the legacy /admin panel — that page sits
+// outside this layout and so renders none of the sidebar navigation.
 const HOME_FOR_ROLE: Record<string, string> = {
-  admin: "/admin",
-  manager: "/admin",
+  admin: "/dashboard/admin",
   guide: "/dashboard/guide",
-  user: "/dashboard/user",
   tourist: "/dashboard/user",
 };
 

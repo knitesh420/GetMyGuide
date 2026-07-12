@@ -42,7 +42,7 @@ export default function AdminGuideCalendarPage() {
   const [selectedGuideId, setSelectedGuideId] = useState<string>("");
 
   useEffect(() => {
-    if (isAuthenticated && user && user.role !== "admin" && user.role !== "manager") {
+    if (isAuthenticated && user && user.role !== "admin") {
       router.replace("/dashboard");
     }
   }, [isAuthenticated, user, router]);
@@ -60,7 +60,7 @@ export default function AdminGuideCalendarPage() {
   }, [dispatch, selectedGuideId]);
 
   if (authLoading || !isAuthenticated) return null;
-  if (user && user.role !== "admin" && user.role !== "manager") return null;
+  if (user && user.role !== "admin") return null;
 
   const availableGuides = guidesAvailability.filter((g) => g.isAvailable);
   const unavailableGuides = guidesAvailability.filter((g) => !g.isAvailable);

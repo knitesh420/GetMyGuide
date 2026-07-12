@@ -1,5 +1,6 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
 import { apiService } from "@/lib/service/api";
+import { toPaginated } from "@/lib/redux/thunks/paginate";
 import {
   ActivityLogEntry,
   BookingsTrendPoint,
@@ -56,11 +57,8 @@ export const fetchActivityLog = createAsyncThunk<
   { page?: number; limit?: number; action?: string; actorType?: "user" | "system" } | undefined
 >("report/fetchActivityLog", async (params = {}, { rejectWithValue }) => {
   try {
-    const response = await apiService.get<PaginatedResult<ActivityLogEntry>>(
-      "/report/activity-log",
-      { params },
-    );
-    return response.data!;
+    const response = await apiService.get<ActivityLogEntry[]>("/report/activity-log", { params });
+    return toPaginated<ActivityLogEntry>(response);
   } catch (err: any) {
     return rejectWithValue(handleError(err));
   }

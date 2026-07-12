@@ -1,6 +1,6 @@
 import AssignmentService from '@services/assignment';
 import { NextFunction, Request, Response } from 'express';
-import { Respond } from 'node-be-utilities';
+import { Respond } from '@utils/respond';
 import {
 	AssignmentCreateValidationResult,
 	AssignmentListQueryValidationResult,
@@ -66,7 +66,10 @@ async function reassign(req: Request, res: Response, next: NextFunction) {
 async function getAssignableGuides(req: Request, res: Response, next: NextFunction) {
 	try {
 		const guides = await AssignmentService.getAssignableGuides();
-		return Respond({ res, status: 200, data: guides });
+		// Wrap the array under `data`: Respond() spreads its `data` onto the top
+		// level of the body, so a bare array would arrive as numeric-keyed props
+		// and `response.data` would be undefined on the client.
+		return Respond({ res, status: 200, data: { data: guides } });
 	} catch (error) {
 		return next(error);
 	}

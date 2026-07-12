@@ -227,21 +227,110 @@ export const getGuideById = createAsyncThunk<GuideProfile, string>(
   }
 );
 
-// Toggle guide approval
-export const toggleGuideApproval = createAsyncThunk<
+// ---- Admin KYC review -----------------------------------------------------
+// Approving and rejecting are separate endpoints, not one toggle: a rejection
+// carries a reason the guide is shown verbatim, and there is nothing to "toggle
+// off" about an approval — you reject instead.
+
+export const approveGuide = createAsyncThunk<GuideProfile, string>(
+  "guide/approve",
+  async (guideAccountId, { rejectWithValue }) => {
+    try {
+      const response = await apiService.patch<GuideProfile>(
+        `/guides/${guideAccountId}/approve`,
+      );
+      return response.data!;
+    } catch (err: any) {
+      return rejectWithValue(handleError(err));
+    }
+  },
+);
+
+export const rejectGuide = createAsyncThunk<
   GuideProfile,
-  { id: string; isApproved: boolean }
->("guide/toggleApproval", async ({ id, isApproved }, { rejectWithValue }) => {
+  { guideAccountId: string; reason: string }
+>("guide/reject", async ({ guideAccountId, reason }, { rejectWithValue }) => {
   try {
     const response = await apiService.patch<GuideProfile>(
-      `/guides/${id}/approve`,
-      { isApproved }
+      `/guides/${guideAccountId}/reject`,
+      { reason },
     );
     return response.data!;
   } catch (err: any) {
     return rejectWithValue(handleError(err));
   }
 });
+
+export interface PendingApproval {
+  accountId: string;
+  guideCode: string | null;
+  name: string;
+  email: string;
+  phone: string;
+  city: string;
+  type: string;
+  languages: string[];
+  pan: string;
+  profileImage: string;
+  /** [licence, aadhaar] in upload order — this is what the admin reviews. */
+  identityProofs: string[];
+  submittedAt: string;
+}
+
+export const fetchPendingApprovals = createAsyncThunk<PendingApproval[], void>(
+  "guide/fetchPendingApprovals",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await apiService.get<PendingApproval[]>(
+        "/guides/admin/pending-approvals",
+      );
+      return response.data ?? [];
+    } catch (err: any) {
+      return rejectWithValue(handleError(err));
+    }
+  },
+);
+
+// ---- The guide's own rates & payout destination ---------------------------
+
+export interface GuidePricing {
+  halfDay: number;
+  fullDay: number;
+}
+
+export const updateMyPricing = createAsyncThunk<GuidePricing, GuidePricing>(
+  "guide/updatePricing",
+  async (pricing, { rejectWithValue }) => {
+    try {
+      const response = await apiService.put<GuidePricing>("/guides/pricing", pricing);
+      return response.data!;
+    } catch (err: any) {
+      return rejectWithValue(handleError(err));
+    }
+  },
+);
+
+export interface GuideBankDetails {
+  accountHolderName?: string;
+  accountNumber?: string;
+  ifsc?: string;
+  upiId?: string;
+}
+
+export const updateMyBankDetails = createAsyncThunk<GuideBankDetails, GuideBankDetails>(
+  "guide/updateBankDetails",
+  async (bankDetails, { rejectWithValue }) => {
+    try {
+      const response = await apiService.put<GuideBankDetails>(
+        "/guides/bank-details",
+        bankDetails,
+      );
+      return response.data!;
+    } catch (err: any) {
+      return rejectWithValue(handleError(err));
+    }
+  },
+);
 
 // Delete guide
 export const deleteGuide = createAsyncThunk<string, string>(
@@ -272,30 +361,32 @@ export const updateMyAvailability = createAsyncThunk<
   }
 });
 
-// Fetch guide pricing details (structured per-guide location/language pricing).
-// NOTE: /guides/:id/pricing-details is NOT implemented on the backend yet — the
-// structured pricing domain (admin-managed locations/languages with group
-// pricing) does not exist server-side. This thunk will reject until that
-// backend work lands; guideSlice handles the rejection by clearing
-// pricingDetails, and the booking page degrades to an "Invalid Booking Request"
-// state rather than crashing.
-export const fetchGuidePricingDetails = createAsyncThunk<
-  { locations: AdminLocation[]; languages: LanguageOption[] },
-  string
->("guide/fetchPricingDetails", async (guideId, { rejectWithValue }) => {
-  try {
-    const response = await apiService.get<{
-      locations: AdminLocation[];
-      languages: LanguageOption[];
-    }>(`/guides/${guideId}/pricing-details`);
-    return response as unknown as {
-      locations: AdminLocation[];
-      languages: LanguageOption[];
-    };
-  } catch (err: any) {
-    return rejectWithValue(handleError(err));
-  }
-});
+export interface GuidePricingDetails {
+  guideId: string;
+  name: string;
+  currency: string;
+  pricing: GuidePricing | null;
+  isCertified: boolean;
+  /** False when the guide is unverified or has never published rates. */
+  bookable: boolean;
+  /** Why not, so the page can say something better than "unavailable". */
+  unavailableReason: string | null;
+}
+
+/** What this guide charges. Drives the direct-booking page's price summary. */
+export const fetchGuidePricingDetails = createAsyncThunk<GuidePricingDetails, string>(
+  "guide/fetchPricingDetails",
+  async (guideId, { rejectWithValue }) => {
+    try {
+      const response = await apiService.get<GuidePricingDetails>(
+        `/guides/${guideId}/pricing-details`,
+      );
+      return response.data!;
+    } catch (err: any) {
+      return rejectWithValue(handleError(err));
+    }
+  },
+);
 
 export const fetchMyBookingsThunk = createAsyncThunk<tourGuideBooking[]>(
   'guideBookings/fetchMyBookings',

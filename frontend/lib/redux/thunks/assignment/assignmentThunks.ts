@@ -1,5 +1,6 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
 import { apiService } from "@/lib/service/api";
+import { toPaginated } from "@/lib/redux/thunks/paginate";
 import {
   AdminBookingSummary,
   AssignableGuide,
@@ -12,33 +13,19 @@ import {
 const handleError = (err: any) =>
   err.response?.data?.message || err.message || "An error occurred";
 
-// The backend's Respond() helper spreads its payload onto the top level, so a
-// paginated list arrives as { data: [...], total, page, totalPages } directly
-// on the response body — `response.data` is the array, not a nested envelope.
-// Rebuild the PaginatedResult the reducers expect from those flat fields.
-function toPaginated<T>(response: {
-  data?: T[];
-  total?: number;
-  page?: number;
-  totalPages?: number;
-}): PaginatedResult<T> {
-  return {
-    data: response.data ?? [],
-    total: response.total ?? 0,
-    page: response.page ?? 1,
-    totalPages: response.totalPages ?? 0,
-  };
-}
-
-// Reuses the existing, unmodified GET /booking (admin) endpoint — the old
-// frontend bookingThunks.ts targets a mismatched shape and is intentionally
-// left untouched, so this fetches the real shape directly for this new page.
+// Reuses the existing, unmodified GET /booking (admin) endpoint.
+//
+// That route answers `{ bookings: [...] }` — it names its array `bookings`
+// rather than using the `data` key most list routes use (GET /lead/contact does
+// the same thing with `inquiries`). Read that key explicitly: `response.data`
+// is the whole object, so treating it as the array silently yielded nothing and
+// this page showed no bookings at all.
 export const fetchBookingsAwaitingAssignment = createAsyncThunk<AdminBookingSummary[], void>(
   "assignment/fetchBookingsAwaitingAssignment",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiService.get<AdminBookingSummary[]>("/booking");
-      const bookings = response.data ?? [];
+      const response = await apiService.get<{ bookings: AdminBookingSummary[] }>("/booking");
+      const bookings = response.data?.bookings ?? [];
       return bookings.filter((b) => b.status === "successful" || b.status === "confirmed");
     } catch (err: any) {
       return rejectWithValue(handleError(err));

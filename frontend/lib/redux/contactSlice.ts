@@ -59,14 +59,52 @@ export const createLead = createAsyncThunk(
   },
 );
 
+/**
+ * GET /lead/contact answers `{ inquiries, total, page, totalPages }` — this one
+ * endpoint names its array `inquiries` rather than the `data` every other list
+ * route uses, so read that key explicitly. Reading `.data` here returned
+ * `undefined` and the admin enquiries list was permanently empty.
+ */
 export const fetchLeads = createAsyncThunk(
   "leads/fetchAll",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiService.get<Lead[]>("/lead/contact?limit=1000");
-      return response.data || [];
+      const response = await apiService.get<{ inquiries: Lead[] }>(
+        "/lead/contact?limit=1000",
+      );
+      return response.data?.inquiries ?? [];
     } catch (error: any) {
       return rejectWithValue(error.message || "Failed to fetch leads");
+    }
+  },
+);
+
+/** Move an enquiry through pending → reviewed → resolved. */
+export const updateLeadStatus = createAsyncThunk(
+  "leads/updateStatus",
+  async (
+    { id, status }: { id: string; status: Lead["status"] },
+    { rejectWithValue },
+  ) => {
+    try {
+      await apiService.patch(`/lead/contact/${id}/status`, { status });
+      return { id, status };
+    } catch (error: any) {
+      return rejectWithValue(
+        error?.message || "Failed to update the enquiry status",
+      );
+    }
+  },
+);
+
+export const deleteLead = createAsyncThunk(
+  "leads/delete",
+  async (id: string, { rejectWithValue }) => {
+    try {
+      await apiService.delete(`/lead/contact/${id}`);
+      return id;
+    } catch (error: any) {
+      return rejectWithValue(error?.message || "Failed to delete the enquiry");
     }
   },
 );
@@ -109,6 +147,22 @@ const leadsSlice = createSlice({
       })
       .addCase(fetchLeads.rejected, (state, action: PayloadAction<any>) => {
         state.loading = false;
+        state.error = action.payload;
+      })
+      // updateLeadStatus — patch the row in place so the table doesn't have to
+      // round-trip the whole list just to recolour one badge.
+      .addCase(updateLeadStatus.fulfilled, (state, action) => {
+        const lead = state.leads.find((l) => l._id === action.payload.id);
+        if (lead) lead.status = action.payload.status;
+      })
+      .addCase(updateLeadStatus.rejected, (state, action: PayloadAction<any>) => {
+        state.error = action.payload;
+      })
+      // deleteLead
+      .addCase(deleteLead.fulfilled, (state, action) => {
+        state.leads = state.leads.filter((l) => l._id !== action.payload);
+      })
+      .addCase(deleteLead.rejected, (state, action: PayloadAction<any>) => {
         state.error = action.payload;
       });
   },

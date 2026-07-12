@@ -1,5 +1,5 @@
 import { StorageDB } from '@mongo';
-import { sendPasswordResetEmail } from '@provider/email';
+import { sendPasswordResetOtpEmail } from '@provider/email';
 import AuthService from '@services/auth';
 import express from 'express';
 import mongoose from 'mongoose';
@@ -10,7 +10,7 @@ import { clearDatabase, connectTestDB, disconnectTestDB } from '../setup/db.setu
 
 // Mock email provider
 jest.mock('@provider/email', () => ({
-	sendPasswordResetEmail: jest.fn().mockResolvedValue(true),
+	sendPasswordResetOtpEmail: jest.fn().mockResolvedValue(true),
 }));
 
 describe('Session API Integration Tests', () => {
@@ -30,7 +30,7 @@ describe('Session API Integration Tests', () => {
 		await clearDatabase();
 		jest.clearAllMocks();
 		// Ensure email mock returns true
-		(sendPasswordResetEmail as jest.Mock).mockResolvedValue(true);
+		(sendPasswordResetOtpEmail as jest.Mock).mockResolvedValue(true);
 	});
 
 	describe('POST /session/signup', () => {
@@ -164,7 +164,7 @@ describe('Session API Integration Tests', () => {
 		beforeEach(async () => {
 			await AuthService.signup(testUser);
 			// Ensure email mock returns true before calling forgotPassword
-			(sendPasswordResetEmail as jest.Mock).mockResolvedValue(true);
+			(sendPasswordResetOtpEmail as jest.Mock).mockResolvedValue(true);
 			await AuthService.forgotPassword(testUser.email);
 
 			// Find the storage document - the token is stored as the key

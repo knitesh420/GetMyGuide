@@ -5,8 +5,20 @@ import Controller from './user.controller';
 
 const router = express.Router();
 
+// The calling account — the "who am I" endpoint, open to any signed-in role.
+// Registered first so 'me' is never parsed as an :id.
+router.route('/me').get(VerifySession, Controller.getMe);
+
 // Admin protected routes
 router.route('/tourists').get(VerifySession, VerifyMinLevel('admin'), Controller.getAllTourists);
+
+// Every account, optionally narrowed by ?role= and ?search= / ?query=.
+router.route('/').get(VerifySession, VerifyMinLevel('admin'), Controller.getAllAccounts);
+
+// Accounts of a single role, e.g. /users/role/guide.
+router
+	.route('/role/:role')
+	.get(VerifySession, VerifyMinLevel('admin'), Controller.getAccountsByRole);
 
 router
 	.route('/:id')

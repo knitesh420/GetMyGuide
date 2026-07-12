@@ -116,7 +116,7 @@ export default function GuideAssignmentsPage() {
         ) : (
           <GuideTable>
             <GuideTableHead
-              columns={["Destination", "Tourist", "Date", "Travellers", "Notes", "Status", "Action"]}
+              columns={["Ref", "Destination", "Tourist", "Date", "Travellers", "Notes", "Status", "Action"]}
             />
             <tbody>
               {myAssignments.map((assignment) => {
@@ -125,6 +125,12 @@ export default function GuideAssignmentsPage() {
 
                 return (
                   <GuideTableRow key={assignment._id}>
+                    <GuideTableCell>
+                      <div className="font-mono text-xs text-slate-500">
+                        <div>{assignment.assignmentCode ?? "—"}</div>
+                        <div>{booking?.bookingCode ?? "—"}</div>
+                      </div>
+                    </GuideTableCell>
                     <GuideTableCell>
                       <GuideCellStack
                         primary={booking?.travel_details.city ?? "Booking"}

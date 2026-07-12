@@ -9,7 +9,12 @@ export type ActivityLogTargetType =
 	| 'Guide'
 	| 'GuideLeave'
 	| 'Transaction'
-	| 'Invoice';
+	| 'Invoice'
+	| 'RefundRequest'
+	| 'Earning'
+	| 'Payout'
+	| 'Location'
+	| 'Account';
 
 export default interface IActivityLog extends Document {
 	_id: Types.ObjectId;

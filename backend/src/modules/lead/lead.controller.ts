@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
-import { Respond } from 'node-be-utilities';
+import { Respond } from '@utils/respond';
 import ContactInquiryDB from '@mongo/repo/ContactInquiry';
 import { CreateContactInquiryValidationResult } from './lead.validator';
 

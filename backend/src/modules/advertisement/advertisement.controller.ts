@@ -3,8 +3,8 @@ import { Path } from '@config/const';
 import { NextFunction, Request, Response } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
-import { BadRequestError, Respond } from 'node-be-utilities';
-
+import { BadRequestError } from 'node-be-utilities';
+import { Respond } from '@utils/respond';
 async function createAdvertisement(req: Request, res: Response, next: NextFunction) {
 	try {
 		const videoFile = req.file;

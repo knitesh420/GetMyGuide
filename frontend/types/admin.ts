@@ -144,11 +144,16 @@ export interface AdminPackage {
   isActive: boolean;
   isFeatured: boolean;
   featured?: boolean;
+  /** What the Package model actually stores — `isActive` above is a leftover
+   *  that no package document carries. Prefer this when reading or writing. */
+  status?: "active" | "inactive";
+  createdAt?: string;
   translations?: PackageTranslations;
   numberOfPeople?: number;
   numberOfDays?: number;
   inclusions?: string[];
   exclusions?: string[];
+  highlights?: string[];
   averageRating?: number; // Optional, likely calculated by backend
   numReviews?: number; // Optional, likely calculated by backend
 }

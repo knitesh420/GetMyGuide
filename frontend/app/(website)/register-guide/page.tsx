@@ -40,6 +40,33 @@ declare global {
 
 const RAZORPAY_THEME_COLOR = "#22C55E";
 
+/**
+ * An anonymous visitor may fill this form, but registration is account-first —
+ * the fields have no Guide record to write to until they have an account. Stash
+ * what they typed (tab-scoped) while they go through signup, and restore it when
+ * they land back here from their dashboard. Files can't survive the trip, so
+ * only the text fields are kept.
+ */
+const DRAFT_KEY = "guideRegistrationDraft";
+
+interface RegistrationDraft {
+  phone: string;
+  city: string;
+  pan: string;
+  guideType: "" | "normal" | "escort";
+  languages: string[];
+}
+
+function readDraft(): RegistrationDraft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    return raw ? (JSON.parse(raw) as RegistrationDraft) : null;
+  } catch {
+    return null;
+  }
+}
+
 const LANGUAGE_OPTIONS: Option[] = [
   "English",
   "Spanish",
@@ -98,18 +125,22 @@ function BecomeGuidePage() {
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Registration is account-first now: an anonymous visitor has no Guide record
-  // to write to. Sign-in drops guides on their dashboard, where "Complete
-  // Profile" leads back here.
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.replace("/signin");
-    }
-  }, [authLoading, isAuthenticated, router]);
-
   useEffect(() => {
     if (isAuthenticated) dispatch(getMyGuideProfile());
   }, [dispatch, isAuthenticated]);
+
+  // Restore anything typed before signing up (see DRAFT_KEY). Runs once, ahead
+  // of the profile prefill below, which only fills fields still left empty.
+  useEffect(() => {
+    const draft = readDraft();
+    if (!draft) return;
+    sessionStorage.removeItem(DRAFT_KEY);
+    setPhone((p) => p || draft.phone);
+    setCity((c) => c || draft.city);
+    setPan((p) => p || draft.pan);
+    setGuideType((t) => t || draft.guideType);
+    setLanguages((l) => (l.length ? l : draft.languages));
+  }, []);
 
   // Prefill from whatever is already on record — the account phone for a new
   // guide, the saved Guide fields for one coming back to edit.
@@ -234,6 +265,19 @@ function BecomeGuidePage() {
     e.preventDefault();
     setFormError("");
 
+    // Anonymous visitors get the full form, but registration and the membership
+    // payment both need a guide account behind them — send them to sign up, and
+    // carry their answers across so they don't retype them.
+    if (!isAuthenticated) {
+      sessionStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({ phone, city, pan, guideType, languages }),
+      );
+      toast.info("Create your guide account to finish registering and pay.");
+      router.push("/signup?role=guide");
+      return;
+    }
+
     if (phone.length !== 10) {
       setFormError("Phone number must be exactly 10 digits.");
       return;
@@ -280,8 +324,9 @@ function BecomeGuidePage() {
   };
 
   // Hold the skeleton until we know whether this is a registration or an edit,
-  // so the file inputs never flash for a guide who has already registered.
-  if (authLoading || !isAuthenticated || (loading && !myProfile)) {
+  // so the file inputs never flash for a guide who has already registered. An
+  // anonymous visitor has no profile to wait on — show them the blank form.
+  if (authLoading || (isAuthenticated && loading && !myProfile)) {
     return (
       <div className="mx-auto max-w-3xl space-y-4 px-4 py-10">
         <Skeleton className="h-20 rounded-2xl" />
@@ -306,17 +351,46 @@ function BecomeGuidePage() {
           </p>
         </header>
 
+        {!isAuthenticated && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            You can fill this in now. When you submit, we&apos;ll ask you to
+            create a guide account — your answers will be waiting for you.{" "}
+            <Link href="/signin" className="font-semibold underline">
+              Already have one? Sign in
+            </Link>
+            .
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <FormSection title="Account" description="Managed by your login — not editable here.">
+            <FormSection
+              title="Account"
+              description={
+                isAuthenticated
+                  ? "Managed by your login — not editable here."
+                  : "Set when you create your guide account."
+              }
+            >
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div>
                   <Label htmlFor="name">Name</Label>
-                  <Input id="name" value={myProfile?.name || ""} disabled />
+                  <Input
+                    id="name"
+                    value={myProfile?.name || ""}
+                    placeholder={isAuthenticated ? "" : "From your account"}
+                    disabled
+                  />
                 </div>
                 <div>
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" value={myProfile?.email || ""} disabled />
+                  <Input
+                    id="email"
+                    type="email"
+                    value={myProfile?.email || ""}
+                    placeholder={isAuthenticated ? "" : "From your account"}
+                    disabled
+                  />
                 </div>
               </div>
             </FormSection>
@@ -336,7 +410,7 @@ function BecomeGuidePage() {
                     placeholder="10-digit mobile number"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                    required
+                    required={!!isAuthenticated}
                   />
                 </div>
                 <div>
@@ -345,7 +419,7 @@ function BecomeGuidePage() {
                     id="city"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
-                    required
+                    required={!!isAuthenticated}
                   />
                 </div>
                 <div>
@@ -372,7 +446,7 @@ function BecomeGuidePage() {
                       onChange={(e) => setPan(e.target.value.toUpperCase())}
                       placeholder="ABCDE1234F"
                       disabled={registered}
-                      required
+                      required={!!isAuthenticated}
                     />
                   </div>
                 )}
@@ -394,63 +468,80 @@ function BecomeGuidePage() {
                 title="Photos & Documents"
                 description="Your photo is public. Your licence and Aadhaar are private and seen only by admins."
               >
-                <div className="grid grid-cols-1 items-start gap-8 md:grid-cols-2">
-                  <div className="md:col-span-2">
-                    <Label className="mb-2 block">Profile Photo (required)</Label>
-                    <div className="mt-2 flex items-center gap-4">
-                      {profilePreview && (
-                        <Image
-                          src={profilePreview}
-                          alt="Profile preview"
-                          width={80}
-                          height={80}
-                          className="h-20 w-20 rounded-full object-cover"
+                {/* A file picked before signing up can't be carried across the
+                    signup redirect (a File isn't serialisable), so list the
+                    uploads for anonymous visitors instead of collecting ones
+                    they'd only have to pick again. */}
+                {!isAuthenticated ? (
+                  <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600">
+                    <li>Profile photo — shown on your public guide listing</li>
+                    <li>Guide licence — private, reviewed by admins</li>
+                    <li>Aadhaar — private, reviewed by admins</li>
+                    <li className="list-none pt-2 text-xs text-slate-500">
+                      You&apos;ll attach these once your guide account exists.
+                    </li>
+                  </ul>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 items-start gap-8 md:grid-cols-2">
+                      <div className="md:col-span-2">
+                        <Label className="mb-2 block">Profile Photo (required)</Label>
+                        <div className="mt-2 flex items-center gap-4">
+                          {profilePreview && (
+                            <Image
+                              src={profilePreview}
+                              alt="Profile preview"
+                              width={80}
+                              height={80}
+                              className="h-20 w-20 rounded-full object-cover"
+                            />
+                          )}
+                          <Input
+                            type="file"
+                            onChange={handleProfileFileChange}
+                            accept="image/*"
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="mb-2 block">Guide Licence (required)</Label>
+                        <Input
+                          type="file"
+                          onChange={(e) => setLicenceFile(e.target.files?.[0] ?? null)}
+                          accept="image/*,.pdf"
+                          required
                         />
-                      )}
-                      <Input
-                        type="file"
-                        onChange={handleProfileFileChange}
-                        accept="image/*"
-                        required
-                      />
+                      </div>
+                      <div>
+                        <Label className="mb-2 block">Aadhaar (required)</Label>
+                        <Input
+                          type="file"
+                          onChange={(e) => setAadhaarFile(e.target.files?.[0] ?? null)}
+                          accept="image/*,.pdf"
+                          required
+                        />
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <Label className="mb-2 block">Guide Licence (required)</Label>
-                    <Input
-                      type="file"
-                      onChange={(e) => setLicenceFile(e.target.files?.[0] ?? null)}
-                      accept="image/*,.pdf"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label className="mb-2 block">Aadhaar (required)</Label>
-                    <Input
-                      type="file"
-                      onChange={(e) => setAadhaarFile(e.target.files?.[0] ?? null)}
-                      accept="image/*,.pdf"
-                      required
-                    />
-                  </div>
-                </div>
 
-                <label className="mt-6 flex items-start gap-3 text-sm text-slate-600">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={disclaimerAccepted}
-                    onChange={(e) => setDisclaimerAccepted(e.target.checked)}
-                  />
-                  <span>
-                    I confirm the details and documents above are genuine, and I agree to
-                    GetMyGuide&apos;s{" "}
-                    <Link href="/terms" className="underline">
-                      terms
-                    </Link>
-                    .
-                  </span>
-                </label>
+                    <label className="mt-6 flex items-start gap-3 text-sm text-slate-600">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={disclaimerAccepted}
+                        onChange={(e) => setDisclaimerAccepted(e.target.checked)}
+                      />
+                      <span>
+                        I confirm the details and documents above are genuine, and I agree to
+                        GetMyGuide&apos;s{" "}
+                        <Link href="/terms" className="underline">
+                          terms
+                        </Link>
+                        .
+                      </span>
+                    </label>
+                  </>
+                )}
               </FormSection>
             )}
 
@@ -459,9 +550,11 @@ function BecomeGuidePage() {
               <Button type="submit" disabled={submitting || loading}>
                 {submitting
                   ? "Please wait..."
-                  : registered
-                    ? "Save Changes"
-                    : "Register & Pay Membership"}
+                  : !isAuthenticated
+                    ? "Continue — create your guide account"
+                    : registered
+                      ? "Save Changes"
+                      : "Register & Pay Membership"}
               </Button>
             </div>
           </div>
@@ -471,16 +564,14 @@ function BecomeGuidePage() {
   );
 }
 
-// Guide registration is for guide accounts only. A signed-in tourist is
-// redirected to their own dashboard with an "Unauthorized Access" notice, and
-// anonymous visitors are sent to sign in (see section 6 role rules).
+// Anonymous visitors may read and fill this form — it's the public "become a
+// guide" pitch, and turning them away at the door loses them. They're sent to
+// sign up when they submit, which is the first point an account is actually
+// needed. A signed-in tourist still can't register as a guide, so they get the
+// "Unauthorized Access" notice and a bounce to their own dashboard.
 export default function BecomeGuidePageGuarded() {
   return (
-    <RoleGuard
-      allowRoles={["guide", "admin"]}
-      requireAuth
-      redirectTo="/dashboard/user"
-    >
+    <RoleGuard allowRoles={["guide", "admin"]} redirectTo="/dashboard/user">
       <BecomeGuidePage />
     </RoleGuard>
   );

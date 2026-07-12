@@ -1,6 +1,6 @@
 import InvoiceService from '@services/invoice';
 import { NextFunction, Request, Response } from 'express';
-import { Respond } from 'node-be-utilities';
+import { Respond } from '@utils/respond';
 import { InvoiceExportQueryValidationResult, InvoiceListQueryValidationResult } from './invoice.validator';
 
 async function list(req: Request, res: Response, next: NextFunction) {

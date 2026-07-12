@@ -5,7 +5,7 @@ export interface User {
   email: string;
   phone?: string; // Changed from mobile to phone to match backend
   mobile?: string; // Keep for backward compatibility
-  role: "admin" | "user" | "guide" | "manager" | "tourist";
+  role: "admin" | "guide" | "tourist";
   avatar?: string;
   isActive: boolean;
   status?: string;
@@ -85,7 +85,7 @@ export interface RegisterRequest {
   name: string;
   email: string;
   password: string;
-  role?: "user" | "guide";
+  role?: "tourist" | "guide";
   mobile?: string;
 }
 
@@ -93,7 +93,7 @@ export interface CreateUserRequest {
   name: string;
   email: string;
   password: string;
-  role: "admin" | "user" | "guide" | "manager";
+  role: "admin" | "guide" | "tourist";
   mobile?: string;
   avatar?: string;
   isActive?: boolean;
@@ -106,7 +106,7 @@ export interface UpdateUserRequest {
   avatar?: string;
   // Fields below are admin-only (cannot be updated via /me endpoint)
   email?: string;
-  role?: "admin" | "user" | "guide" | "manager";
+  role?: "admin" | "guide" | "tourist";
   isActive?: boolean;
 }
 

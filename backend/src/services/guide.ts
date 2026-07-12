@@ -1,10 +1,18 @@
 import { GUIDE_MEMBERSHIP_DURATION_DAYS, GUIDE_MEMBERSHIP_FEE } from '@config/const';
-import { AccountDB, ContactInquiryDB, GuideDB, GuideEnrollmentDB } from '@mongo';
-import IGuideEnrollment from '@mongo/types/guideEnrollment';
+import { AccountDB, ContactInquiryDB, GuideDB } from '@mongo';
+import { displayApprovalStatus, isGuideApproved } from '@utils/guideApproval';
 import { verifyRazorpaySignature } from '@utils/paymentVerify';
 import { Types } from 'mongoose';
-import { BadRequestError, NotFoundError, ServerError, error as logError } from 'node-be-utilities';
+import {
+	BadRequestError,
+	ConflictError,
+	NotFoundError,
+	ServerError,
+	error as logError,
+} from 'node-be-utilities';
+import ActivityLogService from './activityLog';
 import InvoiceService from './invoice';
+import NotificationService from './notification';
 import TransactionService from './transaction';
 
 interface GuideProfileData {
@@ -32,121 +40,7 @@ interface GuideProfilePatchData {
 	languages?: string[];
 }
 
-interface TransformedEnrollment {
-	id: string;
-	name: string;
-	email: string;
-	phone: string;
-	city: string;
-	type: 'normal' | 'escort';
-	pan?: string; // Optional - only for escort guides
-	licence: string;
-	aadhar: string;
-	languages: string[];
-	photo: string;
-	createdAt: Date;
-	updatedAt: Date;
-	transaction?: {
-		transaction_id: string;
-		razorpay_order_id: string;
-		amount: number;
-		currency: string;
-		status: string;
-	};
-}
-
-function transformEnrollment(
-	enrollment: IGuideEnrollment,
-	transaction?: {
-		transaction_id: string;
-		razorpay_order_id: string;
-		amount: number;
-		currency: string;
-		status: string;
-	}
-): TransformedEnrollment {
-	return {
-		id: enrollment._id.toString(),
-		name: enrollment.name,
-		email: enrollment.email,
-		phone: enrollment.phone,
-		city: enrollment.city,
-		type: enrollment.type,
-		pan: enrollment.pan,
-		licence: enrollment.licence,
-		aadhar: enrollment.aadhar,
-		languages: enrollment.languages,
-		photo: enrollment.photo,
-		createdAt: enrollment.createdAt,
-		updatedAt: enrollment.updatedAt,
-		transaction,
-	};
-}
-
 class GuideService {
-	/**
-	 * Read a single legacy enrollment. The anonymous enrol-and-pay flow is gone,
-	 * but admins still open these records to review the KYC documents attached
-	 * to guides who came through it.
-	 */
-	async getEnrollmentById(enrollmentId: Types.ObjectId): Promise<TransformedEnrollment> {
-		const enrollment = await GuideEnrollmentDB.findById(enrollmentId);
-		if (!enrollment) {
-			throw new NotFoundError('Enrollment not found');
-		}
-		return transformEnrollment(enrollment);
-	}
-
-	/**
-	 * Get all enrollments (admin only)
-	 */
-	async getAllEnrollments(query?: string): Promise<TransformedEnrollment[]> {
-		const _query = query
-			? {
-					$or: [
-						{
-							city: { $regex: `^${query}`, $options: 'i' },
-						},
-						{
-							languages: { $regex: `^${query}`, $options: 'i' },
-						},
-					],
-				}
-			: undefined;
-		const enrollments = await GuideEnrollmentDB.find(_query || {})
-			.sort({ createdAt: -1 })
-			.lean();
-
-		// Fetch transaction details for each enrollment
-		const enrollmentsWithTransactions = await Promise.all(
-			enrollments.map(async (enrollment: IGuideEnrollment) => {
-				try {
-					// Try to get transaction for this enrollment
-					const transaction = await TransactionService.getTransactionByReference(
-						enrollment._id.toString(),
-						'enrollment'
-					);
-
-					if (transaction) {
-						return transformEnrollment(enrollment, {
-							transaction_id: transaction.transaction_id,
-							razorpay_order_id: transaction.razorpay_order_id,
-							amount: transaction.amount,
-							currency: transaction.currency,
-							status: transaction.status,
-						});
-					}
-				} catch (error) {
-					// If transaction not found, just return enrollment without transaction details
-				}
-
-				return transformEnrollment(enrollment);
-			})
-		);
-
-		return enrollmentsWithTransactions;
-	}
-
 	/**
 	 * Create a new contact inquiry
 	 */
@@ -252,21 +146,6 @@ class GuideService {
 	}
 
 	/**
-	 * Delete (remove) a guide enrollment by ID (admin only)
-	 */
-	async deleteEnrollment(enrollmentId: Types.ObjectId): Promise<{ message: string }> {
-		const enrollment = await GuideEnrollmentDB.findByIdAndDelete(enrollmentId);
-
-		if (!enrollment) {
-			throw new NotFoundError('Enrollment not found');
-		}
-
-		return {
-			message: 'Guide enrollment deleted successfully',
-		};
-	}
-
-	/**
 	 * Get guide profile (Account + Guide membership) for the current user
 	 */
 	async getGuideProfile(userId: string) {
@@ -276,9 +155,6 @@ class GuideService {
 		}
 
 		const guide = await GuideDB.findOne({ accountId: account._id });
-		// Legacy record from the old anonymous KYC-and-pay flow — used as a
-		// fallback source for guides who haven't filled the new profile form yet.
-		const enrollment = await GuideEnrollmentDB.findOne({ email: account.email.toLowerCase() });
 
 		const now = new Date();
 		const membershipExpired = !guide?.membershipExpiryDate || guide.membershipExpiryDate <= now;
@@ -286,23 +162,23 @@ class GuideService {
 		return {
 			_id: account._id.toString(),
 			user: account._id.toString(),
+			// Human-facing business code (GU######) — null until backfilled.
+			guideCode: guide?.guideCode ?? null,
 			name: account.name,
 			email: account.email,
 			mobile: account.phone,
 			countryCode: account.countryCode,
-			languages: guide?.languages?.length ? guide.languages : enrollment?.languages || [],
-			city: guide?.city || enrollment?.city || '',
-			pan: guide?.pan || enrollment?.pan || '',
-			profileImage: guide?.profileImage || enrollment?.photo || '',
+			languages: guide?.languages ?? [],
+			city: guide?.city || '',
+			pan: guide?.pan || '',
+			profileImage: guide?.profileImage || '',
 			identityProofs: guide?.identityProofs || [],
 			// Legacy field names some existing frontend code still reads
-			serviceLocations: guide?.city ? [guide.city] : enrollment ? [enrollment.city] : [],
-			photo: guide?.profileImage || enrollment?.photo || '',
+			serviceLocations: guide?.city ? [guide.city] : [],
+			photo: guide?.profileImage || '',
 			isApproved: account.status === 'verified',
-			// The Guide record is authoritative once registered; the legacy
-			// enrollment is only a fallback for guides who predate the new form.
-			type: guide?.type || enrollment?.type || 'normal',
-			isCertified: (guide?.type || enrollment?.type) === 'escort',
+			type: guide?.type || 'normal',
+			isCertified: guide?.type === 'escort',
 			unavailableDates: account.unavailableDates || [],
 			// Membership
 			registrationCompleted: guide?.registrationCompleted || false,
@@ -312,6 +188,14 @@ class GuideService {
 			membershipExpiryDate: guide?.membershipExpiryDate || null,
 			membershipExpired,
 			profileComplete: !!guide?.registrationCompleted,
+			// KYC review. The guide needs to see where they stand — and why, if
+			// they were rejected — not just find themselves silently unlisted.
+			approvalStatus: displayApprovalStatus(guide),
+			rejectionReason: guide?.rejectionReason ?? '',
+			approvedAt: guide?.approvedAt ?? null,
+			// Own-profile read, so the payout destination is safe to return here.
+			pricing: guide?.pricing ?? null,
+			bankDetails: guide?.bankDetails ?? null,
 		};
 	}
 
@@ -524,11 +408,22 @@ class GuideService {
 		);
 
 		guide.paymentStatus = 'success';
-		guide.isVisible = true;
+		// Paying is necessary but no longer sufficient — an admin must also have
+		// cleared the guide's KYC. An unapproved guide keeps the membership they
+		// paid for (the clock starts now either way); approveGuide() flips them
+		// visible the moment review passes, without a second payment.
+		guide.isVisible = isGuideApproved(guide);
 		if (!guide.membershipStartDate) {
 			guide.membershipStartDate = now;
 		}
 		guide.membershipExpiryDate = newExpiry;
+		// Append-only membership record. `base` is where this purchased period
+		// begins (now for a first membership, the prior expiry for a renewal),
+		// so each row represents exactly one paid period.
+		guide.membershipHistory = [
+			...(guide.membershipHistory ?? []),
+			{ startDate: base, expiryDate: newExpiry },
+		];
 		await guide.save();
 
 		// Generate the membership invoice (non-blocking) — this single hook
@@ -557,7 +452,7 @@ class GuideService {
 			throw new NotFoundError('Guide profile not found');
 		}
 
-		const enrollment = await GuideEnrollmentDB.findOne({ email: account.email.toLowerCase() });
+		const guide = await GuideDB.findOne({ accountId: account._id });
 
 		return {
 			_id: account._id.toString(),
@@ -565,12 +460,12 @@ class GuideService {
 			name: account.name,
 			email: account.email,
 			mobile: account.phone,
-			languages: enrollment?.languages || [],
-			serviceLocations: enrollment ? [enrollment.city] : [],
-			photo: enrollment?.photo || '',
+			languages: guide?.languages ?? [],
+			serviceLocations: guide?.city ? [guide.city] : [],
+			photo: guide?.profileImage || '',
 			isApproved: account.status === 'verified',
-			profileComplete: true,
-			isCertified: enrollment?.type === 'escort',
+			profileComplete: !!guide?.registrationCompleted,
+			isCertified: guide?.type === 'escort',
 			unavailableDates: account.unavailableDates || [],
 		};
 	}
@@ -594,7 +489,15 @@ class GuideService {
 		const skip = (page - 1) * limit;
 		const now = new Date();
 
-		const guideQuery: any = { isVisible: true, membershipExpiryDate: { $gt: now } };
+		// isVisible is already gated on approval at the point it is set (see
+		// finalizeMembershipPaymentByGuideId / rejectGuide). The $ne here is a
+		// second line of defence: a guide rejected after going live is delisted
+		// even if some other path forgets to clear isVisible.
+		const guideQuery: any = {
+			isVisible: true,
+			membershipExpiryDate: { $gt: now },
+			approvalStatus: { $ne: 'rejected' },
+		};
 
 		if (params?.location) {
 			const escapedLocation = params.location.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -633,8 +536,12 @@ class GuideService {
 					photo: guide.profileImage || '',
 					isApproved: true,
 					profileComplete: guide.registrationCompleted,
-					isCertified: false,
+					isCertified: guide.type === 'escort',
 					unavailableDates: (account as any).unavailableDates || [],
+					pricing: guide.pricing ?? null,
+					// A listed guide can still be un-bookable directly if they never
+					// published rates — the card needs to know which button to show.
+					bookable: !!guide.pricing?.fullDay && guide.pricing.fullDay > 0,
 				};
 			})
 		);
@@ -662,7 +569,6 @@ class GuideService {
 		}
 
 		const guide = await GuideDB.findOne({ accountId: account._id });
-		const enrollment = await GuideEnrollmentDB.findOne({ email: account.email.toLowerCase() });
 		const now = new Date();
 		const isVisible = !!guide?.isVisible && !!guide?.membershipExpiryDate && guide.membershipExpiryDate > now;
 
@@ -672,29 +578,277 @@ class GuideService {
 			name: account.name,
 			email: account.email,
 			mobile: account.phone,
-			languages: guide?.languages?.length ? guide.languages : enrollment?.languages || [],
-			serviceLocations: guide?.city ? [guide.city] : enrollment ? [enrollment.city] : [],
-			photo: guide?.profileImage || enrollment?.photo || '',
+			languages: guide?.languages ?? [],
+			serviceLocations: guide?.city ? [guide.city] : [],
+			photo: guide?.profileImage || '',
 			isApproved: isVisible,
 			profileComplete: !!guide?.registrationCompleted,
-			isCertified: enrollment?.type === 'escort',
+			isCertified: guide?.type === 'escort',
 			unavailableDates: account.unavailableDates || [],
+			pricing: guide?.pricing ?? null,
+			bookable: isGuideApproved(guide) && !!guide?.pricing?.fullDay && guide.pricing.fullDay > 0,
 		};
 	}
 
 	/**
-	 * Get current user's guide enrollment by email
+	 * Admin listing of every guide account joined with its Guide profile —
+	 * unlike getAllApprovedGuides (public, visible-only), this returns all guide
+	 * accounts (active and inactive) with their business code, contact details,
+	 * membership state and registration status for the admin management table.
 	 */
-	async getMyGuideEnrollment(email: string): Promise<TransformedEnrollment | null> {
-		const enrollment = await GuideEnrollmentDB.findOne({
-			email: email.toLowerCase(),
-		});
+	async getAllGuidesForAdmin() {
+		const accounts = await AccountDB.find({ role: 'guide' })
+			.select('name email phone isActive status createdAt')
+			.sort({ createdAt: -1 })
+			.lean();
+		const accountIds = accounts.map((a) => a._id);
 
-		if (!enrollment) {
-			return null;
+		const profiles = await GuideDB.find({ accountId: { $in: accountIds } })
+			.select(
+				'accountId guideCode city languages type pan isVisible registrationCompleted paymentStatus membershipStartDate membershipExpiryDate profileImage identityProofs updatedAt'
+			)
+			.lean();
+		const profileByAccountId = new Map(profiles.map((p) => [p.accountId.toString(), p]));
+
+		const now = new Date();
+		return accounts.map((account) => {
+			const profile = profileByAccountId.get(account._id.toString());
+			const membershipActive =
+				!!profile?.isVisible &&
+				!!profile?.membershipExpiryDate &&
+				new Date(profile.membershipExpiryDate) > now;
+			return {
+				accountId: account._id.toString(),
+				guideCode: profile?.guideCode ?? null,
+				name: account.name,
+				email: account.email,
+				phone: account.phone,
+				isActive: account.isActive,
+				status: account.status,
+				city: profile?.city ?? '',
+				languages: profile?.languages ?? [],
+				type: profile?.type ?? 'normal',
+				pan: profile?.pan ?? '',
+				isVisible: profile?.isVisible ?? false,
+				registrationCompleted: profile?.registrationCompleted ?? false,
+				paymentStatus: profile?.paymentStatus ?? 'pending',
+				membershipActive,
+				membershipStartDate: profile?.membershipStartDate ?? null,
+				membershipExpiryDate: profile?.membershipExpiryDate ?? null,
+				profileImage: profile?.profileImage ?? '',
+				// [licence, aadhaar] in upload order — the admin panel reviews these.
+				identityProofs: profile?.identityProofs ?? [],
+				createdAt: account.createdAt,
+				updatedAt: profile?.updatedAt ?? account.createdAt,
+				approvalStatus: displayApprovalStatus(profile),
+				rejectionReason: profile?.rejectionReason ?? '',
+				approvedAt: profile?.approvedAt ?? null,
+				pricing: profile?.pricing ?? null,
+			};
+		});
+	}
+
+	// ---- Admin KYC review ---------------------------------------------------
+
+	/**
+	 * Clear a guide's KYC. If they have already paid for membership this also
+	 * lists them immediately — they should not have to pay twice because review
+	 * happened to land after payment.
+	 */
+	async approveGuide(guideAccountId: string, adminUserId: string) {
+		const account = await AccountDB.findOne({ _id: guideAccountId, role: 'guide' });
+		if (!account) {
+			throw new NotFoundError('Guide account not found');
 		}
 
-		return transformEnrollment(enrollment);
+		const guide = await GuideDB.findOne({ accountId: account._id });
+		if (!guide) {
+			throw new NotFoundError('Guide profile not found');
+		}
+		if (!guide.registrationCompleted) {
+			throw new BadRequestError('This guide has not submitted their KYC documents yet');
+		}
+		if (guide.approvalStatus === 'approved') {
+			throw new ConflictError('This guide is already approved');
+		}
+
+		const membershipActive =
+			!!guide.membershipExpiryDate && guide.membershipExpiryDate > new Date();
+
+		guide.approvalStatus = 'approved';
+		guide.approvedBy = new Types.ObjectId(adminUserId);
+		guide.approvedAt = new Date();
+		guide.rejectionReason = undefined;
+		guide.isVisible = membershipActive;
+		await guide.save();
+
+		await ActivityLogService.log({
+			actor: adminUserId,
+			action: 'guide.approved',
+			targetType: 'Guide',
+			targetId: guide._id.toString(),
+			description: `Approved guide ${account.name} (${guide.guideCode ?? guide._id.toString()})`,
+			metadata: { accountId: guideAccountId, listedImmediately: membershipActive },
+		});
+
+		await NotificationService.create({
+			recipient: account._id,
+			type: 'guide_approved',
+			title: 'Your profile has been approved',
+			message: membershipActive
+				? 'Your documents have been verified and your profile is now live. Tourists can find and book you.'
+				: 'Your documents have been verified. Pay for your membership to go live and start receiving bookings.',
+			relatedEntity: { kind: 'Guide', id: guide._id.toString() },
+			dedupeKey: `guide_approved:${guide._id.toString()}:${guide.approvedAt.getTime()}`,
+		});
+
+		return guide;
+	}
+
+	/** Refuse a guide's KYC. Delists them immediately if they were live. */
+	async rejectGuide(guideAccountId: string, reason: string, adminUserId: string) {
+		const account = await AccountDB.findOne({ _id: guideAccountId, role: 'guide' });
+		if (!account) {
+			throw new NotFoundError('Guide account not found');
+		}
+
+		const guide = await GuideDB.findOne({ accountId: account._id });
+		if (!guide) {
+			throw new NotFoundError('Guide profile not found');
+		}
+
+		guide.approvalStatus = 'rejected';
+		guide.rejectionReason = reason;
+		guide.approvedBy = new Types.ObjectId(adminUserId);
+		guide.approvedAt = new Date();
+		guide.isVisible = false;
+		await guide.save();
+
+		await ActivityLogService.log({
+			actor: adminUserId,
+			action: 'guide.rejected',
+			targetType: 'Guide',
+			targetId: guide._id.toString(),
+			description: `Rejected guide ${account.name}: ${reason}`,
+			metadata: { accountId: guideAccountId, reason },
+		});
+
+		await NotificationService.create({
+			recipient: account._id,
+			type: 'guide_rejected',
+			title: 'Your profile needs attention',
+			message: `Your guide profile could not be verified. ${reason}`,
+			relatedEntity: { kind: 'Guide', id: guide._id.toString() },
+			dedupeKey: `guide_rejected:${guide._id.toString()}:${Date.now()}`,
+		});
+
+		return guide;
+	}
+
+	/** Guides awaiting review — the admin's KYC inbox. */
+	async getPendingApprovals() {
+		const profiles = await GuideDB.find({
+			registrationCompleted: true,
+			$or: [{ approvalStatus: 'pending' }, { approvalStatus: { $exists: false }, isVisible: false }],
+		})
+			.sort({ createdAt: 1 })
+			.lean();
+
+		const accounts = await AccountDB.find({
+			_id: { $in: profiles.map((p) => p.accountId) },
+			role: 'guide',
+		})
+			.select('name email phone createdAt')
+			.lean();
+
+		return profiles.map((profile) => {
+			const account = accounts.find((a) => a._id.toString() === profile.accountId.toString());
+			return {
+				accountId: profile.accountId.toString(),
+				guideCode: profile.guideCode ?? null,
+				name: account?.name ?? '',
+				email: account?.email ?? '',
+				phone: account?.phone ?? '',
+				city: profile.city,
+				type: profile.type ?? 'normal',
+				languages: profile.languages,
+				pan: profile.pan ?? '',
+				profileImage: profile.profileImage,
+				// [licence, aadhaar] in upload order — this is what the admin reviews.
+				identityProofs: profile.identityProofs,
+				submittedAt: profile.createdAt,
+			};
+		});
+	}
+
+	// ---- Direct-booking rates ----------------------------------------------
+
+	/**
+	 * Public. What a guide charges, and whether they can be booked directly at
+	 * all. Deliberately does not 404 on a guide with no rates — "not bookable"
+	 * is a normal state the booking page needs to render, not an error.
+	 */
+	async getPricingDetails(guideAccountId: string) {
+		const account = await AccountDB.findOne({ _id: guideAccountId, role: 'guide' }).lean();
+		if (!account) {
+			throw new NotFoundError('Guide not found');
+		}
+
+		const guide = await GuideDB.findOne({ accountId: account._id }).lean();
+		const approved = isGuideApproved(guide);
+		const hasRates = !!guide?.pricing?.fullDay && guide.pricing.fullDay > 0;
+
+		return {
+			guideId: account._id.toString(),
+			name: account.name,
+			currency: 'INR',
+			pricing: guide?.pricing ?? null,
+			isCertified: guide?.type === 'escort',
+			bookable: approved && hasRates,
+			// Why not, so the UI can say something more useful than "unavailable".
+			unavailableReason: !approved
+				? 'This guide is pending verification'
+				: !hasRates
+					? 'This guide has not published their rates yet'
+					: null,
+		};
+	}
+
+	/** A guide setting their own rates. */
+	async updatePricing(accountId: string, pricing: { halfDay: number; fullDay: number }) {
+		const guide = await GuideDB.findOne({ accountId });
+		if (!guide || !guide.registrationCompleted) {
+			throw new BadRequestError('Please complete your guide registration first');
+		}
+
+		guide.pricing = pricing;
+		await guide.save();
+
+		return guide.pricing;
+	}
+
+	/**
+	 * A guide's payout destination. Returned only to the owning guide and to
+	 * admins (who need it to actually send the money) — never on a public route.
+	 */
+	async updateBankDetails(
+		accountId: string,
+		bankDetails: {
+			accountHolderName?: string;
+			accountNumber?: string;
+			ifsc?: string;
+			upiId?: string;
+		}
+	) {
+		const guide = await GuideDB.findOne({ accountId });
+		if (!guide || !guide.registrationCompleted) {
+			throw new BadRequestError('Please complete your guide registration first');
+		}
+
+		guide.bankDetails = { ...(guide.bankDetails ?? {}), ...bankDetails };
+		await guide.save();
+
+		return guide.bankDetails;
 	}
 }
 

@@ -1,10 +1,14 @@
 import { BookingDB, GuideDB, TransactionDB } from '@mongo';
 import { error as logError, info } from 'node-be-utilities';
+import BalancePaymentService from './balancePayment';
+import EarningService from './earning';
 import NotificationService from './notification';
 
 const MEMBERSHIP_EXPIRY_REMINDER_BUCKETS = [7, 3, 1] as const;
 const PAYMENT_SCAN_LOOKBACK_MULTIPLIER = 3;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+/** Chase an unpaid balance once the trip is this close. */
+const BALANCE_REMINDER_WINDOW_DAYS = 7;
 
 /**
  * Read-only scan of Transaction for recently successful payments. Never
@@ -93,10 +97,29 @@ async function scanMembershipExpiring() {
 }
 
 /**
+ * Move earnings past their hold window from 'pending' to 'payable', so they show
+ * up in the admin payout queue. Idempotent, hence safe on every tick.
+ */
+async function promoteMaturedEarnings() {
+	const promoted = await EarningService.promoteMaturedEarnings();
+	if (promoted > 0) {
+		info(`notificationWatcher: ${promoted} earning(s) became payable`);
+	}
+}
+
+/** Nudge tourists whose trip is close but whose balance is still outstanding. */
+async function remindOutstandingBalances() {
+	await BalancePaymentService.remindOutstandingBalances(BALANCE_REMINDER_WINDOW_DAYS);
+}
+
+/**
  * Background poller for notification types whose source events live inside
  * protected modules (payment success, membership expiry) this codebase must
  * not modify. Dedup is enforced entirely by Notification's unique
  * `dedupeKey` index, so repeated ticks over the same data are harmless.
+ *
+ * It also drives the two pieces of ledger bookkeeping that are time-based rather
+ * than event-based: maturing earnings, and chasing unpaid balances.
  */
 export function startNotificationWatcher(
 	intervalMs = Number(process.env.NOTIFICATION_WATCHER_INTERVAL_MS) || 5 * 60_000
@@ -105,6 +128,8 @@ export function startNotificationWatcher(
 		try {
 			await scanPaymentSuccesses(intervalMs);
 			await scanMembershipExpiring();
+			await promoteMaturedEarnings();
+			await remindOutstandingBalances();
 		} catch (err) {
 			logError('notificationWatcher: tick failed', err);
 		}

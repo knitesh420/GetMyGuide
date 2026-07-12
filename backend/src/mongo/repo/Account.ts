@@ -65,6 +65,13 @@ const AccountSchema = new mongoose.Schema<IAccount>(
 			type: Number,
 			default: 0,
 		},
+		// Soft-delete marker. Field only — intentionally NOT enforced by query
+		// middleware here, so the auth/login query paths stay byte-for-byte
+		// unchanged. Enforce in service logic when an account is deactivated.
+		deletedAt: {
+			type: Date,
+			default: null,
+		},
 	},
 	{
 		timestamps: true,
