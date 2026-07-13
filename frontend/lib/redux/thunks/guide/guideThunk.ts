@@ -1,6 +1,6 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
 import { apiService } from "@/lib/service/api";
-import { GuideProfile } from "@/lib/data";
+import { GuideDocument, GuideProfile } from "@/lib/data";
 import { AdminLocation, LanguageOption } from '@/lib/data';
 import { tourGuideBooking } from '@/lib/data';
 import { GuideCalendar, GuideLeave, GuideLeaveType } from '@/lib/data';
@@ -272,9 +272,21 @@ export interface PendingApproval {
   languages: string[];
   pan: string;
   profileImage: string;
-  /** [licence, aadhaar] in upload order — this is what the admin reviews. */
+  /**
+   * Raw stored values — filenames for older uploads, Cloudinary URLs for newer
+   * ones. NOT usable as an href: use `documents` below. Linking to these
+   * directly is exactly what made every document 404.
+   */
   identityProofs: string[];
+  /** The same documents, as authenticated admin routes that serve the file. */
+  documents: GuideDocument[];
   submittedAt: string;
+  /**
+   * True when the guide has paid but their subscription has not started, waiting
+   * on this decision — which also means rejecting them will auto-refund the fee.
+   */
+  membershipPendingActivation: boolean;
+  membershipFeePaid: boolean;
 }
 
 export const fetchPendingApprovals = createAsyncThunk<PendingApproval[], void>(

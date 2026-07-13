@@ -28,6 +28,7 @@ const TARGET_TYPES: Record<ActivityLogTargetType, true> = {
 	RefundRequest: true,
 	Earning: true,
 	Payout: true,
+	CashPayment: true,
 	Location: true,
 	Account: true,
 };

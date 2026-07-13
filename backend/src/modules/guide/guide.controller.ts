@@ -1,10 +1,13 @@
 import GuideService from '@services/guide';
 import TourGuideService from '@services/tourguide';
 import { uploadMulterImage } from '@utils/cloudinaryUpload';
+import { documentMimeType, localDocumentPath } from '@utils/guideDocuments';
 import { NextFunction, Request, Response } from 'express';
-import { BadRequestError } from 'node-be-utilities';
+import fs from 'fs';
+import { BadRequestError, NotFoundError } from 'node-be-utilities';
 import { Respond } from '@utils/respond';
 import {
+	GuideAdminNotesValidationResult,
 	GuideBankDetailsValidationResult,
 	GuidePricingValidationResult,
 	GuideProfilePatchValidationResult,
@@ -106,17 +109,31 @@ async function updateGuideProfile(req: Request, res: Response, next: NextFunctio
 		const data = req.locals.data as GuideProfileValidationResult;
 		const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
 
-		// The profile photo is rendered by public/dashboard clients, so it lives on
-		// Cloudinary and we store the URL. Identity proofs are private KYC docs and
-		// stay on local disk, referenced by filename.
+		// Both the profile photo and the identity proofs go to Cloudinary and are
+		// stored as URLs.
+		//
+		// Identity proofs used to stay on the API server's local disk as bare
+		// filenames. That was fragile in two ways: the filename is not a URL, so the
+		// admin panel's links 404'd; and the file lives on a container filesystem
+		// that does not survive a redeploy. Proofs uploaded before this change are
+		// still on disk and still served — the admin document route below falls back
+		// to streaming them from `static/misc`.
 		const profileImageFile = files?.profileImage?.[0];
 		const profileImage = profileImageFile
 			? await uploadMulterImage(profileImageFile, 'getmyguide/guides')
 			: undefined;
 
+		const identityProofs = files?.identityProofs?.length
+			? await Promise.all(
+					files.identityProofs.map((file) =>
+						uploadMulterImage(file, 'getmyguide/guides/identity-proofs')
+					)
+				)
+			: undefined;
+
 		const profile = await GuideService.upsertGuideProfile(user.userId, data, {
 			profileImage,
-			identityProofs: files?.identityProofs?.map((f) => f.filename),
+			identityProofs,
 		});
 
 		return Respond({
@@ -270,6 +287,89 @@ async function getGuideByIdPublic(req: Request, res: Response, next: NextFunctio
 	}
 }
 
+// ---- Admin: one guide, in full -------------------------------------------
+// Payment identifiers, bank details and internal notes are returned ONLY here,
+// and this route is behind VerifyMinLevel('admin').
+
+async function getGuideDetailForAdmin(req: Request, res: Response, next: NextFunction) {
+	try {
+		const detail = await GuideService.getGuideDetailForAdmin(req.params.id as string);
+		return Respond({ res, status: 200, data: detail });
+	} catch (error) {
+		return next(error);
+	}
+}
+
+async function updateAdminNotes(req: Request, res: Response, next: NextFunction) {
+	try {
+		const { notes } = req.locals.data as GuideAdminNotesValidationResult;
+		const result = await GuideService.updateAdminNotes(
+			req.params.id as string,
+			notes,
+			req.locals.user!.userId
+		);
+
+		return Respond({ res, status: 200, data: result });
+	} catch (error) {
+		return next(error);
+	}
+}
+
+/**
+ * Stream a guide's KYC document to an admin. `?download=1` forces a save dialog;
+ * without it the browser renders the PDF/image inline.
+ *
+ * This is the only way to read an identity proof. The documents themselves are
+ * either on Cloudinary (recent uploads — we redirect) or on the API server's
+ * local disk (older uploads — we stream them). Either way the caller has been
+ * through VerifySession + VerifyMinLevel('admin') to get here.
+ */
+async function downloadGuideDocument(req: Request, res: Response, next: NextFunction) {
+	try {
+		const index = Number.parseInt(req.params.index as string, 10);
+		if (!Number.isInteger(index) || index < 0) {
+			return next(new BadRequestError('Document index must be a non-negative integer'));
+		}
+
+		const document = await GuideService.getGuideDocument(req.params.id as string, index);
+		const asAttachment = req.query.download === '1' || req.query.download === 'true';
+
+		if (document.storage === 'remote') {
+			return res.redirect(document.value);
+		}
+
+		const filePath = localDocumentPath(document.value);
+		if (!fs.existsSync(filePath)) {
+			// The row points at a file the server no longer has — almost certainly a
+			// pre-Cloudinary upload lost to a redeploy. Say so, rather than leaving
+			// the admin staring at a bare 404: the fix is to ask the guide to
+			// re-upload, and only a specific message gets them there.
+			return next(
+				new NotFoundError(
+					`The ${document.label} file is no longer on the server. Ask the guide to re-upload it from their profile.`
+				)
+			);
+		}
+
+		const stat = fs.statSync(filePath);
+		const filename = `${document.label.replace(/\s+/g, '-').toLowerCase()}${document.value.slice(document.value.lastIndexOf('.'))}`;
+
+		res.writeHead(200, {
+			'Content-Length': stat.size,
+			// The generic /media route has no PDF entry and falls back to
+			// octet-stream, so a scanned Aadhaar downloaded instead of opening.
+			'Content-Type': documentMimeType(document.value),
+			'Content-Disposition': `${asAttachment ? 'attachment' : 'inline'}; filename="${filename}"`,
+			// KYC documents must never be held by a shared cache.
+			'Cache-Control': 'private, no-store',
+		});
+
+		return fs.createReadStream(filePath).pipe(res);
+	} catch (error) {
+		return next(error);
+	}
+}
+
 // ---- Admin KYC review ------------------------------------------------------
 
 async function approveGuide(req: Request, res: Response, next: NextFunction) {
@@ -382,6 +482,9 @@ const Controller = {
 	getAllApprovedGuides,
 	getAllGuidesForAdmin,
 	getGuideByIdPublic,
+	getGuideDetailForAdmin,
+	updateAdminNotes,
+	downloadGuideDocument,
 	approveGuide,
 	rejectGuide,
 	getPendingApprovals,

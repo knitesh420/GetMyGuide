@@ -12,7 +12,7 @@ import {
   confirmGuideMembershipPayment,
 } from "@/lib/redux/thunks/guide/guideThunk";
 import { Button } from "@/components/ui/button";
-import { CalendarClock, ShieldCheck, AlertTriangle, Eye } from "lucide-react";
+import { CalendarClock, ShieldCheck, AlertTriangle, Eye, Hourglass } from "lucide-react";
 import {
   GuidePageHeader,
   GuidePanel,
@@ -40,8 +40,24 @@ export default function GuideMembershipPage() {
 
   const isActive =
     profile?.isVisible && !profile?.membershipExpired && !!profile?.membershipExpiryDate;
+  /**
+   * Paid, but the 30-day clock has not started: the guide is waiting on the
+   * admin's verification, and their subscription begins the moment it lands.
+   *
+   * Without this the page cannot tell "has not paid" from "paid and waiting" —
+   * both have no expiry date — and would push a guide who has already paid to
+   * pay a second time.
+   */
+  const awaitingApproval = !!profile?.membershipPendingActivation;
   const expiryDate = profile?.membershipExpiryDate
     ? new Date(profile.membershipExpiryDate).toLocaleDateString("en-IN", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    : null;
+  const paidOn = profile?.membershipPaidAt
+    ? new Date(profile.membershipPaidAt).toLocaleDateString("en-IN", {
         year: "numeric",
         month: "long",
         day: "numeric",
@@ -84,7 +100,14 @@ export default function GuideMembershipPage() {
         );
 
         if (confirmGuideMembershipPayment.fulfilled.match(confirmResult)) {
-          toast.success("Membership payment confirmed! You're now visible to travelers.");
+          // Paying does not necessarily list them any more: an unverified guide's
+          // 30 days start when an admin approves, not now. Promising visibility
+          // here would be a lie for exactly the guides who most need the truth.
+          toast.success(
+            profile?.approvalStatus === "approved"
+              ? "Membership payment confirmed! You're now visible to travellers."
+              : "Payment received. Your 30-day subscription will start as soon as our team verifies your documents.",
+          );
           dispatch(getMyGuideProfile());
         } else {
           toast.error(
@@ -108,9 +131,11 @@ export default function GuideMembershipPage() {
     ? "Processing..."
     : isActive
       ? "Renew Early (+30 days)"
-      : profile?.membershipStartDate
-        ? "Renew Membership"
-        : "Pay Membership Fee";
+      : awaitingApproval
+        ? "Awaiting Verification"
+        : profile?.membershipStartDate
+          ? "Renew Membership"
+          : "Pay Membership Fee";
 
   return (
     <>
@@ -133,8 +158,10 @@ export default function GuideMembershipPage() {
               />
               <GuideStat
                 icon={CalendarClock}
-                label={isActive ? "Expires On" : "Expired On"}
-                value={expiryDate ?? "—"}
+                label={
+                  isActive ? "Expires On" : awaitingApproval ? "Fee Paid On" : "Expired On"
+                }
+                value={(awaitingApproval ? paidOn : expiryDate) ?? "—"}
               />
               <GuideStat
                 icon={ShieldCheck}
@@ -149,43 +176,72 @@ export default function GuideMembershipPage() {
               className={`flex items-start gap-3 rounded-lg border p-4 ${
                 isActive
                   ? "border-green-200 bg-green-50/60"
-                  : "border-amber-200 bg-amber-50/60"
+                  : awaitingApproval
+                    ? "border-blue-200 bg-blue-50/60"
+                    : "border-amber-200 bg-amber-50/60"
               }`}
             >
               {isActive ? (
                 <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+              ) : awaitingApproval ? (
+                <Hourglass className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
               ) : (
                 <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
               )}
               <div>
                 <p
                   className={`font-semibold ${
-                    isActive ? "text-green-900" : "text-amber-900"
+                    isActive
+                      ? "text-green-900"
+                      : awaitingApproval
+                        ? "text-blue-900"
+                        : "text-amber-900"
                   }`}
                 >
                   {isActive
                     ? "Membership active"
-                    : profile?.membershipStartDate
-                      ? "Membership expired"
-                      : "No active membership"}
+                    : awaitingApproval
+                      ? "Payment received — awaiting verification"
+                      : profile?.membershipStartDate
+                        ? "Membership expired"
+                        : "No active membership"}
                 </p>
                 <p
                   className={`mt-1 text-sm ${
-                    isActive ? "text-green-800/80" : "text-amber-800/80"
+                    isActive
+                      ? "text-green-800/80"
+                      : awaitingApproval
+                        ? "text-blue-800/80"
+                        : "text-amber-800/80"
                   }`}
                 >
                   {isActive
                     ? "Your profile is currently visible to travellers."
-                    : profile?.membershipStartDate
-                      ? "Your listing is currently hidden from travellers."
-                      : "Pay the membership fee to appear in public guide search."}
+                    : awaitingApproval
+                      ? "Your membership fee is paid. Our team is checking your documents — your 30 days start the moment you're approved, so nothing is lost while you wait. There is nothing more to pay."
+                      : profile?.membershipStartDate
+                        ? "Your listing is currently hidden from travellers."
+                        : "Pay the membership fee to appear in public guide search."}
                 </p>
               </div>
             </div>
 
+            {profile?.membershipRefund?.status === "processed" && (
+              <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                <span className="font-semibold">Membership fee refunded.</span> We refunded ₹
+                {profile.membershipRefund.amount.toLocaleString("en-IN")} on{" "}
+                {new Date(profile.membershipRefund.refundedAt).toLocaleDateString("en-IN")}. It
+                usually reaches your account within 5–7 working days.
+              </div>
+            )}
+
             <Button
               onClick={handlePay}
-              disabled={processing || loading || !profile?.registrationCompleted}
+              // An awaiting-verification guide has already paid: taking their money
+              // again is the one thing this page must never do.
+              disabled={
+                processing || loading || !profile?.registrationCompleted || awaitingApproval
+              }
               className="mt-5 w-full"
               size="lg"
             >
@@ -195,6 +251,11 @@ export default function GuideMembershipPage() {
             {!profile?.registrationCompleted && (
               <p className="mt-2 text-center text-xs text-slate-500">
                 Complete your guide profile first to pay for membership.
+              </p>
+            )}
+            {awaitingApproval && (
+              <p className="mt-2 text-center text-xs text-slate-500">
+                No further payment is needed. We&apos;ll email you when your profile is verified.
               </p>
             )}
           </div>

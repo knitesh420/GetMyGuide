@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { toast } from "react-toastify";
-import { BadgeCheck, ExternalLink, ShieldQuestion } from "lucide-react";
+import { BadgeCheck, ShieldQuestion, Undo2 } from "lucide-react";
 import { useAppDispatch } from "@/lib/redux/hooks";
 import {
   PendingApproval,
@@ -13,6 +14,7 @@ import {
 } from "@/lib/redux/thunks/guide/guideThunk";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { GuideDocumentLinks } from "@/components/admin/GuideDocumentLinks";
 
 const shortDate = (value?: string) =>
   value
@@ -23,15 +25,15 @@ const shortDate = (value?: string) =>
       })
     : "—";
 
-/** Uploads land in this order — see Guide.identityProofs in the backend schema. */
-const PROOF_LABELS = ["Licence", "Aadhaar"];
-
 /**
  * The KYC inbox. A guide who has submitted documents is not bookable until an
- * admin looks at them here — paying for membership alone is no longer enough.
+ * admin looks at them here — paying for membership alone is not enough.
  *
- * Approving a guide who has already paid lists them immediately; approving one
- * who has not simply clears them to pay.
+ * Two things follow from a decision made on this page:
+ *   - Approving starts the guide's 30-day subscription *from that moment*, so a
+ *     guide loses none of what they paid for while they sat in this queue.
+ *   - Rejecting a guide who has paid but never gone live refunds their fee
+ *     automatically.
  */
 export default function AdminGuideApprovalsPage() {
   const dispatch = useAppDispatch();
@@ -64,7 +66,11 @@ export default function AdminGuideApprovalsPage() {
     setBusyId(null);
 
     if (approveGuide.fulfilled.match(result)) {
-      toast.success(`${guide.name} approved.`);
+      toast.success(
+        guide.membershipPendingActivation
+          ? `${guide.name} approved — their 30-day subscription starts now.`
+          : `${guide.name} approved.`,
+      );
       setGuides((prev) => prev.filter((g) => g.accountId !== guide.accountId));
     } else {
       toast.error((result.payload as string) || "Could not approve this guide.");
@@ -84,7 +90,11 @@ export default function AdminGuideApprovalsPage() {
     setBusyId(null);
 
     if (rejectGuide.fulfilled.match(result)) {
-      toast.success(`${guide.name} rejected.`);
+      toast.success(
+        guide.membershipPendingActivation
+          ? `${guide.name} rejected — their membership fee is being refunded.`
+          : `${guide.name} rejected.`,
+      );
       setGuides((prev) => prev.filter((g) => g.accountId !== guide.accountId));
       setRejectingId(null);
       setReason("");
@@ -137,11 +147,21 @@ export default function AdminGuideApprovalsPage() {
 
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="font-semibold text-slate-900">{guide.name}</h2>
+                    <Link
+                      href={`/dashboard/admin/guides/${guide.accountId}`}
+                      className="font-semibold text-slate-900 hover:text-teal-700 hover:underline"
+                    >
+                      {guide.name}
+                    </Link>
                     <span className="text-xs text-slate-400">{guide.guideCode}</span>
                     {guide.type === "escort" && (
                       <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-200">
                         Certified / escort
+                      </span>
+                    )}
+                    {guide.membershipPendingActivation && (
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-inset ring-amber-200">
+                        Fee paid · subscription starts on approval
                       </span>
                     )}
                   </div>
@@ -169,24 +189,9 @@ export default function AdminGuideApprovalsPage() {
 
                   <div className="mt-4">
                     <p className="text-xs font-medium text-slate-400">Documents</p>
-                    {guide.identityProofs.length === 0 ? (
-                      <p className="mt-1 text-sm text-amber-700">No documents uploaded.</p>
-                    ) : (
-                      <div className="mt-1 flex flex-wrap gap-2">
-                        {guide.identityProofs.map((url, index) => (
-                          <a
-                            key={url}
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm text-teal-700 transition-colors hover:bg-teal-50"
-                          >
-                            {PROOF_LABELS[index] ?? `Document ${index + 1}`}
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </a>
-                        ))}
-                      </div>
-                    )}
+                    <div className="mt-1">
+                      <GuideDocumentLinks documents={guide.documents ?? []} />
+                    </div>
                   </div>
 
                   <p className="mt-3 text-xs text-slate-400">
@@ -197,6 +202,17 @@ export default function AdminGuideApprovalsPage() {
 
               {rejectingId === guide.accountId ? (
                 <div className="mt-4 space-y-2 rounded-lg bg-slate-50 p-3">
+                  {guide.membershipPendingActivation && (
+                    // The admin should not discover after the fact that clicking
+                    // "Reject" also sent money back through Razorpay.
+                    <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+                      <Undo2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        This guide has paid their membership fee and never went live.
+                        Rejecting them will automatically refund it in full.
+                      </span>
+                    </div>
+                  )}
                   <label className="block space-y-1">
                     <span className="text-xs font-medium text-slate-500">
                       Why is this being rejected? The guide is shown this verbatim.

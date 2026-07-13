@@ -14,6 +14,7 @@ const PREFIX = {
 	refund: 'RF',
 	earning: 'EA',
 	payout: 'PO',
+	cash_payment: 'CP',
 } as const;
 
 export type CodeEntity = keyof typeof PREFIX;

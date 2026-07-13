@@ -6,6 +6,7 @@ export {
 	AssignmentDB,
 	BlogDB,
 	BookingDB,
+	CashPaymentDB,
 	ContactInquiryDB,
 	CounterDB,
 	EarningDB,

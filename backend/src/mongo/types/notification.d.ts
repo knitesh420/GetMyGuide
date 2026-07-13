@@ -19,6 +19,8 @@ export type NotificationType =
 	| 'balance_due'
 	| 'earning_credited'
 	| 'payout_paid'
+	| 'cash_payment_recorded'
+	| 'membership_refunded'
 	| 'new_message';
 
 export default interface INotification extends Document {

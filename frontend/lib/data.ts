@@ -293,6 +293,28 @@ export interface GuideProfile {
   membershipStartDate?: string | null;
   membershipExpiryDate?: string | null;
   membershipExpired?: boolean;
+  /**
+   * Paid, but the 30-day clock has not started: the guide is still awaiting KYC
+   * approval, and their subscription runs from the moment an admin approves
+   * them. Without this the dashboard cannot tell "hasn't paid" apart from "paid
+   * and waiting", and would ask a guide who has already paid to pay again.
+   */
+  membershipPendingActivation?: boolean;
+  membershipPaidAt?: string | null;
+  /** Set when a rejection auto-refunded the membership fee. */
+  membershipRefund?: {
+    status: "processed" | "failed";
+    amount: number;
+    refundedAt: string;
+  } | null;
+  approvalStatus?: "pending" | "approved" | "rejected";
+  rejectionReason?: string;
+  pricing?: GuidePricing | null;
+}
+
+export interface GuidePricing {
+  halfDay: number;
+  fullDay: number;
 }
 
 export interface TouristProfile {
@@ -579,8 +601,142 @@ export interface AdminGuide {
   membershipStartDate: string | null;
   membershipExpiryDate: string | null;
   profileImage: string;
-  /** KYC uploads in upload order: [licence, aadhaar]. */
+  /**
+   * Raw stored values — Cloudinary URLs for recent uploads, bare filenames for
+   * older ones. NOT linkable: use `documents` instead. Linking straight to these
+   * is what made every KYC document 404, because a filename resolves against the
+   * frontend origin.
+   */
   identityProofs?: string[];
+  /** The same documents, as admin-only routes that actually serve the file. */
+  documents?: GuideDocument[];
+  membershipPendingActivation?: boolean;
+  membershipPaidAt?: string | null;
+  refundStatus?: "processed" | "failed" | null;
+  hasAdminNotes?: boolean;
+  approvalStatus?: "pending" | "approved" | "rejected";
+  pricing?: GuidePricing | null;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+/**
+ * A KYC document as the backend describes it. `url` / `downloadUrl` are paths
+ * relative to the API origin (prefix them with NEXT_PUBLIC_API_URL) and require
+ * an admin session — see GET /guide/:id/documents/:index.
+ */
+export interface GuideDocument {
+  index: number;
+  label: string;
+  value: string;
+  storage: "remote" | "local";
+  url: string;
+  downloadUrl: string;
+  /** False when the row points at a local file that is no longer on the server. */
+  available: boolean;
+}
+
+/** One Razorpay membership payment. ADMIN ONLY — never rendered to a tourist. */
+export interface GuideMembershipTransaction {
+  _id: string;
+  paymentCode: string | null;
+  transaction_id: string;
+  razorpay_order_id: string;
+  razorpay_payment_id: string | null;
+  status: string;
+  amount: number;
+  currency: string;
+  createdAt: string;
+}
+
+export interface GuideMembershipRefund {
+  status: "processed" | "failed";
+  refundId?: string;
+  amount: number;
+  refundedAt: string;
+  failureReason?: string;
+  razorpay_payment_id?: string;
+}
+
+/**
+ * Everything an admin sees on one guide: GET /guide/admin/:id.
+ *
+ * Payment identifiers, bank details and internal notes appear ONLY here and are
+ * returned only to admins — they are absent from every public guide endpoint.
+ */
+export interface AdminGuideDetail {
+  accountId: string;
+  guideId: string | null;
+  guideCode: string | null;
+  name: string;
+  email: string;
+  phone?: string;
+  countryCode?: string;
+  isActive: boolean;
+  status: string;
+  city: string;
+  languages: string[];
+  type: string;
+  pan?: string;
+  profileImage: string;
+  createdAt: string;
+
+  registrationCompleted: boolean;
+  approvalStatus: "pending" | "approved" | "rejected";
+  rejectionReason?: string;
+  approvedAt: string | null;
+
+  isVisible: boolean;
+  membershipActive: boolean;
+  paymentStatus: "pending" | "success" | "failed";
+  membershipStartDate: string | null;
+  membershipExpiryDate: string | null;
+  membershipPaidAt: string | null;
+  membershipPendingActivation: boolean;
+  membershipHistory: { startDate?: string; expiryDate?: string }[];
+
+  documents: GuideDocument[];
+
+  adminNotes: string;
+  adminNotesUpdatedAt: string | null;
+  adminNotesUpdatedBy: string | null;
+
+  pricing: GuidePricing | null;
+  bankDetails: {
+    accountHolderName?: string;
+    accountNumber?: string;
+    ifsc?: string;
+    upiId?: string;
+  } | null;
+  membershipRefund: GuideMembershipRefund | null;
+  transactions: GuideMembershipTransaction[];
+  cashPayments: CashPayment[];
+  cashSummary: { totalAmount: number; count: number };
+}
+
+/**
+ * A cash payment an admin recorded by hand. Entirely independent of the online
+ * Razorpay transactions above — both coexist in a guide's payment history.
+ */
+export interface CashPayment {
+  _id: string;
+  cashPaymentCode: string | null;
+  guide?: string | PopulatedAccountSummary;
+  amount: number;
+  paymentDate: string;
+  method: "cash";
+  paidBy: "tourist" | "admin";
+  touristName?: string;
+  bookingReference?: string;
+  remarks?: string;
+  status: "received" | "voided";
+  /** Audit fields — admin responses only; the guide's own history omits them. */
+  recordedBy?: PopulatedAccountSummary;
+  createdBy?: PopulatedAccountSummary;
+  updatedBy?: PopulatedAccountSummary | null;
+  deletedBy?: PopulatedAccountSummary | null;
+  deletedAt?: string | null;
+  voidReason?: string;
   createdAt: string;
   updatedAt?: string;
 }

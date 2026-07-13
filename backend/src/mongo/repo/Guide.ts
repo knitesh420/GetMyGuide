@@ -104,6 +104,48 @@ const GuideSchema = new mongoose.Schema<IGuide>(
 			trim: true,
 			maxlength: 2000,
 		},
+		// Paid, but the 30-day clock has not started: the guide is still waiting on
+		// KYC review. approveGuide() opens the window from the approval instant.
+		// No default — rows written before this flow existed must stay
+		// distinguishable, since their clock was (correctly, at the time) started
+		// at payment and must not be restarted.
+		membershipPendingActivation: {
+			type: Boolean,
+		},
+		// When the fee was captured. membershipStartDate is when the window opened;
+		// under the approval-gated flow those are no longer the same instant.
+		membershipPaidAt: {
+			type: Date,
+			default: null,
+		},
+		// Written only by the auto-refund on rejection. Its presence is what stops
+		// a second rejection from refunding the same payment twice.
+		membershipRefund: {
+			status: { type: String, enum: ['processed', 'failed'] },
+			refundId: { type: String, trim: true },
+			amount: { type: Number, min: 0 },
+			refundedAt: { type: Date },
+			failureReason: { type: String, trim: true, maxlength: 2000 },
+			transaction: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction' },
+			razorpay_payment_id: { type: String, trim: true },
+			initiatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Account' },
+		},
+		// Internal admin notes. Never projected onto a public or guide-facing
+		// response — see the explicit field lists in services/guide.ts.
+		adminNotes: {
+			type: String,
+			trim: true,
+			maxlength: 5000,
+		},
+		adminNotesUpdatedBy: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: 'Account',
+			default: null,
+		},
+		adminNotesUpdatedAt: {
+			type: Date,
+			default: null,
+		},
 		// Published rates. Direct bookings are priced from `fullDay` server-side;
 		// absent means the guide is not bookable directly yet.
 		pricing: {

@@ -4,6 +4,7 @@ export { default as AdvertisementDB } from './Advertisement';
 export { default as AssignmentDB } from './Assignment';
 export { default as BlogDB } from './Blog';
 export { default as BookingDB } from './Booking';
+export { default as CashPaymentDB } from './CashPayment';
 export { default as ContactInquiryDB } from './ContactInquiry';
 export { default as CounterDB } from './Counter';
 export { default as EarningDB } from './Earning';

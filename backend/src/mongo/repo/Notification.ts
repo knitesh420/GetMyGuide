@@ -1,5 +1,38 @@
 import mongoose from 'mongoose';
-import INotification from '../types/notification';
+import INotification, { NotificationType } from '../types/notification';
+
+/**
+ * The one list of notification kinds.
+ *
+ * Derived from the union rather than hand-written, for the same reason
+ * ActivityLog's target list is: NotificationService.create() must not throw into
+ * the operation that triggered it, so an enum that has fallen behind the type
+ * drops notifications in silence. Add a member to `NotificationType` without
+ * listing it here and this file stops compiling instead.
+ */
+const NOTIFICATION_TYPES: Record<NotificationType, true> = {
+	guide_assigned: true,
+	guide_accepted: true,
+	guide_declined: true,
+	trip_started: true,
+	trip_completed: true,
+	membership_expiring: true,
+	payment_successful: true,
+	booking_updated: true,
+	review_received: true,
+	guide_approved: true,
+	guide_rejected: true,
+	booking_cancelled: true,
+	refund_requested: true,
+	refund_processed: true,
+	refund_rejected: true,
+	balance_due: true,
+	earning_credited: true,
+	payout_paid: true,
+	cash_payment_recorded: true,
+	membership_refunded: true,
+	new_message: true,
+};
 
 const NotificationSchema = new mongoose.Schema<INotification>(
 	{
@@ -10,27 +43,7 @@ const NotificationSchema = new mongoose.Schema<INotification>(
 		},
 		type: {
 			type: String,
-			enum: [
-				'guide_assigned',
-				'guide_accepted',
-				'guide_declined',
-				'trip_started',
-				'trip_completed',
-				'membership_expiring',
-				'payment_successful',
-				'booking_updated',
-				'review_received',
-				'guide_approved',
-				'guide_rejected',
-				'booking_cancelled',
-				'refund_requested',
-				'refund_processed',
-				'refund_rejected',
-				'balance_due',
-				'earning_credited',
-				'payout_paid',
-				'new_message',
-			],
+			enum: Object.keys(NOTIFICATION_TYPES) as NotificationType[],
 			required: true,
 		},
 		title: {

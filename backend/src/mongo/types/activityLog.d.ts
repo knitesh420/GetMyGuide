@@ -13,6 +13,7 @@ export type ActivityLogTargetType =
 	| 'RefundRequest'
 	| 'Earning'
 	| 'Payout'
+	| 'CashPayment'
 	| 'Location'
 	| 'Account';
 

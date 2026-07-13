@@ -10,7 +10,8 @@
       "Bash(npx pnpm:*)",
       "Bash(git status:*)",
       "Bash(curl -s http://localhost:8000/advertisement)",
-      "Bash(curl -s http://localhost:8000/advertisement/admin/all)"
+      "Bash(curl -s http://localhost:8000/advertisement/admin/all)",
+      "Bash(npx jest *)"
     ]
   }
 }

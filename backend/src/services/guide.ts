@@ -1,6 +1,9 @@
 import { GUIDE_MEMBERSHIP_DURATION_DAYS, GUIDE_MEMBERSHIP_FEE } from '@config/const';
-import { AccountDB, ContactInquiryDB, GuideDB } from '@mongo';
+import { AccountDB, ContactInquiryDB, GuideDB, TransactionDB } from '@mongo';
+import IGuide from '@mongo/types/guide';
+import ITransaction from '@mongo/types/transaction';
 import { displayApprovalStatus, isGuideApproved } from '@utils/guideApproval';
+import { describeGuideDocuments } from '@utils/guideDocuments';
 import { verifyRazorpaySignature } from '@utils/paymentVerify';
 import { Types } from 'mongoose';
 import {
@@ -11,9 +14,24 @@ import {
 	error as logError,
 } from 'node-be-utilities';
 import ActivityLogService from './activityLog';
+import CashPaymentService from './cashPayment';
 import InvoiceService from './invoice';
 import NotificationService from './notification';
 import TransactionService from './transaction';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * A guide who was never refunded still hydrates `membershipRefund` as `{}`, not
+ * `undefined` — Mongoose always materialises a nested-object path. That empty
+ * object is truthy, so a bare `guide.membershipRefund ?? null` hands the admin
+ * panel a refund with no fields and it renders an empty "refund failed" block on
+ * every guide who never had one. `status` is only ever set by an actual refund,
+ * so it is what tells a real record from a phantom.
+ */
+function realRefund(guide: Pick<IGuide, 'membershipRefund'> | null | undefined) {
+	return guide?.membershipRefund?.status ? guide.membershipRefund : null;
+}
 
 interface GuideProfileData {
 	languages: string[];
@@ -187,6 +205,23 @@ class GuideService {
 			membershipStartDate: guide?.membershipStartDate || null,
 			membershipExpiryDate: guide?.membershipExpiryDate || null,
 			membershipExpired,
+			// Paid, but the subscription has not started because review is still
+			// pending. The dashboard needs this to explain why a guide who has paid
+			// is not live yet — without it they look simply broken.
+			membershipPendingActivation: !!guide?.membershipPendingActivation,
+			membershipPaidAt: guide?.membershipPaidAt ?? null,
+			// The guide is told their fee came back; the internal audit fields
+			// (which admin, which transaction) stay out of this response.
+			membershipRefund: (() => {
+				const refund = realRefund(guide);
+				return refund
+					? {
+							status: refund.status,
+							amount: refund.amount,
+							refundedAt: refund.refundedAt,
+						}
+					: null;
+			})(),
 			profileComplete: !!guide?.registrationCompleted,
 			// KYC review. The guide needs to see where they stand — and why, if
 			// they were rejected — not just find themselves silently unlisted.
@@ -378,10 +413,50 @@ class GuideService {
 	}
 
 	/**
-	 * Idempotent core of membership finalization — the single place that
-	 * actually mutates isVisible/membershipExpiryDate. Called from both the
-	 * synchronous confirm path above and the Razorpay webhook
-	 * (services/payment.ts's updateRegistrationStatus).
+	 * Open the paid-for membership window on `guide`, starting from `from`.
+	 *
+	 * Renewal-safe: the period is extended from whichever is later — `from`, or an
+	 * expiry still in the future — so renewing early never throws away days the
+	 * guide has already paid for. Each call appends exactly one row to
+	 * membershipHistory, so a row is always one real, live period.
+	 *
+	 * Mutates but does not save; the caller decides when to persist.
+	 */
+	private openMembershipWindow(guide: IGuide, from: Date) {
+		const base =
+			guide.membershipExpiryDate && guide.membershipExpiryDate > from
+				? guide.membershipExpiryDate
+				: from;
+		const expiry = new Date(base.getTime() + GUIDE_MEMBERSHIP_DURATION_DAYS * DAY_MS);
+
+		if (!guide.membershipStartDate) {
+			guide.membershipStartDate = from;
+		}
+		guide.membershipExpiryDate = expiry;
+		guide.membershipHistory = [
+			...(guide.membershipHistory ?? []),
+			{ startDate: base, expiryDate: expiry },
+		];
+		guide.membershipPendingActivation = false;
+		guide.isVisible = true;
+
+		return expiry;
+	}
+
+	/**
+	 * Idempotent core of membership finalization — the single place a *payment*
+	 * mutates membership state. Called from both the synchronous confirm path
+	 * above and the Razorpay webhook (services/payment.ts's
+	 * updateRegistrationStatus).
+	 *
+	 * Paying no longer starts the 30-day clock on its own. A guide who has not yet
+	 * cleared KYC is parked in `membershipPendingActivation`: the fee is captured
+	 * and invoiced, but the window does not open until an admin approves them, at
+	 * which point it runs from the approval instant rather than from a payment
+	 * that may have sat in the review queue for days. approveGuide() does that.
+	 *
+	 * An already-approved guide (the renewal case, and every legacy guide) is
+	 * unaffected: their window opens immediately, exactly as before.
 	 */
 	async finalizeMembershipPaymentByGuideId(guideId: string, status: 'success' | 'failed') {
 		const guide = await GuideDB.findById(guideId);
@@ -397,38 +472,26 @@ class GuideService {
 		}
 
 		const now = new Date();
-		// Renewal-safe: extend from whichever is later (now, or the current
-		// expiry) so renewing early never loses already-paid-for days.
-		const base =
-			guide.membershipExpiryDate && guide.membershipExpiryDate > now
-				? guide.membershipExpiryDate
-				: now;
-		const newExpiry = new Date(
-			base.getTime() + GUIDE_MEMBERSHIP_DURATION_DAYS * 24 * 60 * 60 * 1000
-		);
 
 		guide.paymentStatus = 'success';
-		// Paying is necessary but no longer sufficient — an admin must also have
-		// cleared the guide's KYC. An unapproved guide keeps the membership they
-		// paid for (the clock starts now either way); approveGuide() flips them
-		// visible the moment review passes, without a second payment.
-		guide.isVisible = isGuideApproved(guide);
-		if (!guide.membershipStartDate) {
-			guide.membershipStartDate = now;
+		guide.membershipPaidAt = now;
+
+		if (isGuideApproved(guide)) {
+			this.openMembershipWindow(guide, now);
+		} else {
+			// Paid, but the clock does not start until review passes. Nothing about
+			// membershipStartDate / membershipExpiryDate is touched here — an
+			// unapproved guide has no window at all yet.
+			guide.membershipPendingActivation = true;
+			guide.isVisible = false;
 		}
-		guide.membershipExpiryDate = newExpiry;
-		// Append-only membership record. `base` is where this purchased period
-		// begins (now for a first membership, the prior expiry for a renewal),
-		// so each row represents exactly one paid period.
-		guide.membershipHistory = [
-			...(guide.membershipHistory ?? []),
-			{ startDate: base, expiryDate: newExpiry },
-		];
+
 		await guide.save();
 
 		// Generate the membership invoice (non-blocking) — this single hook
 		// covers both the sync confirm-payment call and the webhook path, since
-		// both converge here.
+		// both converge here. The invoice is for the payment, which happened
+		// regardless of whether the subscription window has opened yet.
 		try {
 			await InvoiceService.createMembershipInvoice(guide);
 		} catch (invoiceError) {
@@ -605,7 +668,7 @@ class GuideService {
 
 		const profiles = await GuideDB.find({ accountId: { $in: accountIds } })
 			.select(
-				'accountId guideCode city languages type pan isVisible registrationCompleted paymentStatus membershipStartDate membershipExpiryDate profileImage identityProofs updatedAt'
+				'accountId guideCode city languages type pan isVisible registrationCompleted paymentStatus membershipStartDate membershipExpiryDate membershipPendingActivation membershipPaidAt membershipRefund adminNotes pricing approvalStatus rejectionReason approvedAt profileImage identityProofs updatedAt'
 			)
 			.lean();
 		const profileByAccountId = new Map(profiles.map((p) => [p.accountId.toString(), p]));
@@ -635,9 +698,20 @@ class GuideService {
 				membershipActive,
 				membershipStartDate: profile?.membershipStartDate ?? null,
 				membershipExpiryDate: profile?.membershipExpiryDate ?? null,
+				// Paid, but waiting on this admin to approve before the clock starts.
+				membershipPendingActivation: !!profile?.membershipPendingActivation,
+				membershipPaidAt: profile?.membershipPaidAt ?? null,
+				refundStatus: profile?.membershipRefund?.status ?? null,
 				profileImage: profile?.profileImage ?? '',
-				// [licence, aadhaar] in upload order — the admin panel reviews these.
+				// [licence, aadhaar] in upload order. Raw stored values — filenames or
+				// Cloudinary URLs, NOT links. The admin table only counts them; the
+				// detail endpoint is what hands back openable `documents`, because
+				// describing one stats the disk and doing that for every guide on
+				// every list load buys nothing.
 				identityProofs: profile?.identityProofs ?? [],
+				// The notes themselves are only served by the detail endpoint; the
+				// table just needs to know whether there is anything to read.
+				hasAdminNotes: !!profile?.adminNotes,
 				createdAt: account.createdAt,
 				updatedAt: profile?.updatedAt ?? account.createdAt,
 				approvalStatus: displayApprovalStatus(profile),
@@ -648,12 +722,192 @@ class GuideService {
 		});
 	}
 
+	/**
+	 * Everything an admin needs on one guide, on one screen: the profile, the KYC
+	 * documents (as links that actually resolve), the internal notes, and the
+	 * money — membership transactions with their Razorpay ids, the payout
+	 * destination, any auto-refund, and the manually recorded cash payments.
+	 *
+	 * ADMIN ONLY. Every field below that is not already on the public guide
+	 * endpoints is here precisely because it must not appear on them: Razorpay
+	 * payment/order ids, bank details, and internal notes are never returned by
+	 * getGuideById, getAllApprovedGuides or getPricingDetails.
+	 */
+	async getGuideDetailForAdmin(guideAccountId: string) {
+		const account = await AccountDB.findOne({ _id: guideAccountId, role: 'guide' })
+			.select('name email phone countryCode isActive status unavailableDates createdAt')
+			.lean();
+		if (!account) {
+			throw new NotFoundError('Guide account not found');
+		}
+
+		const guide = await GuideDB.findOne({ accountId: account._id }).lean();
+
+		const now = new Date();
+		const membershipActive =
+			!!guide?.isVisible && !!guide?.membershipExpiryDate && new Date(guide.membershipExpiryDate) > now;
+
+		// Every membership fee this guide has ever been charged, newest first.
+		const transactions = guide
+			? await TransactionDB.find({
+					reference_id: guide._id.toString(),
+					reference_type: 'guide_membership',
+				})
+					.sort({ createdAt: -1 })
+					.lean()
+			: [];
+
+		const [cashPayments, notesAuthor] = await Promise.all([
+			CashPaymentService.getForGuide(guideAccountId, { limit: 100 }),
+			guide?.adminNotesUpdatedBy
+				? AccountDB.findById(guide.adminNotesUpdatedBy).select('name').lean()
+				: null,
+		]);
+
+		return {
+			accountId: account._id.toString(),
+			guideId: guide?._id.toString() ?? null,
+			guideCode: guide?.guideCode ?? null,
+			name: account.name,
+			email: account.email,
+			phone: account.phone,
+			countryCode: account.countryCode,
+			isActive: account.isActive,
+			status: account.status,
+			city: guide?.city ?? '',
+			languages: guide?.languages ?? [],
+			type: guide?.type ?? 'normal',
+			pan: guide?.pan ?? '',
+			profileImage: guide?.profileImage ?? '',
+			unavailableDates: account.unavailableDates ?? [],
+			createdAt: account.createdAt,
+
+			// ---- Registration & review ----
+			registrationCompleted: guide?.registrationCompleted ?? false,
+			approvalStatus: displayApprovalStatus(guide),
+			rejectionReason: guide?.rejectionReason ?? '',
+			approvedAt: guide?.approvedAt ?? null,
+
+			// ---- Membership ----
+			isVisible: guide?.isVisible ?? false,
+			membershipActive,
+			paymentStatus: guide?.paymentStatus ?? 'pending',
+			membershipStartDate: guide?.membershipStartDate ?? null,
+			membershipExpiryDate: guide?.membershipExpiryDate ?? null,
+			membershipPaidAt: guide?.membershipPaidAt ?? null,
+			membershipPendingActivation: !!guide?.membershipPendingActivation,
+			membershipHistory: guide?.membershipHistory ?? [],
+
+			// ---- Documents (admin-only links) ----
+			documents: describeGuideDocuments(account._id.toString(), guide?.identityProofs),
+
+			// ---- Internal notes (admin-only) ----
+			adminNotes: guide?.adminNotes ?? '',
+			adminNotesUpdatedAt: guide?.adminNotesUpdatedAt ?? null,
+			adminNotesUpdatedBy: notesAuthor?.name ?? null,
+
+			// ---- Money (admin-only) ----
+			pricing: guide?.pricing ?? null,
+			bankDetails: guide?.bankDetails ?? null,
+			membershipRefund: realRefund(guide),
+			transactions: transactions.map((t) => ({
+				_id: t._id.toString(),
+				paymentCode: t.paymentCode ?? null,
+				transaction_id: t.transaction_id,
+				razorpay_order_id: t.razorpay_order_id,
+				razorpay_payment_id: t.razorpay_payment_id ?? null,
+				status: t.status,
+				amount: t.amount,
+				currency: t.currency,
+				createdAt: t.createdAt,
+			})),
+			cashPayments: cashPayments.data,
+			cashSummary: cashPayments.summary,
+		};
+	}
+
+	/**
+	 * Internal notes an admin keeps against a guide. Free-text, overwritten in
+	 * place — this is a notepad, not an append-only log; the activity log records
+	 * that it was edited and by whom.
+	 */
+	async updateAdminNotes(guideAccountId: string, notes: string, adminUserId: string) {
+		const account = await AccountDB.findOne({ _id: guideAccountId, role: 'guide' })
+			.select('name')
+			.lean();
+		if (!account) {
+			throw new NotFoundError('Guide account not found');
+		}
+
+		const guide = await GuideDB.findOne({ accountId: account._id });
+		if (!guide) {
+			throw new NotFoundError('Guide profile not found');
+		}
+
+		guide.adminNotes = notes;
+		guide.adminNotesUpdatedBy = new Types.ObjectId(adminUserId);
+		guide.adminNotesUpdatedAt = new Date();
+		await guide.save();
+
+		await ActivityLogService.log({
+			actor: adminUserId,
+			action: 'guide.notes_updated',
+			targetType: 'Guide',
+			targetId: guide._id.toString(),
+			description: `Updated internal notes on ${account.name}`,
+			metadata: { accountId: guideAccountId, cleared: notes.length === 0 },
+		});
+
+		return {
+			adminNotes: guide.adminNotes,
+			adminNotesUpdatedAt: guide.adminNotesUpdatedAt,
+		};
+	}
+
+	/**
+	 * Resolve one of a guide's identity proofs for the admin-only download route.
+	 * Returns the raw stored value plus its label; the controller decides whether
+	 * to stream it off disk or redirect to Cloudinary.
+	 */
+	async getGuideDocument(guideAccountId: string, index: number) {
+		const account = await AccountDB.findOne({ _id: guideAccountId, role: 'guide' })
+			.select('_id')
+			.lean();
+		if (!account) {
+			throw new NotFoundError('Guide not found');
+		}
+
+		const guide = await GuideDB.findOne({ accountId: account._id })
+			.select('identityProofs')
+			.lean();
+
+		const documents = describeGuideDocuments(guideAccountId, guide?.identityProofs);
+		const document = documents[index];
+		if (!document) {
+			throw new NotFoundError('This guide has no document at that position');
+		}
+
+		return document;
+	}
+
 	// ---- Admin KYC review ---------------------------------------------------
 
 	/**
-	 * Clear a guide's KYC. If they have already paid for membership this also
-	 * lists them immediately — they should not have to pay twice because review
-	 * happened to land after payment.
+	 * Clear a guide's KYC.
+	 *
+	 * This is where a paid-for subscription actually *starts*. A guide who paid
+	 * while pending review has been parked in `membershipPendingActivation` since
+	 * the payment landed; their 30 days run from this instant, not from the day
+	 * they paid, so time spent sitting in the review queue costs them nothing.
+	 *
+	 * Three cases, all of which end with the guide listed iff they have a live
+	 * membership window:
+	 *   - paid, awaiting activation  → the window opens now (the new flow)
+	 *   - already has a live window  → stays live (legacy guides who paid under
+	 *                                  the old start-at-payment rule)
+	 *   - not paid yet               → approved but not listed; paying now opens
+	 *                                  the window immediately, since they are
+	 *                                  approved by the time the payment lands
 	 */
 	async approveGuide(guideAccountId: string, adminUserId: string) {
 		const account = await AccountDB.findOne({ _id: guideAccountId, role: 'guide' });
@@ -672,15 +926,24 @@ class GuideService {
 			throw new ConflictError('This guide is already approved');
 		}
 
-		const membershipActive =
-			!!guide.membershipExpiryDate && guide.membershipExpiryDate > new Date();
+		const approvedAt = new Date();
 
 		guide.approvalStatus = 'approved';
 		guide.approvedBy = new Types.ObjectId(adminUserId);
-		guide.approvedAt = new Date();
+		guide.approvedAt = approvedAt;
 		guide.rejectionReason = undefined;
-		guide.isVisible = membershipActive;
+
+		if (guide.membershipPendingActivation) {
+			this.openMembershipWindow(guide, approvedAt);
+		} else {
+			// No parked payment: either a legacy guide with a window already running,
+			// or someone who has not paid at all. Both are answered by the same test.
+			guide.isVisible = !!guide.membershipExpiryDate && guide.membershipExpiryDate > approvedAt;
+		}
+
 		await guide.save();
+
+		const listedImmediately = guide.isVisible;
 
 		await ActivityLogService.log({
 			actor: adminUserId,
@@ -688,24 +951,58 @@ class GuideService {
 			targetType: 'Guide',
 			targetId: guide._id.toString(),
 			description: `Approved guide ${account.name} (${guide.guideCode ?? guide._id.toString()})`,
-			metadata: { accountId: guideAccountId, listedImmediately: membershipActive },
+			metadata: {
+				accountId: guideAccountId,
+				listedImmediately,
+				membershipStartedAt: listedImmediately ? guide.membershipStartDate : null,
+				membershipExpiresAt: guide.membershipExpiryDate,
+			},
 		});
 
 		await NotificationService.create({
 			recipient: account._id,
 			type: 'guide_approved',
 			title: 'Your profile has been approved',
-			message: membershipActive
-				? 'Your documents have been verified and your profile is now live. Tourists can find and book you.'
+			message: listedImmediately
+				? `Your documents have been verified and your profile is now live. Your ${GUIDE_MEMBERSHIP_DURATION_DAYS}-day subscription starts today and runs until ${guide.membershipExpiryDate?.toLocaleDateString('en-IN')}. Tourists can find and book you.`
 				: 'Your documents have been verified. Pay for your membership to go live and start receiving bookings.',
 			relatedEntity: { kind: 'Guide', id: guide._id.toString() },
-			dedupeKey: `guide_approved:${guide._id.toString()}:${guide.approvedAt.getTime()}`,
+			dedupeKey: `guide_approved:${guide._id.toString()}:${approvedAt.getTime()}`,
 		});
 
 		return guide;
 	}
 
-	/** Refuse a guide's KYC. Delists them immediately if they were live. */
+	/**
+	 * The most recent membership fee this guide actually paid, if any.
+	 * `reference_id` on a membership transaction is the Guide `_id`, not the
+	 * Account id — see createMembershipOrder.
+	 */
+	private async paidMembershipTransaction(guideId: Types.ObjectId): Promise<ITransaction | null> {
+		return TransactionDB.findOne({
+			reference_id: guideId.toString(),
+			reference_type: 'guide_membership',
+			status: { $in: ['success', 'paid'] },
+		})
+			.sort({ createdAt: -1 })
+			.exec();
+	}
+
+	/**
+	 * Refuse a guide's KYC. Delists them immediately if they were live, and — when
+	 * they paid for a membership that never started — refunds it automatically.
+	 *
+	 * The refund is deliberately scoped to a membership that is still parked in
+	 * `membershipPendingActivation`: money taken for a subscription the guide was
+	 * never allowed to use. A guide who was approved, went live, and is only now
+	 * being rejected has consumed part of what they paid for, so their fee is NOT
+	 * clawed back automatically — that is a judgement call, and an admin can still
+	 * refund by hand from the Razorpay dashboard.
+	 *
+	 * A failed refund does not fail the rejection: the guide must come off the
+	 * site either way, and `membershipRefund.status === 'failed'` (surfaced in the
+	 * admin panel) is what tells an admin to chase the money.
+	 */
 	async rejectGuide(guideAccountId: string, reason: string, adminUserId: string) {
 		const account = await AccountDB.findOne({ _id: guideAccountId, role: 'guide' });
 		if (!account) {
@@ -722,6 +1019,8 @@ class GuideService {
 		guide.approvedBy = new Types.ObjectId(adminUserId);
 		guide.approvedAt = new Date();
 		guide.isVisible = false;
+
+		const refund = await this.refundPendingMembership(guide, adminUserId);
 		await guide.save();
 
 		await ActivityLogService.log({
@@ -730,19 +1029,117 @@ class GuideService {
 			targetType: 'Guide',
 			targetId: guide._id.toString(),
 			description: `Rejected guide ${account.name}: ${reason}`,
-			metadata: { accountId: guideAccountId, reason },
+			metadata: {
+				accountId: guideAccountId,
+				reason,
+				refundStatus: refund?.status ?? 'none',
+				refundAmount: refund?.amount ?? 0,
+			},
 		});
+
+		const refundLine =
+			refund?.status === 'processed'
+				? ` A full refund of ₹${refund.amount.toLocaleString('en-IN')} has been initiated and should reach your account in 5–7 working days.`
+				: refund?.status === 'failed'
+					? ' We are also arranging a refund of your membership fee — our team will be in touch.'
+					: '';
 
 		await NotificationService.create({
 			recipient: account._id,
 			type: 'guide_rejected',
 			title: 'Your profile needs attention',
-			message: `Your guide profile could not be verified. ${reason}`,
+			message: `Your guide profile could not be verified. ${reason}${refundLine}`,
 			relatedEntity: { kind: 'Guide', id: guide._id.toString() },
 			dedupeKey: `guide_rejected:${guide._id.toString()}:${Date.now()}`,
 		});
 
+		if (refund?.status === 'processed') {
+			await NotificationService.create({
+				recipient: account._id,
+				type: 'membership_refunded',
+				title: 'Membership fee refunded',
+				message: `We have refunded your ₹${refund.amount.toLocaleString('en-IN')} membership fee. It usually reaches your account in 5–7 working days.`,
+				relatedEntity: { kind: 'Guide', id: guide._id.toString() },
+				dedupeKey: `membership_refunded:${guide._id.toString()}:${refund.refundedAt.getTime()}`,
+			});
+		}
+
 		return guide;
+	}
+
+	/**
+	 * Push the guide's parked membership fee back through Razorpay. Mutates
+	 * `guide` in place (the caller saves) and returns what happened, or null if
+	 * there was nothing to refund.
+	 *
+	 * Duplicate-refund guard: a `membershipRefund` that already succeeded is never
+	 * re-attempted, and `membershipPendingActivation` is cleared on the way
+	 * through, so a second rejection has nothing left to act on. A *failed* refund
+	 * is retried on a subsequent rejection, which is the only case where trying
+	 * again is right.
+	 */
+	private async refundPendingMembership(guide: IGuide, adminUserId: string) {
+		if (guide.membershipRefund?.status === 'processed') {
+			return guide.membershipRefund;
+		}
+		// Only a subscription that never started is refunded automatically.
+		if (!guide.membershipPendingActivation || guide.paymentStatus !== 'success') {
+			return null;
+		}
+
+		const transaction = await this.paidMembershipTransaction(guide._id);
+		if (!transaction || !transaction.razorpay_payment_id) {
+			logError('Guide rejection: no refundable membership payment found', {
+				guideId: guide._id.toString(),
+			});
+			return null;
+		}
+
+		const refundedAt = new Date();
+		const admin = new Types.ObjectId(adminUserId);
+
+		try {
+			const refund = await TransactionService.refundPayment(
+				transaction.razorpay_payment_id,
+				transaction.amount,
+				transaction._id.toString(),
+				'guide_application_rejected'
+			);
+
+			guide.membershipRefund = {
+				status: 'processed',
+				refundId: refund.id,
+				amount: transaction.amount,
+				refundedAt,
+				transaction: transaction._id,
+				razorpay_payment_id: transaction.razorpay_payment_id,
+				initiatedBy: admin,
+			};
+			// The money is back with the guide, so they no longer hold a paid
+			// membership. Re-applying means paying again — which is the point.
+			guide.membershipPendingActivation = false;
+			guide.paymentStatus = 'pending';
+		} catch (err: unknown) {
+			guide.membershipRefund = {
+				status: 'failed',
+				amount: transaction.amount,
+				refundedAt,
+				failureReason: err instanceof Error ? err.message : 'Razorpay refund failed',
+				transaction: transaction._id,
+				razorpay_payment_id: transaction.razorpay_payment_id,
+				initiatedBy: admin,
+			};
+			// The fee has NOT come back, so the membership stays parked and
+			// paymentStatus stays 'success'. A retry (or a manual refund) still has
+			// something to act on.
+			logError('Guide rejection: membership refund failed', {
+				guideId: guide._id.toString(),
+				transactionId: transaction._id.toString(),
+				error: err,
+			});
+		}
+
+		return guide.membershipRefund;
 	}
 
 	/** Guides awaiting review — the admin's KYC inbox. */
@@ -775,8 +1172,16 @@ class GuideService {
 				pan: profile.pan ?? '',
 				profileImage: profile.profileImage,
 				// [licence, aadhaar] in upload order — this is what the admin reviews.
+				// Kept for backward compatibility, but these are raw filenames/URLs:
+				// link to `documents` below instead, which routes through the
+				// authenticated download endpoint. Using identityProofs as an href is
+				// what made every document 404.
 				identityProofs: profile.identityProofs,
+				documents: describeGuideDocuments(profile.accountId.toString(), profile.identityProofs),
 				submittedAt: profile.createdAt,
+				// So the reviewer knows a rejection will trigger an automatic refund.
+				membershipPendingActivation: !!profile.membershipPendingActivation,
+				membershipFeePaid: profile.paymentStatus === 'success',
 			};
 		});
 	}

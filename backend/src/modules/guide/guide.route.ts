@@ -6,6 +6,7 @@ import Controller from './guide.controller';
 import { parseGuideProfileFormData } from './guide.middleware';
 import {
 	ContactInquiryValidator,
+	GuideAdminNotesValidator,
 	GuideBankDetailsValidator,
 	GuidePricingValidator,
 	GuideProfilePatchValidator,
@@ -90,6 +91,14 @@ router
 	.route('/admin/pending-approvals')
 	.get(VerifySession, VerifyMinLevel('admin'), Controller.getPendingApprovals);
 
+// Admin only - one guide in full: profile, documents, internal notes, and the
+// money (membership transactions with their Razorpay ids, bank details, refunds,
+// cash payments). Registered AFTER the two literal '/admin/*' routes above so
+// 'all' and 'pending-approvals' are not swallowed by the ':id' matcher.
+router
+	.route('/admin/:id')
+	.get(VerifySession, VerifyMinLevel('admin'), IDValidator, Controller.getGuideDetailForAdmin);
+
 // Contact inquiry routes
 router.route('/contact-inquiry').post(ContactInquiryValidator, Controller.createContactInquiry);
 
@@ -113,6 +122,21 @@ router
 		GuideRejectValidator,
 		Controller.rejectGuide
 	);
+
+// Admin only - internal notes on a guide. Never readable by the guide themselves.
+router
+	.route('/:id/notes')
+	.put(VerifySession, VerifyMinLevel('admin'), IDValidator, GuideAdminNotesValidator, Controller.updateAdminNotes);
+
+// Admin only - view/download a KYC document (Aadhaar, driving licence).
+//
+// This exists because Guide.identityProofs holds bare filenames, not URLs: the
+// admin panel was using them as hrefs, which resolved against the frontend
+// origin and 404'd. Documents are private, so they are served from here behind
+// an admin session rather than linked directly.
+router
+	.route('/:id/documents/:index')
+	.get(VerifySession, VerifyMinLevel('admin'), IDValidator, Controller.downloadGuideDocument);
 
 // Public — what this guide charges, and whether they can be booked directly.
 router.route('/:id/pricing-details').get(IDValidator, Controller.getPricingDetails);

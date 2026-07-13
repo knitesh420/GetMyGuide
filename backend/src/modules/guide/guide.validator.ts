@@ -217,6 +217,30 @@ export async function GuideRejectValidator(req: Request, res: Response, next: Ne
 	return next(new BadRequestError(message));
 }
 
+export type GuideAdminNotesValidationResult = {
+	notes: string;
+};
+
+/**
+ * Internal notes an admin keeps on a guide. An empty string is valid and means
+ * "clear the notes" — a notepad you cannot erase is a bad notepad.
+ */
+export async function GuideAdminNotesValidator(req: Request, res: Response, next: NextFunction) {
+	const reqValidator = z.object({
+		notes: z.string().trim().max(5000, 'Notes cannot exceed 5000 characters'),
+	});
+
+	const reqValidatorResult = reqValidator.safeParse(req.body);
+
+	if (reqValidatorResult.success) {
+		req.locals.data = reqValidatorResult.data;
+		return next();
+	}
+
+	const message = reqValidatorResult.error.issues.map((err) => `${err.path.join('.')}: ${err.message}`).join(', ');
+	return next(new BadRequestError(message));
+}
+
 export type GuidePricingValidationResult = {
 	halfDay: number;
 	fullDay: number;

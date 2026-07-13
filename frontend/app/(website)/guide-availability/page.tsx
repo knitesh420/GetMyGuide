@@ -148,6 +148,11 @@ function BookNowForm({ guide }: { guide: Guide }) {
   );
 }
 
+interface GuidePricing {
+  halfDay?: number;
+  fullDay?: number;
+}
+
 interface Guide {
   id: string;
   name: string;
@@ -156,9 +161,47 @@ interface Guide {
   city: string;
   languages: string[];
   photo: string;
+  /** What the guide charges. Null until they publish their rates. */
+  pricing: GuidePricing | null;
 }
 
 const getImageUrl = (guide: Guide): string | null => guideImageUrl(guide.photo);
+
+const rupees = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 0,
+});
+
+/**
+ * The guide's published rates, for tourists to see before they book.
+ *
+ * A guide who has not set rates is still listed — they are bookable through the
+ * enquiry form below, just not at a price we can quote — so this renders "Price
+ * on request" rather than hiding the card.
+ */
+function GuidePrice({ pricing }: { pricing: GuidePricing | null }) {
+  const fullDay = pricing?.fullDay;
+  const halfDay = pricing?.halfDay;
+
+  if (!fullDay) {
+    return (
+      <p className="text-xs font-medium text-gray-500">Price on request</p>
+    );
+  }
+
+  return (
+    <div className="flex items-baseline gap-1.5">
+      <span className="text-base font-bold text-gray-900">{rupees.format(fullDay)}</span>
+      <span className="text-[10px] font-medium text-gray-500">/ full day</span>
+      {!!halfDay && (
+        <span className="ml-auto text-[10px] font-medium text-gray-500">
+          {rupees.format(halfDay)} / half day
+        </span>
+      )}
+    </div>
+  );
+}
 
 export default function GuideAvailabilityPage() {
   const [guides, setGuides] = useState<Guide[]>([]);
@@ -208,6 +251,8 @@ export default function GuideAvailabilityPage() {
             : g.city ?? "",
           languages: Array.isArray(g.languages) ? g.languages : [],
           photo: g.photo ?? "",
+          // GET /guide/all already returns this; it just was not being read.
+          pricing: g.pricing ?? null,
         }));
 
         setGuides(normalized);
@@ -464,8 +509,12 @@ export default function GuideAvailabilityPage() {
                         </div>
                       </div>
 
-                      {/* Book Now Button / Form */}
-                      <div className="mt-auto">
+                      {/* Price, then Book Now. Sits directly above the CTA so the
+                          tourist sees what it costs before they commit. */}
+                      <div className="mt-auto space-y-2">
+                        <div className="border-t border-gray-100 pt-2">
+                          <GuidePrice pricing={guide.pricing} />
+                        </div>
                         <BookNowForm guide={guide} />
                       </div>
                     </div>

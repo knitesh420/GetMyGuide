@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppDispatch, RootState } from "@/lib/store";
 import { fetchAdminGuides } from "@/lib/redux/thunks/guide/adminGuideThunks";
@@ -118,7 +119,16 @@ export default function AdminGuidesPage() {
                   {filtered.map((g) => (
                     <TableRow key={g.accountId}>
                       <TableCell className="font-mono text-xs">{g.guideCode ?? "—"}</TableCell>
-                      <TableCell className="font-medium">{g.name}</TableCell>
+                      <TableCell className="font-medium">
+                        {/* The detail page is where documents, notes, payment info
+                            and cash payments live for this guide. */}
+                        <Link
+                          href={`/dashboard/admin/guides/${g.accountId}`}
+                          className="hover:text-teal-700 hover:underline"
+                        >
+                          {g.name}
+                        </Link>
+                      </TableCell>
                       <TableCell className="text-sm">
                         <div>{g.email}</div>
                         <div className="text-muted-foreground">{g.phone ?? "—"}</div>
@@ -131,6 +141,10 @@ export default function AdminGuidesPage() {
                       <TableCell>
                         {g.membershipActive ? (
                           <Badge variant="success">Active</Badge>
+                        ) : g.membershipPendingActivation ? (
+                          // Paid, but the 30-day clock only starts when an admin
+                          // approves them — so this is a queue to work, not a lapse.
+                          <Badge variant="pending">Awaiting approval</Badge>
                         ) : g.registrationCompleted ? (
                           <Badge variant="pending">Lapsed</Badge>
                         ) : (
@@ -145,18 +159,21 @@ export default function AdminGuidesPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        {g.isActive ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                            onClick={() => handleSuspend(g.accountId, g.name)}
-                          >
-                            Suspend
+                        <div className="flex justify-end gap-1">
+                          <Button size="sm" variant="ghost" asChild>
+                            <Link href={`/dashboard/admin/guides/${g.accountId}`}>View</Link>
                           </Button>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">—</span>
-                        )}
+                          {g.isActive && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                              onClick={() => handleSuspend(g.accountId, g.name)}
+                            >
+                              Suspend
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

@@ -3,6 +3,7 @@ import AdvertisementRoute from './advertisement/advertisement.route';
 import AssignmentRoute from './assignment/assignment.route';
 import BlogRoute from './blog/blog.route';
 import BookingRoute from './booking/booking.route';
+import CashPaymentRoute from './cashPayment/cashPayment.route';
 import DashboardRoute from './dashboard/dashboard.route';
 import EarningRoute from './earning/earning.route';
 import GuideRoute from './guide/guide.route';
@@ -38,6 +39,8 @@ router.use('/assignment', AssignmentRoute);
 router.use('/session', SessionRoute);
 router.use('/blog', BlogRoute);
 router.use('/booking', BookingRoute);
+// Admin-recorded cash payments to guides. Independent of /payment (Razorpay).
+router.use('/cash-payment', CashPaymentRoute);
 router.use('/dashboard', DashboardRoute);
 router.use('/earning', EarningRoute);
 router.use('/guide', GuideRoute);

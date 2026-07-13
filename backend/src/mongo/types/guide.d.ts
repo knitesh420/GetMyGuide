@@ -13,6 +13,25 @@ export interface GuidePricing {
 	fullDay: number;
 }
 
+/** Outcome of the automatic membership refund issued when an admin rejects. */
+export type MembershipRefundStatus = 'processed' | 'failed';
+
+export interface GuideMembershipRefund {
+	status: MembershipRefundStatus;
+	/** Razorpay refund id (rfnd_…). Absent when the gateway call failed. */
+	refundId?: string;
+	/** Rupees actually sent back. */
+	amount: number;
+	refundedAt: Date;
+	/** Why Razorpay refused, when status is 'failed'. */
+	failureReason?: string;
+	/** The membership Transaction that was refunded. */
+	transaction?: Types.ObjectId;
+	razorpay_payment_id?: string;
+	/** The admin whose rejection triggered it. */
+	initiatedBy?: Types.ObjectId;
+}
+
 export default interface IGuide extends Document {
 	_id: Types.ObjectId;
 	accountId: Types.ObjectId;
@@ -43,6 +62,25 @@ export default interface IGuide extends Document {
 	approvedBy?: Types.ObjectId | null;
 	approvedAt?: Date | null;
 	rejectionReason?: string;
+
+	/**
+	 * Membership has been paid for but the 30-day clock has NOT started, because
+	 * the guide is still awaiting KYC approval. `approveGuide` starts the window
+	 * from the moment of approval and clears this. Absent on every row written
+	 * before this flow existed — those guides had their clock started at payment,
+	 * and are left exactly as they are.
+	 */
+	membershipPendingActivation?: boolean;
+	/** When the membership fee was actually captured. Distinct from membershipStartDate. */
+	membershipPaidAt?: Date | null;
+	/** Set when a rejection auto-refunded the membership fee. Also the duplicate-refund guard. */
+	membershipRefund?: GuideMembershipRefund;
+
+	// ---- Admin-only internal notes -----------------------------------------
+	/** Free-text, never returned on any public or guide-facing route. */
+	adminNotes?: string;
+	adminNotesUpdatedBy?: Types.ObjectId | null;
+	adminNotesUpdatedAt?: Date | null;
 
 	// ---- Direct-booking pricing -------------------------------------------
 	/** Unset until the guide publishes rates; direct booking is refused without it. */

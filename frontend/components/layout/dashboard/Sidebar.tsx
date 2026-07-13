@@ -130,6 +130,9 @@ const guideNavigationItems: NavItem[] = [
   },
   { name: "My Trips", href: "/dashboard/guide/trips", icon: MapPinned },
   { name: "My Earnings", href: "/dashboard/guide/earnings", icon: Wallet },
+  // Cash the office has recorded as paid to this guide — distinct from Earnings,
+  // which is the commission ledger for online bookings.
+  { name: "Payment History", href: "/dashboard/guide/payments", icon: Receipt },
   { name: "Rates & Payouts", href: "/dashboard/guide/rates", icon: IndianRupee },
   { name: "My Reviews", href: "/dashboard/guide/reviews", icon: Star },
   { name: "Notifications", href: "/dashboard/notifications", icon: Bell },
