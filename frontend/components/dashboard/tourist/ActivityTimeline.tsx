@@ -12,6 +12,7 @@ import type { TouristActivityEntry, TouristActivityType } from "@/lib/data";
 import { SectionCard } from "./SectionCard";
 import { EmptyState } from "./EmptyState";
 import { formatRelative } from "./format";
+import { CARD_PADDING } from "./ui";
 import { cn } from "@/lib/utils";
 
 const ENTRY_STYLE: Record<
@@ -28,7 +29,10 @@ const ENTRY_STYLE: Record<
     className: "bg-violet-500/10 text-violet-600",
   },
   "trip-updated": { icon: Waypoints, className: "bg-teal-500/10 text-teal-600" },
-  "review-submitted": { icon: Star, className: "bg-amber-500/10 text-amber-600" },
+  "review-submitted": {
+    icon: Star,
+    className: "bg-amber-500/10 text-amber-600",
+  },
 };
 
 function ActivityRow({
@@ -43,43 +47,42 @@ function ActivityRow({
 
   const body = (
     <>
-      <p className="text-sm font-medium leading-tight text-foreground">
+      <p className="text-sm font-semibold leading-tight text-gray-900">
         {entry.title}
       </p>
-      <p className="text-sm leading-tight text-muted-foreground">
+      <p className="text-sm leading-relaxed text-gray-700">
         {entry.description}
       </p>
-      <time
-        dateTime={entry.at}
-        className="text-xs text-muted-foreground/80"
-      >
+      <time dateTime={entry.at} className="block text-xs text-gray-500">
         {formatRelative(entry.at)}
       </time>
     </>
   );
 
   return (
-    <li className="relative flex gap-3 pb-5 last:pb-0">
+    <li className="relative flex gap-4 pb-6 last:pb-0">
       {/* The rail joins one event to the next, so it must not hang off the last
           item — hence it's drawn per-row rather than once behind the list. */}
       {!isLast && (
         <span
           aria-hidden="true"
-          className="absolute left-[15px] top-9 h-[calc(100%-1.5rem)] w-px bg-border"
+          className="absolute left-4.25 top-10 h-[calc(100%-1.75rem)] w-px bg-gray-200"
         />
       )}
 
+      {/* ring-white, not ring-card: the card is white but `--card` is #f8f8f8,
+          which would halo every dot in grey. */}
       <span
         aria-hidden="true"
         className={cn(
-          "relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-4 ring-card",
+          "relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ring-4 ring-white",
           style.className,
         )}
       >
         <Icon className="h-4 w-4" />
       </span>
 
-      <div className="min-w-0 flex-1 space-y-0.5">
+      <div className="min-w-0 flex-1 space-y-1">
         {entry.href ? (
           <Link
             href={entry.href}
@@ -105,7 +108,7 @@ export function ActivityTimeline({
       icon={Activity}
       title="Recent Activity"
       description="Newest first"
-      contentClassName={activity.length ? "p-5" : "p-0"}
+      contentClassName={activity.length ? CARD_PADDING : "p-0"}
     >
       {activity.length === 0 ? (
         <EmptyState

@@ -1,48 +1,99 @@
 // app/payment-success/page.tsx
 "use client";
 
-import { Suspense } from 'react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { CheckCircle, ArrowRight } from 'lucide-react';
+import { Suspense } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ArrowRight, CheckCircle } from "lucide-react";
+import { formatCurrency } from "@/components/dashboard/tourist/format";
+import { CARD, PAGE_TITLE } from "@/components/dashboard/tourist/ui";
 
 function SuccessMessage() {
-    const searchParams = useSearchParams();
-    const requestId = searchParams.get('requestId');
-    const amount = searchParams.get('amount');
+  const searchParams = useSearchParams();
+  const amount = searchParams.get("amount");
 
-    return (
-        <div className="text-center">
-            <CheckCircle className="w-24 h-24 mx-auto text-green-500 mb-4" />
-            <h1 className="text-4xl font-extrabold text-foreground">Payment Successful!</h1>
-            {amount && (
-                 <p className="mt-2 text-2xl text-muted-foreground">You have successfully paid <span className="font-bold text-foreground">₹{Number(amount).toLocaleString()}</span>.</p>
-            )}
-            <p className="mt-4 text-lg text-muted-foreground">Your booking status has been updated. A confirmation has been sent to your email.</p>
-            
-            <div className="mt-8 flex flex-col sm:flex-row justify-center gap-4">
-                <Button asChild size="lg" className="red-gradient">
-                    <Link href={`/tours`}>
-                        Explore More <ArrowRight className="ml-2 w-5 h-5" />
-                    </Link>
-                </Button>
-                <Button asChild variant="outline" size="lg">
-                    <Link href="/dashboard/user">Back to Dashboard</Link>
-                </Button>
-            </div>
-        </div>
-    );
+  return (
+    <div className="flex flex-col items-center gap-6 text-center">
+      <span
+        aria-hidden="true"
+        className="flex h-20 w-20 items-center justify-center rounded-2xl bg-green-500/10 ring-1 ring-inset ring-green-500/20"
+      >
+        <CheckCircle className="h-10 w-10 text-green-600" />
+      </span>
+
+      <div className="space-y-3">
+        <h1 className={PAGE_TITLE}>Payment Successful!</h1>
+
+        {amount && (
+          <p className="text-sm text-gray-500 md:text-base">
+            You have successfully paid{" "}
+            <span className="text-2xl font-bold tracking-tight text-gray-900 lg:text-3xl">
+              {formatCurrency(Number(amount))}
+            </span>
+            .
+          </p>
+        )}
+
+        <p className="mx-auto max-w-md text-sm leading-relaxed text-gray-700 md:text-base">
+          Your booking status has been updated. A confirmation has been sent to
+          your email.
+        </p>
+      </div>
+
+      <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:justify-center">
+        <Button asChild className="red-gradient h-10 rounded-lg px-5">
+          <Link href="/tours">
+            Explore More
+            <ArrowRight aria-hidden="true" className="ml-1.5 h-4 w-4" />
+          </Link>
+        </Button>
+        <Button
+          asChild
+          variant="outline"
+          className="h-10 rounded-lg border-gray-200 px-5 text-gray-700 hover:bg-teal-500/10 hover:text-teal-700"
+        >
+          <Link href="/dashboard/user">Back to Dashboard</Link>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Same shape as SuccessMessage, so the card doesn't resize when params read. */
+function SuccessSkeleton() {
+  return (
+    <div
+      role="status"
+      aria-busy="true"
+      aria-live="polite"
+      className="flex flex-col items-center gap-6"
+    >
+      <span className="sr-only">Confirming your payment…</span>
+      <Skeleton className="h-20 w-20 rounded-2xl" />
+      <div className="flex flex-col items-center gap-3">
+        <Skeleton className="h-10 w-72" />
+        <Skeleton className="h-5 w-56" />
+        <Skeleton className="h-5 w-80" />
+      </div>
+      <div className="flex gap-3">
+        <Skeleton className="h-10 w-36 rounded-lg" />
+        <Skeleton className="h-10 w-44 rounded-lg" />
+      </div>
+    </div>
+  );
 }
 
 export default function PaymentSuccessPage() {
-    return (
-        <div className="min-h-screen bg-background flex items-center justify-center p-4">
-            <div className="max-w-3xl mx-auto animate-fade-in-up">
-                <Suspense fallback={<div>Loading...</div>}>
-                    <SuccessMessage />
-                </Suspense>
-            </div>
-        </div>
-    );
+  return (
+    <div className="mx-auto flex w-full max-w-2xl justify-center py-8 lg:py-10">
+      <Card className={`${CARD} w-full p-8 lg:p-12`}>
+        <Suspense fallback={<SuccessSkeleton />}>
+          <SuccessMessage />
+        </Suspense>
+      </Card>
+    </div>
+  );
 }

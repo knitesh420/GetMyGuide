@@ -19,6 +19,7 @@ import { RecentTripsPreview } from "@/components/dashboard/tourist/RecentTripsPr
 import { ReviewReminder } from "@/components/dashboard/tourist/ReviewReminder";
 import { StatsGrid } from "@/components/dashboard/tourist/StatsGrid";
 import { UpcomingTripHero } from "@/components/dashboard/tourist/UpcomingTripHero";
+import { PAGE } from "@/components/dashboard/tourist/ui";
 
 /**
  * Tourist Dashboard Home — a summary, not a replacement for the detail pages.
@@ -52,21 +53,25 @@ export default function UserDashboardPage() {
 
   if (error && !overview) {
     return (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Could not load your dashboard</AlertTitle>
-        <AlertDescription className="flex flex-col items-start gap-3">
-          <span>{error}</span>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => dispatch(fetchTouristDashboard())}
-          >
-            <RefreshCw aria-hidden="true" className="mr-1.5 h-4 w-4" />
-            Try again
-          </Button>
-        </AlertDescription>
-      </Alert>
+      <div className={PAGE}>
+        <Alert variant="destructive" className="rounded-2xl p-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle className="text-lg font-semibold">
+            Could not load your dashboard
+          </AlertTitle>
+          <AlertDescription className="flex flex-col items-start gap-4">
+            <span className="text-sm leading-relaxed">{error}</span>
+            <Button
+              variant="outline"
+              className="h-9 rounded-lg"
+              onClick={() => dispatch(fetchTouristDashboard())}
+            >
+              <RefreshCw aria-hidden="true" className="mr-1.5 h-4 w-4" />
+              Try again
+            </Button>
+          </AlertDescription>
+        </Alert>
+      </div>
     );
   }
 
@@ -88,7 +93,7 @@ export default function UserDashboardPage() {
   } = overview;
 
   return (
-    <div className="space-y-6 pb-4">
+    <div className={PAGE}>
       <DashboardHeader profile={profile} />
 
       <StatsGrid stats={stats} />
@@ -104,14 +109,14 @@ export default function UserDashboardPage() {
 
       {/* Previews of the detail pages on the left; the at-a-glance widgets that
           have no page of their own on the right. */}
-      <div className="grid gap-6 xl:grid-cols-3">
-        <div className="space-y-6 xl:col-span-2">
+      <div className="grid gap-6 lg:gap-8 xl:grid-cols-3">
+        <div className="space-y-8 lg:space-y-10 xl:col-span-2">
           <RecentBookingsPreview bookings={recentBookings} />
           <RecentTripsPreview trips={recentTrips} />
           <QuickActions />
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-8 lg:space-y-10">
           <NotificationsPreview
             notifications={notifications}
             unreadCount={stats.unreadNotifications}

@@ -5,7 +5,7 @@ import fs from 'fs';
 import routes from './modules';
 
 import { createLoggerContext, errorHandler } from 'node-be-utilities';
-import { IS_WINDOWS, Path } from './config/const';
+import { IS_PRODUCTION, IS_WINDOWS, Path } from './config/const';
 
 const allowlist = [
 	'http://localhost:5173',
@@ -50,6 +50,15 @@ export default function (app: Express) {
 
 	// Don't advertise the framework.
 	app.disable('x-powered-by');
+
+	// Behind nginx in production: trust exactly one proxy hop so req.ip resolves
+	// to the real client (the left-most X-Forwarded-For entry nginx sets) instead
+	// of nginx's loopback address — otherwise every request shares one rate-limit
+	// bucket. Deliberately left off in dev, where there is no proxy and a client
+	// could otherwise spoof X-Forwarded-For to forge req.ip and dodge limits.
+	if (IS_PRODUCTION) {
+		app.set('trust proxy', 1);
+	}
 
 	// Baseline security headers (kept dependency-free; no CSP to avoid breaking
 	// existing pages/embeds). HSTS is only meaningful over HTTPS, so it's gated

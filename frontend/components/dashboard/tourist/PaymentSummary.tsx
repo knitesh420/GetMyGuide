@@ -9,6 +9,7 @@ import type { TouristPaymentSummary } from "@/lib/data";
 import { SectionCard } from "./SectionCard";
 import { EmptyState } from "./EmptyState";
 import { formatCurrency, formatDate } from "./format";
+import { CARD_PADDING } from "./ui";
 import { cn } from "@/lib/utils";
 
 function Figure({
@@ -21,12 +22,12 @@ function Figure({
   tone?: "danger";
 }) {
   return (
-    <div className="rounded-xl bg-muted/50 p-3">
-      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+      <dt className="text-sm font-medium text-gray-500">{label}</dt>
       <dd
         className={cn(
-          "mt-0.5 text-lg font-bold tabular-nums",
-          tone === "danger" ? "text-destructive" : "text-foreground",
+          "mt-1 text-xl font-bold tracking-tight tabular-nums lg:text-2xl",
+          tone === "danger" ? "text-red-600" : "text-gray-900",
         )}
       >
         {value}
@@ -35,7 +36,11 @@ function Figure({
   );
 }
 
-export function PaymentSummary({ payments }: { payments: TouristPaymentSummary }) {
+export function PaymentSummary({
+  payments,
+}: {
+  payments: TouristPaymentSummary;
+}) {
   const [downloading, setDownloading] = useState(false);
   const latest = payments.latestInvoice;
 
@@ -70,7 +75,7 @@ export function PaymentSummary({ payments }: { payments: TouristPaymentSummary }
       icon={Wallet}
       title="Payments"
       description="What you've paid and what's due"
-      contentClassName="p-5"
+      contentClassName={payments.invoiceCount === 0 && payments.pendingAmount === 0 ? "p-0" : CARD_PADDING}
     >
       {payments.invoiceCount === 0 && payments.pendingAmount === 0 ? (
         <EmptyState
@@ -80,9 +85,12 @@ export function PaymentSummary({ payments }: { payments: TouristPaymentSummary }
           action={{ label: "Explore Tours", href: "/services" }}
         />
       ) : (
-        <div className="space-y-4">
-          <dl className="grid grid-cols-2 gap-3">
-            <Figure label="Total paid" value={formatCurrency(payments.totalPaid)} />
+        <div className="space-y-6">
+          <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Figure
+              label="Total paid"
+              value={formatCurrency(payments.totalPaid)}
+            />
             <Figure
               label="Pending payment"
               value={formatCurrency(payments.pendingAmount)}
@@ -91,28 +99,29 @@ export function PaymentSummary({ payments }: { payments: TouristPaymentSummary }
             <Figure label="Invoices" value={String(payments.invoiceCount)} />
             <Figure
               label="Latest payment"
-              value={latest ? formatCurrency(latest.amount, latest.currency) : "—"}
+              value={
+                latest ? formatCurrency(latest.amount, latest.currency) : "—"
+              }
             />
           </dl>
 
           {latest && (
-            <div className="flex flex-col gap-3 rounded-xl border border-border/60 p-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <p className="truncate font-mono text-sm font-medium">
+            <div className="flex flex-col gap-4 rounded-xl border border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 space-y-0.5">
+                <p className="truncate font-mono text-sm font-medium text-gray-900">
                   {latest.invoiceNumber}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-gray-500">
                   {latest.destination ? `${latest.destination} · ` : ""}
                   Paid {formatDate(latest.paidAt)}
                 </p>
               </div>
 
               <Button
-                size="sm"
                 variant="outline"
                 onClick={downloadLatest}
                 disabled={downloading}
-                className="shrink-0"
+                className="h-9 shrink-0 rounded-lg border-gray-200 text-gray-700 hover:bg-teal-500/10 hover:text-teal-700"
               >
                 {downloading ? (
                   <Loader2

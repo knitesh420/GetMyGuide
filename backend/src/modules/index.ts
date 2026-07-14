@@ -27,7 +27,9 @@ import UserRoute from './user/user.route';
 import { NotFoundError, ServerError } from 'node-be-utilities';
 import { Respond } from '@utils/respond';
 import { FileUpload, ONLY_MEDIA_ALLOWED, SingleFileUploadOptions } from '../utils/files';
+import { VerifySession } from '../middleware';
 import fs from 'fs';
+import path from 'path';
 
 const router = express.Router();
 
@@ -65,7 +67,7 @@ router.use('/trip', TripRoute);
 router.use('/user', UserRoute);
 router.use('/users', UserRoute);
 
-router.post('/upload-media', async function (req, res, next) {
+router.post('/upload-media', VerifySession, async function (req, res, next) {
 	const fileUploadOptions: SingleFileUploadOptions = {
 		field_name: 'file',
 		options: {
@@ -88,9 +90,18 @@ router.post('/upload-media', async function (req, res, next) {
 });
 
 router.get('/media/:path/:filename', function (req, res, next) {
-	const filePath = __basedir + '/static/' + req.params.path + '/' + req.params.filename;
+	// Resolve inside the static directory and verify the result stays contained.
+	// Express URL-decodes route params, so without this a request such as
+	// /media/..%2f..%2f..%2fetc/passwd would escape 'static' and stream arbitrary
+	// files off the host (path traversal).
+	const baseDir = path.resolve(__basedir, 'static');
+	const filePath = path.resolve(baseDir, req.params.path, req.params.filename);
 
-	if (!fs.existsSync(filePath)) {
+	if (filePath !== baseDir && !filePath.startsWith(baseDir + path.sep)) {
+		return next(new NotFoundError('File not found'));
+	}
+
+	if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
 		return next(new NotFoundError('File not found'));
 	}
 
@@ -99,6 +110,11 @@ router.get('/media/:path/:filename', function (req, res, next) {
 	const range = req.headers.range;
 
 	const ext = req.params.filename.split('.').pop()?.toLowerCase();
+	// Only raster images and video are rendered inline. Anything else — notably
+	// SVG, which can carry <script> — is served as an opaque download so an
+	// uploaded file can't execute as active content in this origin. The upload
+	// MIME filter is spoofable (client-set Content-Type), so this is the real
+	// guard, together with the global X-Content-Type-Options: nosniff header.
 	const mimeTypes: Record<string, string> = {
 		mp4: 'video/mp4',
 		webm: 'video/webm',
@@ -109,9 +125,10 @@ router.get('/media/:path/:filename', function (req, res, next) {
 		png: 'image/png',
 		gif: 'image/gif',
 		webp: 'image/webp',
-		svg: 'image/svg+xml',
 	};
-	const contentType = mimeTypes[ext || ''] || 'application/octet-stream';
+	const inlineType = mimeTypes[ext || ''];
+	const contentType = inlineType || 'application/octet-stream';
+	const disposition = inlineType ? 'inline' : 'attachment';
 
 	if (range) {
 		const parts = range.replace(/bytes=/, '').split('-');
@@ -125,7 +142,7 @@ router.get('/media/:path/:filename', function (req, res, next) {
 			'Accept-Ranges': 'bytes',
 			'Content-Length': chunkSize,
 			'Content-Type': contentType,
-			'Content-Disposition': 'inline',
+			'Content-Disposition': disposition,
 		});
 		stream.pipe(res);
 	} else {
@@ -133,7 +150,7 @@ router.get('/media/:path/:filename', function (req, res, next) {
 			'Content-Length': fileSize,
 			'Content-Type': contentType,
 			'Accept-Ranges': 'bytes',
-			'Content-Disposition': 'inline',
+			'Content-Disposition': disposition,
 		});
 		fs.createReadStream(filePath).pipe(res);
 	}

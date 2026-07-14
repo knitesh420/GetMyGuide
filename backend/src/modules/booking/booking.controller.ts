@@ -140,9 +140,14 @@ async function getMyReservations(req: Request, res: Response, next: NextFunction
 
 async function getTransactionStatus(req: Request, res: Response, next: NextFunction) {
 	try {
+		const user = req.locals.user as JWTPayload;
 		const bookingId = req.locals.id!;
 
-		const transactionStatus = await BookingService.getTransactionStatus(bookingId);
+		const transactionStatus = await BookingService.getTransactionStatus(
+			bookingId,
+			new Types.ObjectId(user.userId),
+			user.role
+		);
 
 		return Respond({
 			res,

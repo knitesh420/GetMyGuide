@@ -18,13 +18,13 @@ import { cn } from "@/lib/utils";
  * as a literal here rather than interpolated from a colour name.
  */
 const ACCENTS = {
-  teal: { icon: "bg-teal-500/10 text-teal-600", glow: "group-hover:shadow-teal-500/10" },
-  emerald: { icon: "bg-emerald-500/10 text-emerald-600", glow: "group-hover:shadow-emerald-500/10" },
-  sky: { icon: "bg-sky-500/10 text-sky-600", glow: "group-hover:shadow-sky-500/10" },
-  amber: { icon: "bg-amber-500/10 text-amber-600", glow: "group-hover:shadow-amber-500/10" },
-  violet: { icon: "bg-violet-500/10 text-violet-600", glow: "group-hover:shadow-violet-500/10" },
-  rose: { icon: "bg-rose-500/10 text-rose-600", glow: "group-hover:shadow-rose-500/10" },
-  slate: { icon: "bg-slate-500/10 text-slate-600", glow: "group-hover:shadow-slate-500/10" },
+  teal: "bg-teal-500/10 text-teal-600",
+  emerald: "bg-emerald-500/10 text-emerald-600",
+  sky: "bg-sky-500/10 text-sky-600",
+  amber: "bg-amber-500/10 text-amber-600",
+  violet: "bg-violet-500/10 text-violet-600",
+  rose: "bg-rose-500/10 text-rose-600",
+  slate: "bg-slate-500/10 text-slate-600",
 } as const;
 
 type Accent = keyof typeof ACCENTS;
@@ -101,9 +101,10 @@ const STATS: StatDef[] = [
 ];
 
 function StatCard({ stat, value }: { stat: StatDef; value: number }) {
-  const accent = ACCENTS[stat.accent];
   const Icon = stat.icon;
-  const display = stat.money ? formatCurrency(value) : value.toLocaleString("en-IN");
+  const display = stat.money
+    ? formatCurrency(value)
+    : value.toLocaleString("en-IN");
 
   return (
     <Link
@@ -113,38 +114,39 @@ function StatCard({ stat, value }: { stat: StatDef; value: number }) {
       // hidden from the reader to avoid announcing everything twice.
       aria-label={`${stat.label}: ${display}. ${stat.description}`}
       className={cn(
-        "group relative flex flex-col justify-between gap-3 rounded-2xl border border-border/60 bg-card p-4 shadow-sm",
-        "transition-all duration-300 hover:-translate-y-0.5 hover:border-teal-500/40 hover:shadow-lg",
+        "group flex h-full flex-col justify-between gap-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:p-6",
+        "transition-all duration-200 hover:border-teal-500/40 hover:shadow-md",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2",
-        accent.glow,
+        // The money tile is the one that overflows, so it takes the extra column
+        // — which also squares the grid off (6 tiles + 1 double = 8 cells = two
+        // clean rows of four) instead of leaving an orphan gap at the end.
+        stat.money && "col-span-2 lg:col-span-2 2xl:col-span-1",
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span
-          aria-hidden="true"
-          className={cn(
-            "flex h-10 w-10 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-110",
-            accent.icon,
-          )}
-        >
-          <Icon className="h-5 w-5" />
-        </span>
-      </div>
+      <span
+        aria-hidden="true"
+        className={cn(
+          "flex h-11 w-11 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-105",
+          ACCENTS[stat.accent],
+        )}
+      >
+        <Icon className="h-5 w-5" />
+      </span>
 
-      <div aria-hidden="true" className="space-y-0.5">
+      <div aria-hidden="true" className="space-y-1">
         <p
           className={cn(
-            "font-bold tracking-tight text-foreground",
+            "font-bold tracking-tight text-gray-900",
             // Money runs long ("₹1,20,000") — step it down so it never wraps.
-            stat.money ? "text-xl sm:text-2xl" : "text-3xl",
+            stat.money ? "text-2xl lg:text-3xl" : "text-3xl",
           )}
         >
           {display}
         </p>
-        <p className="text-sm font-medium leading-tight text-foreground/80">
+        <p className="text-sm font-medium leading-tight text-gray-700">
           {stat.label}
         </p>
-        <p className="text-xs leading-tight text-muted-foreground">
+        <p className="text-xs leading-relaxed text-gray-500">
           {stat.description}
         </p>
       </div>
@@ -158,7 +160,7 @@ export function StatsGrid({ stats }: { stats: TouristDashboardStats }) {
       <h2 id="stats-heading" className="sr-only">
         Your travel statistics
       </h2>
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-7">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-6 2xl:grid-cols-7">
         {STATS.map((stat) => (
           <StatCard key={stat.key} stat={stat} value={stats[stat.key]} />
         ))}

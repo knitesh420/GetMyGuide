@@ -90,18 +90,25 @@ export default { SingleFileUpload, MultiFileUpload };
 
 export { MultipleFileUploadOptions as FileUploadOptions, ResolvedFile };
 
+const ALLOWED_MEDIA_MIMETYPES = new Set([
+	'image/png',
+	'image/webp',
+	'image/jpg',
+	'image/jpeg',
+	'video/mp4',
+]);
+const ALLOWED_MEDIA_EXTENSIONS = new Set(['.png', '.webp', '.jpg', '.jpeg', '.mp4']);
+
 const ONLY_MEDIA_ALLOWED = (
 	req: Request,
 	file: Express.Multer.File,
 	cb: multer.FileFilterCallback
 ) => {
-	if (
-		file.mimetype !== 'image/png' &&
-		file.mimetype !== 'image/webp' &&
-		file.mimetype !== 'image/jpg' &&
-		file.mimetype !== 'image/jpeg' &&
-		file.mimetype !== 'video/mp4'
-	) {
+	// Client-set Content-Type is spoofable, and the stored filename's extension
+	// (taken from originalname) is what decides how the file is later served —
+	// so reject on the extension too, not just the MIME type.
+	const ext = path.extname(file.originalname).toLowerCase();
+	if (!ALLOWED_MEDIA_MIMETYPES.has(file.mimetype) || !ALLOWED_MEDIA_EXTENSIONS.has(ext)) {
 		return cb(new Error('Only JPG, PNG, WEBP, MP4  images are allowed'));
 	}
 	cb(null, true);

@@ -22,9 +22,12 @@ export function rateLimit(options: RateLimitOptions) {
 
 	return async function rateLimitMiddleware(req: Request, _res: Response, next: NextFunction) {
 		try {
-			const identifier =
-				keyFn?.(req) ??
-				(req.ip || req.headers['x-forwarded-for']?.toString() || 'unknown');
+			// req.ip is authoritative here: in production Express is configured with
+			// `trust proxy` so it reflects the real client (from nginx's
+			// X-Forwarded-For), and in dev it's the socket address. The raw
+			// X-Forwarded-For header is intentionally NOT used as a fallback — it's
+			// client-controlled and would let an attacker rotate it to evade limits.
+			const identifier = keyFn?.(req) ?? req.ip ?? 'unknown';
 			const key = `rl:${prefix}:${identifier}`;
 
 			const currentRaw = await StorageDB.getString(key);

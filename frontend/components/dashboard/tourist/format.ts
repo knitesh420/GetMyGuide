@@ -30,6 +30,20 @@ export function formatDate(value: string | null | undefined): string {
   });
 }
 
+/** e.g. "12 Jul 2026, 4:31 pm" — for payment timestamps, where the time matters. */
+export function formatDateTime(value: string | null | undefined): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 /** e.g. "July 2026" — used for "Member since". */
 export function formatMonthYear(value: string | null | undefined): string {
   if (!value) return "—";

@@ -757,14 +757,29 @@ class BookingService {
 	/**
 	 * Get transaction status for booking
 	 */
-	async getTransactionStatus(bookingId: Types.ObjectId): Promise<{
+	async getTransactionStatus(
+		bookingId: Types.ObjectId,
+		userId: Types.ObjectId,
+		userRole: string
+	): Promise<{
 		transaction_id: string;
 		status: string;
 		order_status: string;
 		amount: number;
 		currency: string;
 	}> {
-		const booking = await BookingDB.findById(bookingId);
+		// Ownership scoping — a tourist may only read their own booking, a guide
+		// only bookings allocated to them; admins see all. Mirrors getBookingById.
+		// Without this, any authenticated user could read (and, via the status
+		// flip below, mutate) any booking by guessing its id.
+		let booking: IBooking | null = null;
+		if (userRole === 'admin') {
+			booking = await BookingDB.findById(bookingId);
+		} else if (userRole === 'guide') {
+			booking = await BookingDB.findOne({ _id: bookingId, allocated_guide: userId });
+		} else {
+			booking = await BookingDB.findOne({ _id: bookingId, linked_to: userId });
+		}
 
 		if (!booking) {
 			throw new NotFoundError('Booking not found');

@@ -768,7 +768,11 @@ describe('BookingService', () => {
 				mockTransactionStatus
 			);
 
-			const result = await BookingService.getTransactionStatus(booking._id);
+			const result = await BookingService.getTransactionStatus(
+				booking._id,
+				testUserId,
+				'tourist'
+			);
 
 			expect(result).toEqual(mockTransactionStatus);
 			expect(TransactionService.getTransactionStatus).toHaveBeenCalledWith('txn-1');
@@ -822,7 +826,11 @@ describe('BookingService', () => {
 				mockTransactionStatus
 			);
 
-			const result = await BookingService.getTransactionStatus(booking._id);
+			const result = await BookingService.getTransactionStatus(
+				booking._id,
+				testUserId,
+				'tourist'
+			);
 
 			expect(result).toEqual(mockTransactionStatus);
 
@@ -833,7 +841,9 @@ describe('BookingService', () => {
 		it('should throw NotFoundError if booking not found', async () => {
 			const fakeId = new Types.ObjectId();
 
-			await expect(BookingService.getTransactionStatus(fakeId)).rejects.toThrow(NotFoundError);
+			await expect(
+				BookingService.getTransactionStatus(fakeId, testUserId, 'tourist')
+			).rejects.toThrow(NotFoundError);
 		});
 	});
 });

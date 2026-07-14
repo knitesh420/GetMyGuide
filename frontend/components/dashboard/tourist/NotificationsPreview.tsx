@@ -12,6 +12,7 @@ import type { NotificationItem } from "@/lib/data";
 import { SectionCard } from "./SectionCard";
 import { EmptyState } from "./EmptyState";
 import { formatRelative } from "./format";
+import { ROW_PADDING } from "./ui";
 import { cn } from "@/lib/utils";
 
 function NotificationRow({
@@ -26,8 +27,9 @@ function NotificationRow({
   return (
     <li
       className={cn(
-        "flex items-start justify-between gap-3 px-5 py-3.5 transition-colors",
-        unread ? "bg-teal-500/[0.06]" : "hover:bg-muted/40",
+        "flex items-start justify-between gap-3 transition-colors",
+        ROW_PADDING,
+        unread ? "bg-teal-50" : "hover:bg-gray-50",
       )}
     >
       {/* The unread marker is a colour cue, so it carries a text equivalent for
@@ -35,14 +37,14 @@ function NotificationRow({
       <span
         aria-hidden="true"
         className={cn(
-          "mt-1.5 h-2 w-2 shrink-0 rounded-full",
+          "mt-2 h-2 w-2 shrink-0 rounded-full",
           unread ? "bg-teal-500" : "bg-transparent",
         )}
       />
 
-      <div className="min-w-0 flex-1 space-y-0.5">
+      <div className="min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-semibold leading-tight">
+          <p className="text-sm font-semibold leading-tight text-gray-900">
             {notification.title}
           </p>
           {unread && (
@@ -51,13 +53,10 @@ function NotificationRow({
             </Badge>
           )}
         </div>
-        <p className="line-clamp-2 text-sm text-muted-foreground">
+        <p className="line-clamp-2 text-sm leading-relaxed text-gray-700">
           {notification.message}
         </p>
-        <time
-          dateTime={notification.createdAt}
-          className="text-xs text-muted-foreground/80"
-        >
+        <time dateTime={notification.createdAt} className="block text-xs text-gray-500">
           {formatRelative(notification.createdAt)}
         </time>
       </div>
@@ -66,7 +65,7 @@ function NotificationRow({
         <Button
           size="sm"
           variant="ghost"
-          className="shrink-0 text-xs"
+          className="h-8 shrink-0 rounded-lg px-2.5 text-xs font-medium text-teal-700 hover:bg-teal-500/10 hover:text-teal-800"
           onClick={() => onMarkRead(notification._id)}
         >
           Mark read
@@ -99,7 +98,7 @@ export function NotificationsPreview({
           <Button
             size="sm"
             variant="ghost"
-            className="text-xs"
+            className="h-9 rounded-lg px-2.5 text-xs font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900"
             onClick={() => dispatch(markAllNotificationsRead())}
           >
             Mark all read
@@ -114,7 +113,7 @@ export function NotificationsPreview({
           description="Updates about your bookings, guides and trips will show up here."
         />
       ) : (
-        <ul className="divide-y divide-border/60">
+        <ul className="divide-y divide-gray-200">
           {notifications.map((notification) => (
             <NotificationRow
               key={notification._id}
