@@ -63,6 +63,13 @@ import {
 
 type GuideType = "normal" | "escort";
 
+// Shared input styling so every field on the page reads as one set: a soft
+// slate fill that brightens to white on focus, on-brand focus ring from the
+// Input/Select primitives. Editable and read-only fields differ only in fill.
+const EDITABLE_INPUT =
+  "bg-slate-50 border-slate-200 transition-colors focus-visible:bg-white focus-visible:border-slate-300";
+const READONLY_INPUT = "bg-slate-100 border-slate-200 text-slate-500";
+
 /** Titled band inside the profile panel, ruled off from the one above it. */
 const FormSection = ({
   title,
@@ -75,8 +82,8 @@ const FormSection = ({
   action?: React.ReactNode;
   children: React.ReactNode;
 }) => (
-  <section className="border-b border-slate-200 px-6 py-6 last:border-b-0">
-    <div className="mb-5 flex items-start justify-between gap-4">
+  <section className="border-b border-slate-200 px-5 py-6 last:border-b-0 sm:px-6">
+    <div className="mb-6 flex items-start justify-between gap-4">
       <div>
         <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
         {description && <p className="mt-1 text-xs text-slate-500">{description}</p>}
@@ -85,6 +92,35 @@ const FormSection = ({
     </div>
     {children}
   </section>
+);
+
+/**
+ * One labelled form field. Owns the label→input rhythm (space-y-2) so every
+ * field on the page shares the exact same gap, and an optional hint that sits
+ * between the label and the control — deliberately above the input so it can
+ * never be covered by an open dropdown.
+ */
+const Field = ({
+  label,
+  htmlFor,
+  hint,
+  action,
+  children,
+}: {
+  label: string;
+  htmlFor?: string;
+  hint?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) => (
+  <div className="space-y-2">
+    <div className="flex min-h-5 items-center justify-between gap-2">
+      <Label htmlFor={htmlFor}>{label}</Label>
+      {action}
+    </div>
+    {hint && <p className="-mt-0.5 text-xs leading-relaxed text-slate-500">{hint}</p>}
+    {children}
+  </div>
 );
 
 const sameLanguages = (a: string[], b: string[]) =>
@@ -553,15 +589,19 @@ const GuideProfilePage = () => {
       <form onSubmit={handleSubmit}>
         <GuidePanel>
           <FormSection title="Account" description="Managed by your login — not editable here.">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div>
-                <Label htmlFor="name">Name</Label>
-                <Input id="name" value={myProfile?.name || ""} disabled />
-              </div>
-              <div>
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" value={myProfile?.email || ""} disabled />
-              </div>
+            <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-2">
+              <Field label="Name" htmlFor="name">
+                <Input id="name" value={myProfile?.name || ""} disabled className={READONLY_INPUT} />
+              </Field>
+              <Field label="Email" htmlFor="email">
+                <Input
+                  id="email"
+                  type="email"
+                  value={myProfile?.email || ""}
+                  disabled
+                  className={READONLY_INPUT}
+                />
+              </Field>
             </div>
           </FormSection>
 
@@ -569,9 +609,8 @@ const GuideProfilePage = () => {
             title="Editable Details"
             description="These four fields are the only ones you can change here."
           >
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div>
-                <Label htmlFor="phone">Phone Number</Label>
+            <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-2">
+              <Field label="Phone Number" htmlFor="phone">
                 <Input
                   id="phone"
                   name="phone"
@@ -581,22 +620,25 @@ const GuideProfilePage = () => {
                   placeholder="10-digit mobile number"
                   value={phone}
                   onChange={handlePhoneChange}
+                  className={EDITABLE_INPUT}
                 />
-              </div>
-              <div>
-                <Label htmlFor="city">Guide Location</Label>
+              </Field>
+
+              <Field label="Guide Location" htmlFor="city">
                 <Input
                   id="city"
                   name="city"
+                  placeholder="City you guide in"
                   value={city}
                   onChange={(e) => {
                     setCity(e.target.value);
                     setSaved(false);
                   }}
+                  className={EDITABLE_INPUT}
                 />
-              </div>
-              <div>
-                <Label htmlFor="guideType">Guide Type</Label>
+              </Field>
+
+              <Field label="Guide Type" htmlFor="guideType">
                 <Select
                   value={guideType}
                   onValueChange={(v) => {
@@ -604,7 +646,7 @@ const GuideProfilePage = () => {
                     setSaved(false);
                   }}
                 >
-                  <SelectTrigger id="guideType" className="bg-white">
+                  <SelectTrigger id="guideType" className={`w-full ${EDITABLE_INPUT}`}>
                     <SelectValue placeholder="Select guide type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -612,25 +654,27 @@ const GuideProfilePage = () => {
                     <SelectItem value="escort">Escort Guide</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="z-50 bg-white">
-                <div className="flex items-center justify-between">
-                  <Label>Foreign Languages</Label>
-                  {selectedLanguages.length > 0 && (
+              </Field>
+
+              <Field
+                label="Foreign Languages"
+                hint="Select every language you speak fluently. Type to search."
+                action={
+                  selectedLanguages.length > 0 ? (
                     <button
                       type="button"
                       onClick={() => {
                         setSelectedLanguages([]);
                         setSaved(false);
                       }}
-                      className="text-xs font-medium text-slate-500 hover:text-red-600"
+                      className="shrink-0 text-xs font-medium text-slate-500 transition-colors hover:text-red-600"
                     >
                       Clear all
                     </button>
-                  )}
-                </div>
+                  ) : undefined
+                }
+              >
                 <MultiSelect
-                  className="bg-white"
                   options={languageOptions}
                   selected={selectedLanguages}
                   onChange={(next) => {
@@ -639,10 +683,7 @@ const GuideProfilePage = () => {
                   }}
                   placeholder="Search and select languages..."
                 />
-                <p className="mt-1 text-xs text-slate-500">
-                  Select every language you speak fluently. Type to search.
-                </p>
-              </div>
+              </Field>
             </div>
           </FormSection>
 
@@ -650,11 +691,10 @@ const GuideProfilePage = () => {
             title="Fixed at Registration"
             description="Contact support if this needs to change."
           >
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div>
-                <Label htmlFor="pan">PAN</Label>
-                <Input id="pan" value={myProfile?.pan || "—"} disabled />
-              </div>
+            <div className="grid grid-cols-1 gap-x-6 gap-y-6 md:grid-cols-2">
+              <Field label="PAN" htmlFor="pan">
+                <Input id="pan" value={myProfile?.pan || "—"} disabled className={READONLY_INPUT} />
+              </Field>
             </div>
           </FormSection>
 

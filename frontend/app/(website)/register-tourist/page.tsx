@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/hooks/useAuth";
 import RoleGuard from "@/components/auth/RoleGuard";
+import { showError } from "@/lib/swal";
 
 declare global {
   interface Window {
@@ -805,8 +806,9 @@ function CombinedGuideBookingForm() {
             setShowSuccess(true);
           } catch (error) {
             console.error("Payment verification error:", error);
-            alert(
-              "Payment completed but booking creation failed. Please contact support with your payment ID: " +
+            showError(
+              "Booking could not be completed",
+              "Your payment went through but the booking failed. Please contact support with your payment ID: " +
                 response.razorpay_payment_id,
             );
           } finally {
@@ -817,9 +819,10 @@ function CombinedGuideBookingForm() {
 
       const rzp = new window.Razorpay(options);
       rzp.on("payment.failed", (response: any) => {
-        alert(
+        showError(
+          "Payment failed",
           response?.error?.description ||
-            "Payment failed. Please try again or use a different method.",
+            "Please try again or use a different method.",
         );
         setIsSubmitting(false);
       });
@@ -828,7 +831,7 @@ function CombinedGuideBookingForm() {
     } catch (error) {
       const message =
         (error as Error)?.message || "An error occurred. Please try again.";
-      alert(message);
+      showError("Something went wrong", message);
       setIsSubmitting(false);
     }
   };

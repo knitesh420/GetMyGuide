@@ -10,6 +10,7 @@ import { fetchBlogs, deleteBlog } from "@/lib/redux/thunks/blog/blogThunks";
 import { Blog } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { Plus, Play, Trash2 } from "lucide-react";
+import { showError, confirmDialog } from "@/lib/swal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -57,9 +58,12 @@ function BlogVideoCard({
       e.preventDefault();
       e.stopPropagation();
       if (isDeleting) return;
-      const confirmed = window.confirm(
-        "Are you sure you want to delete this blog? This action cannot be undone.",
-      );
+      const confirmed = await confirmDialog({
+        title: "Delete this blog?",
+        text: "This action cannot be undone.",
+        confirmText: "Delete",
+        destructive: true,
+      });
       if (!confirmed) return;
       setIsDeleting(true);
       try {
@@ -165,14 +169,13 @@ export default function BlogListPage() {
       try {
         const result = await dispatch(deleteBlog(id));
         if (deleteBlog.rejected.match(result)) {
-          alert(
-            typeof result.payload === "string"
-              ? result.payload
-              : "Failed to delete blog",
+          await showError(
+            "Failed to delete blog",
+            typeof result.payload === "string" ? result.payload : undefined,
           );
         }
       } catch {
-        alert("Failed to delete blog");
+        await showError("Failed to delete blog");
       }
     },
     [dispatch],

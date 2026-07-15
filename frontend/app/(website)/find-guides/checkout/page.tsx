@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, ShieldCheck, AlertCircle } from 'lucide-react';
+import { showWarning } from '@/lib/swal';
 import { format } from 'date-fns';
 
 const CheckoutPage: FC = () => {
@@ -84,7 +85,7 @@ const CheckoutPage: FC = () => {
 
   const handlePlaceOrder = async () => {
     if (!fullName || !email || !phone) {
-      alert('Please fill in all contact details.');
+      showWarning('Missing details', 'Please fill in all contact details.');
       return;
     }
 

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "react-toastify";
+import { confirmDialog } from "@/lib/swal";
 import {
   ArrowLeft,
   Banknote,
@@ -132,13 +133,13 @@ export default function AdminGuideDetailPage() {
   // here but the action to undo it lived only on the list — so an admin who
   // drilled in had to go back out to reinstate the guide.
   const handleReactivate = async () => {
-    if (
-      !window.confirm(
-        `Reactivate ${detail?.name}? They will regain access and be listed on the site again.`,
-      )
-    ) {
-      return;
-    }
+    const confirmed = await confirmDialog({
+      title: `Reactivate ${detail?.name}?`,
+      text: "They will regain access and be listed on the site again.",
+      confirmText: "Reactivate",
+      icon: "question",
+    });
+    if (!confirmed) return;
 
     setReactivating(true);
     const result = await dispatch(reactivateGuide(accountId));

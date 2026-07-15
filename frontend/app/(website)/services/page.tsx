@@ -10,6 +10,7 @@ import { getServicesAction } from "./actions";
 import { useSelector } from "react-redux";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { resolvePackageImageUrl } from "@/lib/utils";
+import { showSuccess, showError, confirmDialog } from "@/lib/swal";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -164,7 +165,7 @@ function ServicesContent() {
       const data = await res.json();
 
       if (!res.ok || !data?.success) {
-        alert(data?.error?.message || "Failed to create package.");
+        await showError("Failed to create package", data?.error?.message);
         return false;
       }
 
@@ -196,19 +197,22 @@ function ServicesContent() {
         ...prev,
       ]);
 
-      alert("Package created successfully!");
+      void showSuccess("Package created", "Your package is now live.");
       return true;
     } catch (error) {
       console.error("Failed to create package", error);
-      alert("An error occurred while creating the package.");
+      await showError("Something went wrong", "An error occurred while creating the package.");
       return false;
     }
   };
 
   const handleDelete = async (packageId: string) => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this package?",
-    );
+    const confirmed = await confirmDialog({
+      title: "Delete this package?",
+      text: "This action cannot be undone.",
+      confirmText: "Delete",
+      destructive: true,
+    });
     if (!confirmed) return;
 
     try {
@@ -231,15 +235,15 @@ function ServicesContent() {
             error: { message: responseText || "Failed to delete package" },
           };
         }
-        alert(data?.error?.message || "Failed to delete package");
+        await showError("Failed to delete package", data?.error?.message);
         return;
       }
 
       setPackages((prev) => prev.filter((pkg) => pkg.id !== packageId));
-      alert("Package deleted successfully!");
+      void showSuccess("Package deleted");
     } catch (error) {
       console.error("Failed to delete package", error);
-      alert("An error occurred while deleting the package.");
+      await showError("Something went wrong", "An error occurred while deleting the package.");
     }
   };
 

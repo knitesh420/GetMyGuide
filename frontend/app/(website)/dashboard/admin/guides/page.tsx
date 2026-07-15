@@ -9,6 +9,7 @@ import { fetchAdminGuides } from "@/lib/redux/thunks/guide/adminGuideThunks";
 import { deleteGuide, reactivateGuide } from "@/lib/redux/thunks/guide/guideThunk";
 import { Button } from "@/components/ui/button";
 import { showToast } from "@/lib/utils/toastHelper";
+import { confirmDialog } from "@/lib/swal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -58,13 +59,13 @@ export default function AdminGuidesPage() {
   // Suspension hides the guide from the site and blocks their login. It is
   // reversible via handleReactivate below, so this asks before doing it.
   const handleSuspend = async (accountId: string, name: string) => {
-    if (
-      !window.confirm(
-        `Suspend ${name}? They will be hidden from the site and lose access.`,
-      )
-    ) {
-      return;
-    }
+    const confirmed = await confirmDialog({
+      title: `Suspend ${name}?`,
+      text: "They will be hidden from the site and lose access.",
+      confirmText: "Suspend",
+      destructive: true,
+    });
+    if (!confirmed) return;
 
     const result = await dispatch(deleteGuide(accountId));
     if (deleteGuide.fulfilled.match(result)) {
@@ -77,13 +78,13 @@ export default function AdminGuidesPage() {
   // Reverse a suspension: restores the guide's access and puts them back on the
   // site.
   const handleReactivate = async (accountId: string, name: string) => {
-    if (
-      !window.confirm(
-        `Reactivate ${name}? They will regain access and be listed on the site again.`,
-      )
-    ) {
-      return;
-    }
+    const confirmed = await confirmDialog({
+      title: `Reactivate ${name}?`,
+      text: "They will regain access and be listed on the site again.",
+      confirmText: "Reactivate",
+      icon: "question",
+    });
+    if (!confirmed) return;
 
     const result = await dispatch(reactivateGuide(accountId));
     if (reactivateGuide.fulfilled.match(result)) {

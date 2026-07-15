@@ -15,6 +15,7 @@ import Image from 'next/image';
 import { Calendar as CalendarIcon, Users, MapPin, Globe, ArrowRight, Tags } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
 import { addDays, format, differenceInCalendarDays, isBefore } from 'date-fns';
+import { showWarning } from '@/lib/swal';
 
 export default function BookGuidePage() {
   const dispatch: AppDispatch = useDispatch();
@@ -64,15 +65,21 @@ export default function BookGuidePage() {
 
   const handleProceedToCheckout = () => {
     if (!pricingDetails?.bookable) {
-      alert(pricingDetails?.unavailableReason ?? "This guide cannot be booked directly right now.");
+      showWarning(
+        "Guide unavailable",
+        pricingDetails?.unavailableReason ?? "This guide cannot be booked directly right now.",
+      );
       return;
     }
     if (totalPrice <= 0) {
-      alert("Please choose your travel dates.");
+      showWarning("Select your dates", "Please choose your travel dates to continue.");
       return;
     }
     if (!guide || !locationName || !languageName || !date?.from || !date?.to || !fullName || !email || !phone) {
-      alert("Please fill all booking and contact details before proceeding.");
+      showWarning(
+        "Missing details",
+        "Please fill all booking and contact details before proceeding.",
+      );
       return;
     }
 

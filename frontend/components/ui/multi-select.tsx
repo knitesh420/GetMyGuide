@@ -69,9 +69,9 @@ export function MultiSelect({
   return (
     <Command
       onKeyDown={handleKeyDown}
-      className={`overflow-visible bg-white ${className}`}
+      className={`overflow-visible bg-transparent ${className ?? ""}`}
     >
-      <div className="group rounded-md border border-input px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+      <div className="group rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm ring-offset-background transition-colors focus-within:border-slate-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
         <div className="flex flex-wrap gap-1">
           {selected.map((value) => {
             const option = options.find((opt) => opt.value === value);
@@ -109,7 +109,7 @@ export function MultiSelect({
       </div>
       <div className="relative mt-2">
         {open && selectables.length > 0 ? (
-          <div className="absolute top-0 z-10 w-full rounded-md border bg-white text-popover-foreground shadow-md outline-none animate-in">
+          <div className="absolute top-0 z-50 max-h-60 w-full overflow-auto rounded-md border border-slate-200 bg-white text-popover-foreground shadow-lg outline-none animate-in">
             <CommandList>
               <CommandGroup className="h-full overflow-auto">
                 {selectables.map((option) => (

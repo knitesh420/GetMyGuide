@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AssignGuideModal } from "@/components/assignment/AssignGuideModal";
 import { showToast } from "@/lib/utils/toastHelper";
+import { confirmDialog } from "@/lib/swal";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { AdminBookingSummary } from "@/lib/data";
 
@@ -120,8 +121,14 @@ export default function AdminTouristsPage() {
   // Suspending an account is reversible (it only flips `isActive`), but it does
   // lock the tourist out immediately — so it still asks first.
   const handleToggleAccount = async (accountId: string, name: string, isActive: boolean) => {
-    if (isActive && !window.confirm(`Suspend ${name}'s account? They will lose access until you restore it.`)) {
-      return;
+    if (isActive) {
+      const confirmed = await confirmDialog({
+        title: `Suspend ${name}'s account?`,
+        text: "They will lose access until you restore it.",
+        confirmText: "Suspend",
+        destructive: true,
+      });
+      if (!confirmed) return;
     }
 
     const result = isActive
