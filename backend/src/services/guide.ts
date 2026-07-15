@@ -425,11 +425,13 @@ class GuideService {
 		document: GuideIdentityDocument
 	) {
 		const guide = await this.requireRegisteredGuide(accountId);
-		guide.identityDocuments = {
-			...(guide.identityDocuments ?? {}),
-			[type]: document,
-		};
-		guide.markModified('identityDocuments');
+		// Set only this slot via its dot-path. Do NOT spread the live
+		// `guide.identityDocuments` into a fresh object: it is a Mongoose nested
+		// path, and spreading it turns the *other* (untouched) slot into `undefined`,
+		// which then fails to cast to Object on save ("Cast to Object failed for
+		// value undefined"). A targeted set leaves the sibling slot alone.
+		guide.set(`identityDocuments.${type}`, document);
+		guide.markModified(`identityDocuments.${type}`);
 		await guide.save();
 		return this.getGuideProfile(accountId);
 	}
@@ -437,12 +439,26 @@ class GuideService {
 	/** Remove one managed identity document. Silent if the slot was already empty. */
 	async deleteIdentityDocument(accountId: string, type: GuideIdentityDocumentType) {
 		const guide = await this.requireRegisteredGuide(accountId);
-		if (guide.identityDocuments?.[type]) {
-			// Rebuild the sub-object without the deleted key, then $set the whole
-			// path — assigning `undefined` to a nested key does not reliably unset it.
-			const remaining = { ...(guide.identityDocuments as Record<string, unknown>) };
-			delete remaining[type];
-			guide.identityDocuments = remaining;
+		// Work from a plain snapshot, never the live nested path. Spreading the
+		// Mongoose object corrupts the surviving slot into `undefined` (see the
+		// upsert above), and assigning `undefined` to the key does not reliably
+		// unset it. So: snapshot -> drop the slot -> replace the whole path.
+		const existing = guide.get('identityDocuments') as
+			| { toObject?: () => Record<string, { url?: string } | undefined> }
+			| Record<string, { url?: string } | undefined>
+			| undefined;
+		const plain: Record<string, { url?: string } | undefined> =
+			existing && typeof (existing as { toObject?: unknown }).toObject === 'function'
+				? (existing as { toObject: () => Record<string, { url?: string } | undefined> }).toObject()
+				: { ...((existing as Record<string, { url?: string } | undefined>) ?? {}) };
+		if (plain[type]?.url) {
+			delete plain[type];
+			// Drop any phantom empty slots Mongoose materialised so a bare `{}` is
+			// not re-persisted for a document the guide never uploaded.
+			for (const key of Object.keys(plain)) {
+				if (!plain[key]?.url) delete plain[key];
+			}
+			guide.set('identityDocuments', plain);
 			guide.markModified('identityDocuments');
 			await guide.save();
 		}
