@@ -80,6 +80,22 @@ async function deleteGuide(req: Request, res: Response, next: NextFunction) {
 	}
 }
 
+async function reactivateGuide(req: Request, res: Response, next: NextFunction) {
+	try {
+		const guideId = req.locals.id!;
+
+		const result = await GuideService.reactivateGuide(guideId);
+
+		return Respond({
+			res,
+			status: 200,
+			data: result,
+		});
+	} catch (error) {
+		return next(error);
+	}
+}
+
 async function getGuideProfile(req: Request, res: Response, next: NextFunction) {
 	try {
 		const user = req.locals.user;
@@ -473,6 +489,7 @@ const Controller = {
 	createContactInquiry,
 	getContactInquiries,
 	deleteGuide,
+	reactivateGuide,
 	getGuideProfile,
 	updateGuideProfile,
 	patchGuideProfile,

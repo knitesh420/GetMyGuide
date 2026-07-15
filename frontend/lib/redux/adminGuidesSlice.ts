@@ -5,7 +5,7 @@ import {
   fetchAdminGuides,
   saveGuideNotes,
 } from "@/lib/redux/thunks/guide/adminGuideThunks";
-import { deleteGuide } from "@/lib/redux/thunks/guide/guideThunk";
+import { deleteGuide, reactivateGuide } from "@/lib/redux/thunks/guide/guideThunk";
 
 interface AdminGuidesState {
   guides: AdminGuide[];
@@ -87,6 +87,16 @@ const adminGuidesSlice = createSlice({
       })
       .addCase(deleteGuide.rejected, (state, action: PayloadAction<unknown>) => {
         state.error = (action.payload as string) ?? "Failed to suspend the guide";
+      })
+      // Reversing a suspension is the mirror image: flip `isActive` back on for
+      // the row and, if it is open, the detail.
+      .addCase(reactivateGuide.fulfilled, (state, action) => {
+        const guide = state.guides.find((g) => g.accountId === action.payload);
+        if (guide) guide.isActive = true;
+        if (state.detail?.accountId === action.payload) state.detail.isActive = true;
+      })
+      .addCase(reactivateGuide.rejected, (state, action: PayloadAction<unknown>) => {
+        state.error = (action.payload as string) ?? "Failed to reactivate the guide";
       });
   },
 });

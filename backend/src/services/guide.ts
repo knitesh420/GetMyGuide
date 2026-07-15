@@ -164,6 +164,28 @@ class GuideService {
 	}
 
 	/**
+	 * Reactivate a suspended guide account by ID — the reverse of
+	 * deactivateGuide. Flips `isActive` back to true so the guide can log in and
+	 * is visible on the site again. Deactivation is a soft delete that only
+	 * clears this flag, so nothing else needs restoring.
+	 */
+	async reactivateGuide(guideId: Types.ObjectId): Promise<{ message: string }> {
+		const guide = await AccountDB.findOneAndUpdate(
+			{ _id: guideId, role: 'guide' },
+			{ isActive: true },
+			{ new: true }
+		);
+
+		if (!guide) {
+			throw new NotFoundError('Guide not found');
+		}
+
+		return {
+			message: 'Guide account reactivated successfully',
+		};
+	}
+
+	/**
 	 * Get guide profile (Account + Guide membership) for the current user
 	 */
 	async getGuideProfile(userId: string) {

@@ -123,6 +123,13 @@ router
 		Controller.rejectGuide
 	);
 
+// Admin only - reverse a suspension. The DELETE below is a soft delete that only
+// clears `isActive`; this flips it back so a mistakenly-suspended guide can be
+// restored without touching the database. Before '/:id' so it is not swallowed.
+router
+	.route('/:id/reactivate')
+	.patch(VerifySession, VerifyMinLevel('admin'), IDValidator, Controller.reactivateGuide);
+
 // Admin only - internal notes on a guide. Never readable by the guide themselves.
 router
 	.route('/:id/notes')

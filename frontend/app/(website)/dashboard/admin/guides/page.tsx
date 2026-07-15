@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppDispatch, RootState } from "@/lib/store";
 import { fetchAdminGuides } from "@/lib/redux/thunks/guide/adminGuideThunks";
-import { deleteGuide } from "@/lib/redux/thunks/guide/guideThunk";
+import { deleteGuide, reactivateGuide } from "@/lib/redux/thunks/guide/guideThunk";
 import { Button } from "@/components/ui/button";
 import { showToast } from "@/lib/utils/toastHelper";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,8 +56,7 @@ export default function AdminGuidesPage() {
   if (user && user.role !== "admin") return null;
 
   // Suspension hides the guide from the site and blocks their login. It is
-  // reversible in the database but there is no un-suspend endpoint yet, so this
-  // asks before doing it.
+  // reversible via handleReactivate below, so this asks before doing it.
   const handleSuspend = async (accountId: string, name: string) => {
     if (
       !window.confirm(
@@ -72,6 +71,25 @@ export default function AdminGuidesPage() {
       showToast.success(`${name} suspended.`);
     } else {
       showToast.error((result.payload as string) || "Could not suspend the guide.");
+    }
+  };
+
+  // Reverse a suspension: restores the guide's access and puts them back on the
+  // site.
+  const handleReactivate = async (accountId: string, name: string) => {
+    if (
+      !window.confirm(
+        `Reactivate ${name}? They will regain access and be listed on the site again.`,
+      )
+    ) {
+      return;
+    }
+
+    const result = await dispatch(reactivateGuide(accountId));
+    if (reactivateGuide.fulfilled.match(result)) {
+      showToast.success(`${name} reactivated.`);
+    } else {
+      showToast.error((result.payload as string) || "Could not reactivate the guide.");
     }
   };
 
@@ -163,7 +181,7 @@ export default function AdminGuidesPage() {
                           <Button size="sm" variant="ghost" asChild>
                             <Link href={`/dashboard/admin/guides/${g.accountId}`}>View</Link>
                           </Button>
-                          {g.isActive && (
+                          {g.isActive ? (
                             <Button
                               size="sm"
                               variant="ghost"
@@ -171,6 +189,15 @@ export default function AdminGuidesPage() {
                               onClick={() => handleSuspend(g.accountId, g.name)}
                             >
                               Suspend
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                              onClick={() => handleReactivate(g.accountId, g.name)}
+                            >
+                              Reactivate
                             </Button>
                           )}
                         </div>

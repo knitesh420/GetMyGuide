@@ -344,12 +344,26 @@ export const updateMyBankDetails = createAsyncThunk<GuideBankDetails, GuideBankD
   },
 );
 
-// Delete guide
+// Delete guide (soft delete — clears isActive, i.e. suspends)
 export const deleteGuide = createAsyncThunk<string, string>(
   "guide/deleteGuide",
   async (id, { rejectWithValue }) => {
     try {
       await apiService.delete(`/guides/${id}`);
+      return id;
+    } catch (err: any) {
+      return rejectWithValue(handleError(err));
+    }
+  }
+);
+
+// Reverse a suspension — the counterpart to deleteGuide. Sets isActive back to
+// true so a suspended guide regains access and is listed again.
+export const reactivateGuide = createAsyncThunk<string, string>(
+  "guide/reactivateGuide",
+  async (id, { rejectWithValue }) => {
+    try {
+      await apiService.patch(`/guides/${id}/reactivate`);
       return id;
     } catch (err: any) {
       return rejectWithValue(handleError(err));

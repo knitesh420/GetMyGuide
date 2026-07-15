@@ -19,6 +19,7 @@ import {
   fetchAdminGuideDetail,
   saveGuideNotes,
 } from "@/lib/redux/thunks/guide/adminGuideThunks";
+import { reactivateGuide } from "@/lib/redux/thunks/guide/guideThunk";
 import { clearCashPayments } from "@/lib/redux/cashPaymentSlice";
 import { fetchGuideCashPayments } from "@/lib/redux/thunks/cashPayment/cashPaymentThunks";
 import { useAuth } from "@/lib/hooks/useAuth";
@@ -81,6 +82,7 @@ export default function AdminGuideDetailPage() {
   const [notes, setNotes] = useState("");
   /** Notes as they are on the server, so we know whether the box is dirty. */
   const [savedNotes, setSavedNotes] = useState("");
+  const [reactivating, setReactivating] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated && user && user.role !== "admin") {
@@ -123,6 +125,29 @@ export default function AdminGuideDetailPage() {
       toast.success("Notes saved.");
     } else {
       toast.error((result.payload as string) || "Could not save the notes.");
+    }
+  };
+
+  // Reverse a suspension from the guide's own page. The "Suspended" badge shows
+  // here but the action to undo it lived only on the list — so an admin who
+  // drilled in had to go back out to reinstate the guide.
+  const handleReactivate = async () => {
+    if (
+      !window.confirm(
+        `Reactivate ${detail?.name}? They will regain access and be listed on the site again.`,
+      )
+    ) {
+      return;
+    }
+
+    setReactivating(true);
+    const result = await dispatch(reactivateGuide(accountId));
+    setReactivating(false);
+
+    if (reactivateGuide.fulfilled.match(result)) {
+      toast.success(`${detail?.name} reactivated.`);
+    } else {
+      toast.error((result.payload as string) || "Could not reactivate the guide.");
     }
   };
 
@@ -196,7 +221,21 @@ export default function AdminGuideDetailPage() {
           <Badge variant={APPROVAL_BADGE[detail.approvalStatus] ?? "outline"}>
             {detail.approvalStatus}
           </Badge>
-          {!detail.isActive && <Badge variant="destructive">Suspended</Badge>}
+          {!detail.isActive && (
+            <>
+              <Badge variant="destructive">Suspended</Badge>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                onClick={handleReactivate}
+                disabled={reactivating}
+              >
+                <Undo2 className="mr-1.5 h-4 w-4" />
+                {reactivating ? "Reactivating…" : "Reactivate"}
+              </Button>
+            </>
+          )}
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
           {detail.email} · {detail.phone ?? "—"} · {detail.city || "No city"}
