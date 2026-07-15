@@ -182,6 +182,113 @@ async function patchGuideProfile(req: Request, res: Response, next: NextFunction
 	}
 }
 
+/**
+ * The two document slots a guide manages themselves. Anything else on `:type`
+ * is a 400 rather than silently writing an unknown key.
+ */
+const IDENTITY_DOCUMENT_TYPES = ['aadhaar', 'guideLicence'] as const;
+type IdentityDocumentType = (typeof IDENTITY_DOCUMENT_TYPES)[number];
+
+function parseDocumentType(value: unknown): IdentityDocumentType {
+	if (typeof value === 'string' && (IDENTITY_DOCUMENT_TYPES as readonly string[]).includes(value)) {
+		return value as IdentityDocumentType;
+	}
+	throw new BadRequestError('Document type must be either "aadhaar" or "guideLicence"');
+}
+
+async function updateProfilePhoto(req: Request, res: Response, next: NextFunction) {
+	try {
+		const user = req.locals.user;
+		if (!user || !user.userId) {
+			return next(new BadRequestError('User not authenticated'));
+		}
+
+		const file = req.file;
+		if (!file) {
+			return next(new BadRequestError('No image file was uploaded'));
+		}
+
+		const url = await uploadMulterImage(file, 'getmyguide/guides');
+		const profile = await GuideService.updateProfilePhoto(user.userId, url);
+
+		return Respond({ res, status: 200, data: profile });
+	} catch (error) {
+		return next(error);
+	}
+}
+
+async function deleteProfilePhoto(req: Request, res: Response, next: NextFunction) {
+	try {
+		const user = req.locals.user;
+		if (!user || !user.userId) {
+			return next(new BadRequestError('User not authenticated'));
+		}
+
+		const profile = await GuideService.deleteProfilePhoto(user.userId);
+		return Respond({ res, status: 200, data: profile });
+	} catch (error) {
+		return next(error);
+	}
+}
+
+async function uploadIdentityDocument(req: Request, res: Response, next: NextFunction) {
+	try {
+		const user = req.locals.user;
+		if (!user || !user.userId) {
+			return next(new BadRequestError('User not authenticated'));
+		}
+
+		const type = parseDocumentType(req.params.type);
+		const file = req.file;
+		if (!file) {
+			return next(new BadRequestError('No document file was uploaded'));
+		}
+
+		const url = await uploadMulterImage(file, 'getmyguide/guides/identity-proofs');
+		const profile = await GuideService.upsertIdentityDocument(user.userId, type, {
+			url,
+			storage: 'remote',
+			mimeType: file.mimetype,
+			originalName: file.originalname,
+			size: file.size,
+			uploadedAt: new Date(),
+		});
+
+		return Respond({ res, status: 200, data: profile });
+	} catch (error) {
+		return next(error);
+	}
+}
+
+async function deleteIdentityDocument(req: Request, res: Response, next: NextFunction) {
+	try {
+		const user = req.locals.user;
+		if (!user || !user.userId) {
+			return next(new BadRequestError('User not authenticated'));
+		}
+
+		const type = parseDocumentType(req.params.type);
+		const profile = await GuideService.deleteIdentityDocument(user.userId, type);
+		return Respond({ res, status: 200, data: profile });
+	} catch (error) {
+		return next(error);
+	}
+}
+
+async function getSubscriptionHistory(req: Request, res: Response, next: NextFunction) {
+	try {
+		const user = req.locals.user;
+		if (!user || !user.userId) {
+			return next(new BadRequestError('User not authenticated'));
+		}
+
+		const history = await GuideService.getSubscriptionHistory(user.userId);
+		return Respond({ res, status: 200, data: history });
+	} catch (error) {
+		return next(error);
+	}
+}
+
 async function createMembershipOrder(req: Request, res: Response, next: NextFunction) {
 	try {
 		const user = req.locals.user;
@@ -493,6 +600,11 @@ const Controller = {
 	getGuideProfile,
 	updateGuideProfile,
 	patchGuideProfile,
+	updateProfilePhoto,
+	deleteProfilePhoto,
+	uploadIdentityDocument,
+	deleteIdentityDocument,
+	getSubscriptionHistory,
 	createMembershipOrder,
 	confirmMembershipPayment,
 	updateAvailability,

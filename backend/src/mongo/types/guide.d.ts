@@ -13,6 +13,26 @@ export interface GuidePricing {
 	fullDay: number;
 }
 
+/**
+ * The two identity documents a guide manages from their profile after
+ * registration. Stored under structured keys (rather than the legacy positional
+ * `identityProofs` array) so each can be replaced or removed independently.
+ */
+export type GuideIdentityDocumentType = 'aadhaar' | 'guideLicence';
+
+export interface GuideIdentityDocument {
+	/** Cloudinary secure URL (recent uploads) or a bare filename (legacy on disk). */
+	url: string;
+	storage: 'remote' | 'local';
+	/** e.g. application/pdf, image/jpeg — used to render the preview and set download headers. */
+	mimeType?: string;
+	/** The name the guide's file had when they uploaded it. */
+	originalName?: string;
+	/** Bytes, for display. */
+	size?: number;
+	uploadedAt?: Date;
+}
+
 /** Outcome of the automatic membership refund issued when an admin rejects. */
 export type MembershipRefundStatus = 'processed' | 'failed';
 
@@ -42,7 +62,22 @@ export default interface IGuide extends Document {
 	/** Escort guides only. */
 	pan?: string;
 	profileImage: string;
+	/**
+	 * Legacy positional KYC uploads: [licence, aadhaar] in that order, set at
+	 * registration. Still the source the admin download route indexes into, so it
+	 * is never renamed or reordered. Post-registration document management writes
+	 * to `identityDocuments` below instead.
+	 */
 	identityProofs: string[];
+	/**
+	 * Structured, individually-editable identity documents managed from the guide
+	 * profile after registration. Additive to `identityProofs`; absent on older
+	 * rows (hydrates as `{}` — check for `.url`, not truthiness of the key).
+	 */
+	identityDocuments?: {
+		aadhaar?: GuideIdentityDocument;
+		guideLicence?: GuideIdentityDocument;
+	};
 	registrationCompleted: boolean;
 	paymentStatus: 'pending' | 'success' | 'failed';
 	isVisible: boolean;

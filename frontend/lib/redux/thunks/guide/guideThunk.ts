@@ -1,6 +1,11 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
 import { apiService } from "@/lib/service/api";
-import { GuideDocument, GuideProfile } from "@/lib/data";
+import {
+  GuideDocument,
+  GuideIdentityDocumentType,
+  GuideProfile,
+  GuideSubscriptionRecord,
+} from "@/lib/data";
 import { AdminLocation, LanguageOption } from '@/lib/data';
 import { tourGuideBooking } from '@/lib/data';
 import { GuideCalendar, GuideLeave, GuideLeaveType } from '@/lib/data';
@@ -103,6 +108,91 @@ export const patchMyGuideProfile = createAsyncThunk<GuideProfile, GuideProfilePa
     }
   }
 );
+
+// ---- Post-registration profile assets (photo + identity documents) --------
+// Each returns the freshly-read GuideProfile (the backend responds with the
+// same shape as getMyGuideProfile), so the store's myProfile stays in sync.
+
+/** Upload/replace the guide's profile photo. */
+export const updateGuideProfilePhoto = createAsyncThunk<GuideProfile, File>(
+  "guide/updateProfilePhoto",
+  async (file, { rejectWithValue }) => {
+    try {
+      const formData = new FormData();
+      formData.append("profileImage", file);
+      const response = await apiService.put<GuideProfile>(
+        "/guides/profile/photo",
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } },
+      );
+      return response as unknown as GuideProfile;
+    } catch (err: any) {
+      return rejectWithValue(handleError(err));
+    }
+  },
+);
+
+/** Remove the guide's profile photo. */
+export const deleteGuideProfilePhoto = createAsyncThunk<GuideProfile, void>(
+  "guide/deleteProfilePhoto",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await apiService.delete<GuideProfile>("/guides/profile/photo");
+      return response as unknown as GuideProfile;
+    } catch (err: any) {
+      return rejectWithValue(handleError(err));
+    }
+  },
+);
+
+/** Upload/replace one identity document (Aadhaar or Guide Licence). */
+export const uploadGuideIdentityDocument = createAsyncThunk<
+  GuideProfile,
+  { type: GuideIdentityDocumentType; file: File }
+>("guide/uploadIdentityDocument", async ({ type, file }, { rejectWithValue }) => {
+  try {
+    const formData = new FormData();
+    formData.append("document", file);
+    const response = await apiService.put<GuideProfile>(
+      `/guides/profile/documents/${type}`,
+      formData,
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return response as unknown as GuideProfile;
+  } catch (err: any) {
+    return rejectWithValue(handleError(err));
+  }
+});
+
+/** Delete one identity document (Aadhaar or Guide Licence). */
+export const deleteGuideIdentityDocument = createAsyncThunk<
+  GuideProfile,
+  GuideIdentityDocumentType
+>("guide/deleteIdentityDocument", async (type, { rejectWithValue }) => {
+  try {
+    const response = await apiService.delete<GuideProfile>(
+      `/guides/profile/documents/${type}`,
+    );
+    return response as unknown as GuideProfile;
+  } catch (err: any) {
+    return rejectWithValue(handleError(err));
+  }
+});
+
+/** The guide's own membership/subscription history, newest first. */
+export const fetchGuideSubscriptionHistory = createAsyncThunk<
+  GuideSubscriptionRecord[],
+  void
+>("guide/fetchSubscriptionHistory", async (_, { rejectWithValue }) => {
+  try {
+    const response = await apiService.get<GuideSubscriptionRecord[]>(
+      "/guides/subscription-history",
+    );
+    return response.data ?? [];
+  } catch (err: any) {
+    return rejectWithValue(handleError(err));
+  }
+});
 
 // Guide membership (30-day recurring) — create a Razorpay order
 export const createGuideMembershipOrder = createAsyncThunk<

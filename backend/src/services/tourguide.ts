@@ -3,6 +3,7 @@ import { AccountDB, AssignmentDB, BookingDB, GuideDB, TransactionDB } from '@mon
 import IBooking from '@mongo/types/booking';
 import { JWTPayload } from '@services/jwt';
 import { getBookingOccupiedRange } from '@utils/bookingOccupiedRange';
+import { isMembershipActive } from '@utils/guideMembership';
 import { verifyRazorpaySignature } from '@utils/paymentVerify';
 import { randomBytes } from 'crypto';
 import { Types } from 'mongoose';
@@ -97,6 +98,19 @@ class TourGuideService {
 
 		if (input.endDate < input.startDate) {
 			throw new BadRequestError('The end date cannot be before the start date');
+		}
+
+		// Booking protection: a guide whose membership has lapsed (or was never
+		// activated) must not take NEW bookings, even if they are still approved
+		// and have rates. This is checked here, before any money is taken — the
+		// same rule that removes them from public listings. The verify path below
+		// deliberately does NOT re-run this: once the tourist has paid, a window
+		// that expires mid-checkout must not cost them their booking.
+		const profile = await GuideDB.findOne({ accountId: input.guideId }).lean();
+		if (!isMembershipActive(profile)) {
+			throw new BadRequestError(
+				'This guide is not currently accepting bookings. Their membership is inactive.'
+			);
 		}
 
 		const pricing = await this.quote(input);

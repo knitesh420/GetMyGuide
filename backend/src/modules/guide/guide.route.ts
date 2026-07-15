@@ -3,7 +3,11 @@ import idempotency from '../../middleware/idempotency';
 import IDValidator from '../../middleware/idValidator';
 import VerifySession, { VerifyMinLevel } from '../../middleware/VerifySession';
 import Controller from './guide.controller';
-import { parseGuideProfileFormData } from './guide.middleware';
+import {
+	parseGuideProfileFormData,
+	parseIdentityDocumentUpload,
+	parseProfilePhotoUpload,
+} from './guide.middleware';
 import {
 	ContactInquiryValidator,
 	GuideAdminNotesValidator,
@@ -44,6 +48,31 @@ router
 		Controller.patchGuideProfile
 	);
 router.route('/availability').put(VerifySession, Controller.updateAvailability);
+
+// ---- Guide self-service profile assets (post-registration) ----------------
+// A registered guide manages their profile photo and their two identity
+// documents (Aadhaar, Guide Licence) individually, without re-running the
+// one-time PUT registration above. All are the guide's own to change, so they
+// sit behind the guide session only.
+router
+	.route('/profile/photo')
+	.put(VerifySession, VerifyMinLevel('guide'), parseProfilePhotoUpload, Controller.updateProfilePhoto)
+	.delete(VerifySession, VerifyMinLevel('guide'), Controller.deleteProfilePhoto);
+
+router
+	.route('/profile/documents/:type')
+	.put(
+		VerifySession,
+		VerifyMinLevel('guide'),
+		parseIdentityDocumentUpload,
+		Controller.uploadIdentityDocument
+	)
+	.delete(VerifySession, VerifyMinLevel('guide'), Controller.deleteIdentityDocument);
+
+// The calling guide's own membership/subscription history (newest first).
+router
+	.route('/subscription-history')
+	.get(VerifySession, VerifyMinLevel('guide'), Controller.getSubscriptionHistory);
 
 // ---- Guide membership (30-day recurring, account-first) -------------------
 router

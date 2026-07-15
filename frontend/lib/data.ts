@@ -310,11 +310,50 @@ export interface GuideProfile {
   approvalStatus?: "pending" | "approved" | "rejected";
   rejectionReason?: string;
   pricing?: GuidePricing | null;
+  /**
+   * Structured, individually-managed KYC documents (Aadhaar, Guide Licence).
+   * Each slot is null until the guide uploads it. Additive to `identityProofs`.
+   */
+  identityDocuments?: {
+    aadhaar: GuideIdentityDocumentInfo | null;
+    guideLicence: GuideIdentityDocumentInfo | null;
+  };
 }
 
 export interface GuidePricing {
   halfDay: number;
   fullDay: number;
+}
+
+/** One managed identity document as returned to the guide/admin. */
+export interface GuideIdentityDocumentInfo {
+  url: string;
+  mimeType: string | null;
+  originalName: string | null;
+  size: number | null;
+  uploadedAt: string | null;
+}
+
+/** The two identity documents a guide manages from their profile. */
+export type GuideIdentityDocumentType = "aadhaar" | "guideLicence";
+
+/** One row of a guide's membership/subscription history. */
+export interface GuideSubscriptionRecord {
+  id: string;
+  plan: string;
+  purchaseDate: string;
+  activationDate: string | null;
+  expiryDate: string | null;
+  durationDays: number | null;
+  amount: number;
+  currency: string;
+  paymentMethod: string | null;
+  paymentStatus: string;
+  transactionId: string;
+  razorpayPaymentId: string | null;
+  status: "Active" | "Expired" | "Pending" | "Cancelled";
+  invoiceId: string | null;
+  invoiceNumber: string | null;
 }
 
 export interface TouristProfile {

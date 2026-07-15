@@ -1,16 +1,40 @@
 // app/dashboard/guide/profile/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState, ChangeEvent, FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  ChangeEvent,
+  FormEvent,
+} from "react";
 import Link from "next/link";
 import { useDispatch, useSelector } from "react-redux";
+import { toast } from "react-toastify";
 import { AppDispatch, RootState } from "@/lib/store";
 import {
   getMyGuideProfile,
   patchMyGuideProfile,
   GuideProfilePatch,
+  updateGuideProfilePhoto,
+  deleteGuideProfilePhoto,
+  uploadGuideIdentityDocument,
+  deleteGuideIdentityDocument,
 } from "@/lib/redux/thunks/guide/guideThunk";
-import { fetchLanguages } from "@/lib/redux/thunks/admin/languageThunks";
+import type {
+  GuideIdentityDocumentInfo,
+  GuideIdentityDocumentType,
+} from "@/lib/data";
+import { SUPPORTED_LANGUAGES } from "@/lib/supportedLanguages";
+import { guideImageUrl } from "@/lib/images";
+import {
+  compressImage,
+  validateUpload,
+  formatBytes,
+  IMAGE_ACCEPT,
+  DOCUMENT_ACCEPT,
+} from "@/lib/fileUpload";
 
 import { MultiSelect, Option } from "@/components/ui/multi-select";
 import { Input } from "@/components/ui/input";
@@ -25,7 +49,17 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GuidePageHeader, GuidePanel } from "@/components/guide";
-import { BadgeInfo, Lock } from "lucide-react";
+import {
+  BadgeInfo,
+  Lock,
+  Upload,
+  Trash2,
+  FileText,
+  Image as ImageIcon,
+  Loader2,
+  Eye,
+  CheckCircle2,
+} from "lucide-react";
 
 type GuideType = "normal" | "escort";
 
@@ -33,16 +67,21 @@ type GuideType = "normal" | "escort";
 const FormSection = ({
   title,
   description,
+  action,
   children,
 }: {
   title: string;
   description?: string;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) => (
   <section className="border-b border-slate-200 px-6 py-6 last:border-b-0">
-    <div className="mb-5">
-      <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
-      {description && <p className="mt-1 text-xs text-slate-500">{description}</p>}
+    <div className="mb-5 flex items-start justify-between gap-4">
+      <div>
+        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+        {description && <p className="mt-1 text-xs text-slate-500">{description}</p>}
+      </div>
+      {action}
     </div>
     {children}
   </section>
@@ -51,11 +90,320 @@ const FormSection = ({
 const sameLanguages = (a: string[], b: string[]) =>
   a.length === b.length && [...a].sort().join("|") === [...b].sort().join("|");
 
+const isPdf = (doc: GuideIdentityDocumentInfo) =>
+  doc.mimeType === "application/pdf" || /\.pdf(\?|$)/i.test(doc.url);
+
+// ---------------------------------------------------------------------------
+// Profile photo — upload with a preview-before-save step, replace, and remove.
+// ---------------------------------------------------------------------------
+function ProfilePhotoSection({
+  currentUrl,
+}: {
+  currentUrl: string;
+}) {
+  const dispatch: AppDispatch = useDispatch();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState<"save" | "remove" | null>(null);
+
+  const existing = guideImageUrl(currentUrl);
+
+  useEffect(() => {
+    // Revoke the object URL when the pending file changes or on unmount.
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  const onPick = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file
+    if (!file) return;
+    const error = validateUpload(file, "image");
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPending(file);
+    setPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const clearPending = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPending(null);
+    setPreviewUrl(null);
+  };
+
+  const onSave = async () => {
+    if (!pending) return;
+    setBusy("save");
+    const compressed = await compressImage(pending);
+    const result = await dispatch(updateGuideProfilePhoto(compressed));
+    setBusy(null);
+    if (updateGuideProfilePhoto.fulfilled.match(result)) {
+      toast.success("Profile photo updated.");
+      clearPending();
+    } else {
+      toast.error((result.payload as string) || "Failed to upload photo.");
+    }
+  };
+
+  const onRemove = async () => {
+    setBusy("remove");
+    const result = await dispatch(deleteGuideProfilePhoto());
+    setBusy(null);
+    if (deleteGuideProfilePhoto.fulfilled.match(result)) {
+      toast.success("Profile photo removed.");
+    } else {
+      toast.error((result.payload as string) || "Failed to remove photo.");
+    }
+  };
+
+  const shown = previewUrl || existing;
+
+  return (
+    <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
+      <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-50">
+        {shown ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={shown} alt="Profile" className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <ImageIcon className="h-8 w-8 text-slate-300" />
+          </div>
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1 space-y-3">
+        <input
+          ref={inputRef}
+          type="file"
+          accept={IMAGE_ACCEPT}
+          className="hidden"
+          onChange={onPick}
+        />
+
+        {pending ? (
+          <>
+            <p className="text-xs text-slate-500">
+              Preview of <span className="font-medium text-slate-700">{pending.name}</span> ·{" "}
+              {formatBytes(pending.size)}. Save to apply.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" onClick={onSave} disabled={busy !== null}>
+                {busy === "save" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                Save Photo
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={clearPending}
+                disabled={busy !== null}
+              >
+                Cancel
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-slate-500">
+              JPG, PNG or WebP, up to 10&nbsp;MB. Large images are compressed
+              automatically.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => inputRef.current?.click()}
+                disabled={busy !== null}
+              >
+                <Upload className="h-4 w-4" />
+                {existing ? "Replace Photo" : "Upload Photo"}
+              </Button>
+              {existing && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="text-red-600 hover:text-red-700"
+                  onClick={onRemove}
+                  disabled={busy !== null}
+                >
+                  {busy === "remove" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  Remove
+                </Button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// One identity document slot — upload/replace/preview/delete.
+// ---------------------------------------------------------------------------
+function DocumentCard({
+  label,
+  hint,
+  type,
+  doc,
+}: {
+  label: string;
+  hint: string;
+  type: GuideIdentityDocumentType;
+  doc: GuideIdentityDocumentInfo | null;
+}) {
+  const dispatch: AppDispatch = useDispatch();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState<"upload" | "delete" | null>(null);
+
+  const onPick = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const error = validateUpload(file, "document");
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    setBusy("upload");
+    const prepared = await compressImage(file);
+    const result = await dispatch(uploadGuideIdentityDocument({ type, file: prepared }));
+    setBusy(null);
+    if (uploadGuideIdentityDocument.fulfilled.match(result)) {
+      toast.success(`${label} uploaded.`);
+    } else {
+      toast.error((result.payload as string) || `Failed to upload ${label}.`);
+    }
+  };
+
+  const onDelete = async () => {
+    setBusy("delete");
+    const result = await dispatch(deleteGuideIdentityDocument(type));
+    setBusy(null);
+    if (deleteGuideIdentityDocument.fulfilled.match(result)) {
+      toast.success(`${label} removed.`);
+    } else {
+      toast.error((result.payload as string) || `Failed to remove ${label}.`);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-900">{label}</p>
+          <p className="text-xs text-slate-500">{hint}</p>
+        </div>
+        {doc ? (
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700 ring-1 ring-inset ring-green-200">
+            <CheckCircle2 className="h-3 w-3" /> Uploaded
+          </span>
+        ) : (
+          <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+            Not uploaded
+          </span>
+        )}
+      </div>
+
+      {doc && (
+        <div className="mb-3 flex items-center gap-3 rounded-md border border-slate-100 bg-slate-50 p-2.5">
+          {isPdf(doc) ? (
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded bg-white ring-1 ring-slate-200">
+              <FileText className="h-6 w-6 text-slate-400" />
+            </div>
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={doc.url}
+              alt={label}
+              className="h-12 w-12 shrink-0 rounded object-cover ring-1 ring-slate-200"
+            />
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-medium text-slate-700">
+              {doc.originalName || "Document on file"}
+            </p>
+            <p className="text-[11px] text-slate-400">
+              {formatBytes(doc.size)}
+              {doc.uploadedAt
+                ? ` · ${new Date(doc.uploadedAt).toLocaleDateString("en-IN")}`
+                : ""}
+            </p>
+          </div>
+          <a
+            href={doc.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700"
+          >
+            <Eye className="h-3.5 w-3.5" /> View
+          </a>
+        </div>
+      )}
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept={DOCUMENT_ACCEPT}
+        className="hidden"
+        onChange={onPick}
+      />
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => inputRef.current?.click()}
+          disabled={busy !== null}
+        >
+          {busy === "upload" ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Upload className="h-4 w-4" />
+          )}
+          {doc ? "Replace" : "Upload"}
+        </Button>
+        {doc && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="text-red-600 hover:text-red-700"
+            onClick={onDelete}
+            disabled={busy !== null}
+          >
+            {busy === "delete" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
+            Delete
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const GuideProfilePage = () => {
   const dispatch: AppDispatch = useDispatch();
 
   const { myProfile, loading, error } = useSelector((state: RootState) => state.guide);
-  const { languages } = useSelector((state: RootState) => state.admin);
 
   const [phone, setPhone] = useState("");
   const [city, setCity] = useState("");
@@ -67,7 +415,6 @@ const GuideProfilePage = () => {
 
   useEffect(() => {
     dispatch(getMyGuideProfile());
-    dispatch(fetchLanguages());
   }, [dispatch]);
 
   useEffect(() => {
@@ -125,12 +472,19 @@ const GuideProfilePage = () => {
     }
 
     const result = await dispatch(patchMyGuideProfile(patch));
-    if (patchMyGuideProfile.fulfilled.match(result)) setSaved(true);
+    if (patchMyGuideProfile.fulfilled.match(result)) {
+      setSaved(true);
+      toast.success("Profile updated.");
+    }
   };
 
-  const languageOptions: Option[] = Array.isArray(languages)
-    ? languages.map((lang) => ({ value: lang.languageName, label: lang.languageName }))
-    : [];
+  // Fixed supported list, plus any language already on the profile that predates
+  // the list — so an existing value still renders as a chip and is never lost.
+  const languageOptions: Option[] = useMemo(() => {
+    const values = new Set<string>(SUPPORTED_LANGUAGES as readonly string[]);
+    selectedLanguages.forEach((l) => values.add(l));
+    return Array.from(values).map((l) => ({ value: l, label: l }));
+  }, [selectedLanguages]);
 
   if (loading && !myProfile) {
     return (
@@ -177,12 +531,24 @@ const GuideProfilePage = () => {
     );
   }
 
+  const documents = myProfile?.identityDocuments;
+
   return (
     <div className="space-y-4">
       <GuidePageHeader
         title="Edit Profile"
-        description="Only your phone, location, guide type and languages can be changed after registration."
+        description="Manage your photo, languages, identity documents and contact details."
       />
+
+      {/* Profile photo — its own panel so uploads are independent of the form. */}
+      <GuidePanel>
+        <FormSection
+          title="Profile Photo"
+          description="This is the picture travellers see on your public listing."
+        >
+          <ProfilePhotoSection currentUrl={myProfile?.profileImage || ""} />
+        </FormSection>
+      </GuidePanel>
 
       <form onSubmit={handleSubmit}>
         <GuidePanel>
@@ -201,7 +567,7 @@ const GuideProfilePage = () => {
 
           <FormSection
             title="Editable Details"
-            description="These four fields are the only ones you can change."
+            description="These four fields are the only ones you can change here."
           >
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div>
@@ -248,7 +614,21 @@ const GuideProfilePage = () => {
                 </Select>
               </div>
               <div className="z-50 bg-white">
-                <Label>Languages</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Foreign Languages</Label>
+                  {selectedLanguages.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedLanguages([]);
+                        setSaved(false);
+                      }}
+                      className="text-xs font-medium text-slate-500 hover:text-red-600"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </div>
                 <MultiSelect
                   className="bg-white"
                   options={languageOptions}
@@ -257,28 +637,23 @@ const GuideProfilePage = () => {
                     setSelectedLanguages(next);
                     setSaved(false);
                   }}
-                  placeholder="Select languages..."
+                  placeholder="Search and select languages..."
                 />
+                <p className="mt-1 text-xs text-slate-500">
+                  Select every language you speak fluently. Type to search.
+                </p>
               </div>
             </div>
           </FormSection>
 
           <FormSection
             title="Fixed at Registration"
-            description="Contact support if any of these need to change."
+            description="Contact support if this needs to change."
           >
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div>
                 <Label htmlFor="pan">PAN</Label>
                 <Input id="pan" value={myProfile?.pan || "—"} disabled />
-              </div>
-              <div>
-                <Label htmlFor="documents">Identity Documents</Label>
-                <Input
-                  id="documents"
-                  value={`${myProfile?.identityProofs?.length ?? 0} document(s) on file`}
-                  disabled
-                />
               </div>
             </div>
           </FormSection>
@@ -296,6 +671,29 @@ const GuideProfilePage = () => {
           </div>
         </GuidePanel>
       </form>
+
+      {/* Identity documents — independent uploads, own panel. */}
+      <GuidePanel>
+        <FormSection
+          title="Identity Documents"
+          description="Upload your Aadhaar card and government-issued tourist guide licence. PDF, JPG, PNG or WebP, up to 10 MB each. Visible only to you and our verification team."
+        >
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <DocumentCard
+              label="Aadhaar Card"
+              hint="Front and back, or a single clear scan."
+              type="aadhaar"
+              doc={documents?.aadhaar ?? null}
+            />
+            <DocumentCard
+              label="Government-issued Tourist Guide Licence"
+              hint="Your official guide licence document."
+              type="guideLicence"
+              doc={documents?.guideLicence ?? null}
+            />
+          </div>
+        </FormSection>
+      </GuidePanel>
     </div>
   );
 };

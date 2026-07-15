@@ -1,7 +1,7 @@
 // app/(website)/dashboard/guide/buy-subscription/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import Script from "next/script";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-toastify";
@@ -10,15 +10,288 @@ import {
   getMyGuideProfile,
   createGuideMembershipOrder,
   confirmGuideMembershipPayment,
+  fetchGuideSubscriptionHistory,
 } from "@/lib/redux/thunks/guide/guideThunk";
+import type { GuideSubscriptionRecord } from "@/lib/data";
 import { Button } from "@/components/ui/button";
-import { CalendarClock, ShieldCheck, AlertTriangle, Eye, Hourglass } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  CalendarClock,
+  ShieldCheck,
+  AlertTriangle,
+  Eye,
+  Hourglass,
+  History,
+  ChevronDown,
+  Download,
+  RefreshCw,
+} from "lucide-react";
 import {
   GuidePageHeader,
   GuidePanel,
   GuideStat,
   GuideStatStrip,
+  GuideEmptyState,
 } from "@/components/guide";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+const rupees = (amount: number) =>
+  `₹${(amount ?? 0).toLocaleString("en-IN")}`;
+
+const formatDate = (value?: string | null) =>
+  value
+    ? new Date(value).toLocaleDateString("en-IN", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    : "—";
+
+const STATUS_STYLES: Record<GuideSubscriptionRecord["status"], string> = {
+  Active: "bg-green-50 text-green-700 ring-green-200",
+  Expired: "bg-slate-100 text-slate-600 ring-slate-200",
+  Pending: "bg-amber-50 text-amber-700 ring-amber-200",
+  Cancelled: "bg-red-50 text-red-700 ring-red-200",
+};
+
+function StatusBadge({ status }: { status: GuideSubscriptionRecord["status"] }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${STATUS_STYLES[status]}`}
+    >
+      {status}
+    </span>
+  );
+}
+
+/** Stream an invoice PDF down, sending the session cookie with the request. */
+async function downloadInvoice(record: GuideSubscriptionRecord) {
+  if (!record.invoiceId) return;
+  try {
+    const res = await fetch(`${API_BASE_URL}/invoice/${record.invoiceId}/download`, {
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error("Download failed");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${record.invoiceNumber || "invoice"}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch {
+    toast.error("Could not download the invoice. Please try again.");
+  }
+}
+
+function SubscriptionHistorySection({
+  reloadToken,
+  onRenew,
+  canRenew,
+}: {
+  reloadToken: number;
+  onRenew: () => void;
+  canRenew: boolean;
+}) {
+  const dispatch = useDispatch<AppDispatch>();
+  const [records, setRecords] = useState<GuideSubscriptionRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const result = await dispatch(fetchGuideSubscriptionHistory());
+    if (fetchGuideSubscriptionHistory.fulfilled.match(result)) {
+      setRecords(result.payload);
+    }
+    setLoading(false);
+  }, [dispatch]);
+
+  useEffect(() => {
+    load();
+  }, [load, reloadToken]);
+
+  return (
+    <GuidePanel>
+      <div className="flex items-center gap-2 border-b border-slate-200 px-5 py-4">
+        <History className="h-4 w-4 text-slate-400" />
+        <h2 className="text-sm font-semibold text-slate-900">Subscription History</h2>
+      </div>
+
+      {loading ? (
+        <div className="space-y-3 p-5">
+          <Skeleton className="h-12 rounded-lg" />
+          <Skeleton className="h-12 rounded-lg" />
+          <Skeleton className="h-12 rounded-lg" />
+        </div>
+      ) : records.length === 0 ? (
+        <GuideEmptyState
+          icon={History}
+          title="No subscriptions yet"
+          description="Once you pay your membership fee, every payment and renewal will appear here."
+        />
+      ) : (
+        <>
+          {/* Table on md+, stacked cards on mobile. */}
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-xs font-medium text-slate-400">
+                  <th className="px-5 py-3">Plan</th>
+                  <th className="px-5 py-3">Purchased</th>
+                  <th className="px-5 py-3">Amount</th>
+                  <th className="px-5 py-3">Payment</th>
+                  <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {records.map((r) => (
+                  <Fragment key={r.id}>
+                    <tr className="border-b border-slate-100 last:border-b-0">
+                      <td className="px-5 py-3 font-medium text-slate-900">{r.plan}</td>
+                      <td className="px-5 py-3 text-slate-600">{formatDate(r.purchaseDate)}</td>
+                      <td className="px-5 py-3 text-slate-600">{rupees(r.amount)}</td>
+                      <td className="px-5 py-3 capitalize text-slate-600">
+                        {r.paymentStatus}
+                      </td>
+                      <td className="px-5 py-3">
+                        <StatusBadge status={r.status} />
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setExpanded(expanded === r.id ? null : r.id)}
+                          >
+                            <ChevronDown
+                              className={`h-4 w-4 transition-transform ${
+                                expanded === r.id ? "rotate-180" : ""
+                              }`}
+                            />
+                            Details
+                          </Button>
+                          {r.invoiceId && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => downloadInvoice(r)}
+                            >
+                              <Download className="h-4 w-4" />
+                              Invoice
+                            </Button>
+                          )}
+                          {r.status === "Expired" && canRenew && (
+                            <Button type="button" size="sm" onClick={onRenew}>
+                              <RefreshCw className="h-4 w-4" />
+                              Renew
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {expanded === r.id && (
+                      <tr className="bg-slate-50/70">
+                        <td colSpan={6} className="px-5 py-4">
+                          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-xs sm:grid-cols-3 lg:grid-cols-4">
+                            <Detail label="Activation Date" value={formatDate(r.activationDate)} />
+                            <Detail label="Expiry Date" value={formatDate(r.expiryDate)} />
+                            <Detail
+                              label="Duration"
+                              value={r.durationDays ? `${r.durationDays} days` : "—"}
+                            />
+                            <Detail
+                              label="Payment Method"
+                              value={r.paymentMethod || "—"}
+                              capitalize
+                            />
+                            <Detail label="Transaction ID" value={r.transactionId} mono />
+                            <Detail label="Invoice No." value={r.invoiceNumber || "—"} mono />
+                          </dl>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="divide-y divide-slate-100 md:hidden">
+            {records.map((r) => (
+              <div key={r.id} className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">{r.plan}</p>
+                    <p className="text-xs text-slate-500">{formatDate(r.purchaseDate)}</p>
+                  </div>
+                  <StatusBadge status={r.status} />
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                  <span>Amount: {rupees(r.amount)}</span>
+                  <span className="capitalize">Payment: {r.paymentStatus}</span>
+                  <span>Activated: {formatDate(r.activationDate)}</span>
+                  <span>Expires: {formatDate(r.expiryDate)}</span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {r.invoiceId && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => downloadInvoice(r)}
+                    >
+                      <Download className="h-4 w-4" />
+                      Invoice
+                    </Button>
+                  )}
+                  {r.status === "Expired" && canRenew && (
+                    <Button type="button" size="sm" onClick={onRenew}>
+                      <RefreshCw className="h-4 w-4" />
+                      Renew
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </GuidePanel>
+  );
+}
+
+function Detail({
+  label,
+  value,
+  mono,
+  capitalize,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  capitalize?: boolean;
+}) {
+  return (
+    <div>
+      <dt className="text-slate-400">{label}</dt>
+      <dd
+        className={`mt-0.5 font-medium text-slate-800 ${mono ? "break-all font-mono" : ""} ${
+          capitalize ? "capitalize" : ""
+        }`}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
 
 declare global {
   interface Window {
@@ -33,6 +306,8 @@ export default function GuideMembershipPage() {
   const dispatch = useDispatch<AppDispatch>();
   const { myProfile: profile, loading } = useSelector((state: RootState) => state.guide);
   const [processing, setProcessing] = useState(false);
+  // Bumped after a successful payment so the history section refetches.
+  const [historyReload, setHistoryReload] = useState(0);
 
   useEffect(() => {
     dispatch(getMyGuideProfile());
@@ -109,6 +384,8 @@ export default function GuideMembershipPage() {
               : "Payment received. Your 30-day subscription will start as soon as our team verifies your documents.",
           );
           dispatch(getMyGuideProfile());
+          // Surface the new payment in the history table below.
+          setHistoryReload((n) => n + 1);
         } else {
           toast.error(
             (confirmResult.payload as string) ||
@@ -260,6 +537,14 @@ export default function GuideMembershipPage() {
             )}
           </div>
         </GuidePanel>
+
+        <SubscriptionHistorySection
+          reloadToken={historyReload}
+          onRenew={handlePay}
+          // Renewing is only meaningful for a registered guide who is not mid-payment
+          // and is not already parked awaiting verification (they've paid already).
+          canRenew={!!profile?.registrationCompleted && !awaitingApproval && !processing}
+        />
       </div>
     </>
   );

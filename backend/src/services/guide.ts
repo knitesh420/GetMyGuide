@@ -1,9 +1,10 @@
 import { GUIDE_MEMBERSHIP_DURATION_DAYS, GUIDE_MEMBERSHIP_FEE } from '@config/const';
-import { AccountDB, ContactInquiryDB, GuideDB, TransactionDB } from '@mongo';
-import IGuide from '@mongo/types/guide';
+import { AccountDB, ContactInquiryDB, GuideDB, InvoiceDB, TransactionDB } from '@mongo';
+import IGuide, { GuideIdentityDocument, GuideIdentityDocumentType } from '@mongo/types/guide';
 import ITransaction from '@mongo/types/transaction';
 import { displayApprovalStatus, isGuideApproved } from '@utils/guideApproval';
 import { describeGuideDocuments } from '@utils/guideDocuments';
+import { activeMembershipFilter } from '@utils/guideMembership';
 import { verifyRazorpaySignature } from '@utils/paymentVerify';
 import { Types } from 'mongoose';
 import {
@@ -31,6 +32,23 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  */
 function realRefund(guide: Pick<IGuide, 'membershipRefund'> | null | undefined) {
 	return guide?.membershipRefund?.status ? guide.membershipRefund : null;
+}
+
+/**
+ * Shape a stored identity document for a guide/admin response. Like
+ * `realRefund`, this guards against Mongoose materialising an empty sub-document
+ * (`{}` with no `url`) as if it were a real upload — a slot is only "filled"
+ * once it has a `url`. Returns null for an empty/absent slot.
+ */
+function publicIdentityDocument(doc: GuideIdentityDocument | undefined | null) {
+	if (!doc?.url) return null;
+	return {
+		url: doc.url,
+		mimeType: doc.mimeType ?? null,
+		originalName: doc.originalName ?? null,
+		size: doc.size ?? null,
+		uploadedAt: doc.uploadedAt ?? null,
+	};
 }
 
 interface GuideProfileData {
@@ -213,6 +231,13 @@ class GuideService {
 			pan: guide?.pan || '',
 			profileImage: guide?.profileImage || '',
 			identityProofs: guide?.identityProofs || [],
+			// Structured, individually-managed KYC documents. Only the fields the
+			// guide's own UI needs (never the admin-only audit trail). `null` for a
+			// slot the guide has not uploaded yet.
+			identityDocuments: {
+				aadhaar: publicIdentityDocument(guide?.identityDocuments?.aadhaar),
+				guideLicence: publicIdentityDocument(guide?.identityDocuments?.guideLicence),
+			},
 			// Legacy field names some existing frontend code still reads
 			serviceLocations: guide?.city ? [guide.city] : [],
 			photo: guide?.profileImage || '',
@@ -345,6 +370,196 @@ class GuideService {
 		}
 
 		return this.getGuideProfile(accountId);
+	}
+
+	/**
+	 * Resolve the calling guide's own Guide row, ensuring they have registered.
+	 * Shared by the photo/document self-service methods below — all of which are
+	 * only meaningful once a profile exists.
+	 */
+	private async requireRegisteredGuide(accountId: string): Promise<IGuide> {
+		const account = await AccountDB.findOne({ _id: accountId, role: 'guide' }).select('_id').lean();
+		if (!account) {
+			throw new NotFoundError('Guide account not found');
+		}
+		const guide = await GuideDB.findOne({ accountId: account._id });
+		if (!guide || !guide.registrationCompleted) {
+			throw new BadRequestError(
+				'Please complete your guide registration before managing your profile'
+			);
+		}
+		return guide;
+	}
+
+	/**
+	 * Replace the guide's profile photo. The controller has already uploaded the
+	 * file to Cloudinary and passes the resulting URL — the previous photo is
+	 * simply overwritten. Preserving the old image when no new one is supplied is
+	 * the caller's job (it only calls this when there is a new URL).
+	 */
+	async updateProfilePhoto(accountId: string, profileImageUrl: string) {
+		const guide = await this.requireRegisteredGuide(accountId);
+		guide.profileImage = profileImageUrl;
+		await guide.save();
+		return this.getGuideProfile(accountId);
+	}
+
+	/** Remove the guide's profile photo, falling back to the empty-string default. */
+	async deleteProfilePhoto(accountId: string) {
+		const guide = await this.requireRegisteredGuide(accountId);
+		guide.profileImage = '';
+		await guide.save();
+		return this.getGuideProfile(accountId);
+	}
+
+	/**
+	 * Upload or replace one of the guide's two managed identity documents
+	 * (Aadhaar or Guide Licence). The controller uploads to Cloudinary and passes
+	 * the URL plus file metadata; here we only persist it under the right key.
+	 * Independent of `identityProofs`, so the legacy positional store and the
+	 * admin download route that indexes it are untouched.
+	 */
+	async upsertIdentityDocument(
+		accountId: string,
+		type: GuideIdentityDocumentType,
+		document: GuideIdentityDocument
+	) {
+		const guide = await this.requireRegisteredGuide(accountId);
+		guide.identityDocuments = {
+			...(guide.identityDocuments ?? {}),
+			[type]: document,
+		};
+		guide.markModified('identityDocuments');
+		await guide.save();
+		return this.getGuideProfile(accountId);
+	}
+
+	/** Remove one managed identity document. Silent if the slot was already empty. */
+	async deleteIdentityDocument(accountId: string, type: GuideIdentityDocumentType) {
+		const guide = await this.requireRegisteredGuide(accountId);
+		if (guide.identityDocuments?.[type]) {
+			// Rebuild the sub-object without the deleted key, then $set the whole
+			// path — assigning `undefined` to a nested key does not reliably unset it.
+			const remaining = { ...(guide.identityDocuments as Record<string, unknown>) };
+			delete remaining[type];
+			guide.identityDocuments = remaining;
+			guide.markModified('identityDocuments');
+			await guide.save();
+		}
+		return this.getGuideProfile(accountId);
+	}
+
+	/**
+	 * The guide's full membership/subscription history, newest first.
+	 *
+	 * Assembled from three sources that each hold part of the picture:
+	 *   - Transactions   — one row per payment attempt: amount, status, dates, ids.
+	 *   - membershipHistory — the actual 30-day windows that were opened.
+	 *   - Invoices       — the downloadable receipt + captured payment method.
+	 *
+	 * Successful transactions (oldest → newest) are paired positionally with the
+	 * membership windows (oldest → newest), since a window is appended on each
+	 * successful payment. That pairing is best-effort for legacy rows but exact
+	 * for everything written under the current flow.
+	 */
+	async getSubscriptionHistory(accountId: string) {
+		const account = await AccountDB.findOne({ _id: accountId, role: 'guide' })
+			.select('_id')
+			.lean();
+		if (!account) {
+			throw new NotFoundError('Guide profile not found');
+		}
+
+		const guide = await GuideDB.findOne({ accountId: account._id }).lean();
+		if (!guide) {
+			return { data: [] };
+		}
+
+		const now = new Date();
+
+		const [transactions, invoices] = await Promise.all([
+			TransactionDB.find({
+				reference_id: guide._id.toString(),
+				reference_type: 'guide_membership',
+			})
+				.sort({ createdAt: -1 })
+				.lean(),
+			InvoiceDB.find({ guideAccount: account._id, invoiceType: 'guide_membership' })
+				.select('_id invoiceNumber transaction paymentInfo pdfUrl')
+				.lean(),
+		]);
+
+		const invoiceByTxn = new Map(
+			invoices.map((inv) => [inv.transaction?.toString(), inv])
+		);
+
+		// Windows and successful payments, both oldest-first, paired by position.
+		const windows = [...(guide.membershipHistory ?? [])]
+			.filter((h) => h.startDate)
+			.sort(
+				(a, b) => new Date(a.startDate!).getTime() - new Date(b.startDate!).getTime()
+			);
+		const successAsc = [...transactions]
+			.filter((t) => t.status === 'paid' || t.status === 'success')
+			.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+		const windowByTxnId = new Map<string, { startDate?: Date; expiryDate?: Date }>();
+		successAsc.forEach((t, i) => {
+			if (windows[i]) windowByTxnId.set(t._id.toString(), windows[i]);
+		});
+
+		const refundedTxnId =
+			realRefund(guide)?.status === 'processed'
+				? guide.membershipRefund?.transaction?.toString()
+				: undefined;
+
+		const data = transactions.map((t) => {
+			const paid = t.status === 'paid' || t.status === 'success';
+			const window = windowByTxnId.get(t._id.toString());
+			const activation = window?.startDate ? new Date(window.startDate) : null;
+			const expiry = window?.expiryDate ? new Date(window.expiryDate) : null;
+			const invoice = invoiceByTxn.get(t._id.toString());
+
+			let status: 'Active' | 'Expired' | 'Pending' | 'Cancelled';
+			if ((refundedTxnId && refundedTxnId === t._id.toString()) || t.status === 'refunded') {
+				status = 'Cancelled';
+			} else if (!paid) {
+				status = 'Pending';
+			} else if (expiry && expiry > now) {
+				status = 'Active';
+			} else if (!expiry) {
+				// Paid, but the window has not opened yet (awaiting KYC approval).
+				status = 'Pending';
+			} else {
+				status = 'Expired';
+			}
+
+			const durationDays =
+				activation && expiry
+					? Math.round((expiry.getTime() - activation.getTime()) / DAY_MS)
+					: null;
+
+			return {
+				id: t._id.toString(),
+				plan: `${GUIDE_MEMBERSHIP_DURATION_DAYS}-day membership`,
+				purchaseDate: t.createdAt,
+				activationDate: activation,
+				expiryDate: expiry,
+				durationDays,
+				amount: t.amount,
+				currency: t.currency,
+				paymentMethod: invoice?.paymentInfo?.method ?? null,
+				paymentStatus: paid ? 'paid' : t.status,
+				// Human-facing reference: prefer our own code, then the gateway id.
+				transactionId: t.paymentCode ?? t.razorpay_payment_id ?? t.transaction_id,
+				razorpayPaymentId: t.razorpay_payment_id ?? null,
+				status,
+				// Present only once the invoice has been generated; drives Download.
+				invoiceId: invoice?._id.toString() ?? null,
+				invoiceNumber: invoice?.invoiceNumber ?? null,
+			};
+		});
+
+		return { data };
 	}
 
 	/**
@@ -575,14 +790,12 @@ class GuideService {
 		const now = new Date();
 
 		// isVisible is already gated on approval at the point it is set (see
-		// finalizeMembershipPaymentByGuideId / rejectGuide). The $ne here is a
-		// second line of defence: a guide rejected after going live is delisted
-		// even if some other path forgets to clear isVisible.
-		const guideQuery: any = {
-			isVisible: true,
-			membershipExpiryDate: { $gt: now },
-			approvalStatus: { $ne: 'rejected' },
-		};
+		// finalizeMembershipPaymentByGuideId / rejectGuide). The membership filter
+		// here is the single source of truth for public listability (shared with
+		// the direct-booking guard and isMembershipActive) — a guide whose 30-day
+		// window has lapsed drops out automatically, and a rejected guide is
+		// delisted even if some other path forgot to clear isVisible.
+		const guideQuery: any = { ...activeMembershipFilter(now) };
 
 		if (params?.location) {
 			const escapedLocation = params.location.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -822,6 +1035,13 @@ class GuideService {
 
 			// ---- Documents (admin-only links) ----
 			documents: describeGuideDocuments(account._id.toString(), guide?.identityProofs),
+			// Structured documents the guide manages themselves post-registration.
+			// Additive to `documents` above (the legacy positional store); admins
+			// see both so nothing a guide re-uploads is hidden from review.
+			identityDocuments: {
+				aadhaar: publicIdentityDocument(guide?.identityDocuments?.aadhaar),
+				guideLicence: publicIdentityDocument(guide?.identityDocuments?.guideLicence),
+			},
 
 			// ---- Internal notes (admin-only) ----
 			adminNotes: guide?.adminNotes ?? '',

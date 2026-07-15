@@ -20,6 +20,10 @@ import {
   fetchMyLeaves,
   cancelMyLeave,
   fetchMyGuideCalendar,
+  updateGuideProfilePhoto,
+  deleteGuideProfilePhoto,
+  uploadGuideIdentityDocument,
+  deleteGuideIdentityDocument,
 } from "@/lib/redux/thunks/guide/guideThunk";
 
 const initialState: GuideState = {
@@ -82,6 +86,36 @@ const guideSlice = createSlice({
         state.myProfile = action.payload;
       })
       .addCase(patchMyGuideProfile.rejected, setRejected)
+
+      // Profile photo & identity documents — every one of these returns the
+      // freshly-read profile, so myProfile is simply replaced with the result.
+      .addCase(updateGuideProfilePhoto.pending, setPending)
+      .addCase(updateGuideProfilePhoto.fulfilled, (state, action) => {
+        state.loading = false;
+        state.myProfile = action.payload;
+      })
+      .addCase(updateGuideProfilePhoto.rejected, setRejected)
+
+      .addCase(deleteGuideProfilePhoto.pending, setPending)
+      .addCase(deleteGuideProfilePhoto.fulfilled, (state, action) => {
+        state.loading = false;
+        state.myProfile = action.payload;
+      })
+      .addCase(deleteGuideProfilePhoto.rejected, setRejected)
+
+      .addCase(uploadGuideIdentityDocument.pending, setPending)
+      .addCase(uploadGuideIdentityDocument.fulfilled, (state, action) => {
+        state.loading = false;
+        state.myProfile = action.payload;
+      })
+      .addCase(uploadGuideIdentityDocument.rejected, setRejected)
+
+      .addCase(deleteGuideIdentityDocument.pending, setPending)
+      .addCase(deleteGuideIdentityDocument.fulfilled, (state, action) => {
+        state.loading = false;
+        state.myProfile = action.payload;
+      })
+      .addCase(deleteGuideIdentityDocument.rejected, setRejected)
 
       // Handle Confirm Membership Payment (first payment or renewal)
       .addCase(confirmGuideMembershipPayment.pending, setPending)

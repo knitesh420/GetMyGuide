@@ -36,10 +36,36 @@ const GuideSchema = new mongoose.Schema<IGuide>(
 			type: String,
 			default: '',
 		},
-		// Licence and Aadhaar uploads land here, in that order.
+		// Licence and Aadhaar uploads land here, in that order (legacy positional
+		// store, still indexed by the admin download route). Kept as-is.
 		identityProofs: {
 			type: [String],
 			default: [],
+		},
+		// Individually-editable identity documents managed from the guide profile
+		// after registration. Additive to `identityProofs` — each key can be
+		// replaced or deleted without disturbing the other. No default object, so
+		// an untouched guide is not carrying two empty phantom sub-docs.
+		identityDocuments: {
+			aadhaar: {
+				url: { type: String, trim: true },
+				storage: { type: String, enum: ['remote', 'local'] },
+				mimeType: { type: String, trim: true },
+				originalName: { type: String, trim: true },
+				size: { type: Number, min: 0 },
+				uploadedAt: { type: Date },
+				_id: false,
+			},
+			guideLicence: {
+				url: { type: String, trim: true },
+				storage: { type: String, enum: ['remote', 'local'] },
+				mimeType: { type: String, trim: true },
+				originalName: { type: String, trim: true },
+				size: { type: Number, min: 0 },
+				uploadedAt: { type: Date },
+				_id: false,
+			},
+			_id: false,
 		},
 		registrationCompleted: {
 			type: Boolean,
