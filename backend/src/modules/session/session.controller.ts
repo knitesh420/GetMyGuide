@@ -1,6 +1,8 @@
 import {
 	ACCESS_COOKIE_MAX_AGE_MS,
 	Cookie,
+	COOKIE_DOMAIN,
+	COOKIE_SAMESITE,
 	IS_PRODUCTION,
 	REFRESH_COOKIE_MAX_AGE_MS,
 } from '@config/const';
@@ -22,7 +24,14 @@ function baseCookie(): CookieOptions {
 	return {
 		httpOnly: true,
 		secure: IS_PRODUCTION,
-		sameSite: IS_PRODUCTION ? 'none' : 'lax',
+		// Was unconditionally 'none' in production, which tells the browser to
+		// attach the session to requests from ANY site — the enabling half of a
+		// CSRF. 'lax' still covers getmyguide.in → api.getmyguide.in (same
+		// registrable domain, therefore same-site) while refusing to travel to
+		// third-party origins. Overridable via COOKIE_SAMESITE if the frontend
+		// ever moves to an unrelated domain.
+		sameSite: COOKIE_SAMESITE,
+		...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}),
 		path: '/',
 	};
 }

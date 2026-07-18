@@ -3,21 +3,30 @@ import fs from 'fs';
 import path from 'path';
 import request from 'supertest';
 import configServer from '../../src/server-config';
+import { createAuthedUser } from '../helpers/auth';
+import { connectTestDB, disconnectTestDB } from '../setup/db.setup';
 
 describe('Media API Integration Tests', () => {
 	let app: express.Application;
 	const testUploadDir = path.join(__dirname, '../../static/misc');
 
-	beforeAll(() => {
+	// /upload-media sits behind VerifySession. These tests predate that guard and
+	// used to post anonymously, which is why they all began returning 401.
+	let token: string;
+
+	beforeAll(async () => {
+		await connectTestDB();
 		app = express();
 		configServer(app as express.Express);
+		({ token } = await createAuthedUser('tourist'));
 		// Ensure test upload directory exists
 		if (!fs.existsSync(testUploadDir)) {
 			fs.mkdirSync(testUploadDir, { recursive: true });
 		}
 	});
 
-	afterAll(() => {
+	afterAll(async () => {
+		await disconnectTestDB();
 		// Clean up test files
 		if (fs.existsSync(testUploadDir)) {
 			const files = fs.readdirSync(testUploadDir);
@@ -37,6 +46,7 @@ describe('Media API Integration Tests', () => {
 
 			const response = await request(app)
 				.post('/upload-media')
+				.set('Authorization', `Bearer ${token}`)
 				.attach('file', imageBuffer, 'test.jpg')
 				.set('Content-Type', 'multipart/form-data');
 
@@ -51,6 +61,7 @@ describe('Media API Integration Tests', () => {
 
 			const response = await request(app)
 				.post('/upload-media')
+				.set('Authorization', `Bearer ${token}`)
 				.attach('file', textBuffer, 'test.txt')
 				.field('Content-Type', 'text/plain');
 
@@ -63,6 +74,7 @@ describe('Media API Integration Tests', () => {
 
 			const response = await request(app)
 				.post('/upload-media')
+				.set('Authorization', `Bearer ${token}`)
 				.attach('file', pdfBuffer, 'test.pdf')
 				.field('Content-Type', 'application/pdf');
 
@@ -78,6 +90,7 @@ describe('Media API Integration Tests', () => {
 
 			const response = await request(app)
 				.post('/upload-media')
+				.set('Authorization', `Bearer ${token}`)
 				.attach('file', pngBuffer, 'test.png')
 				.field('Content-Type', 'image/png');
 
@@ -93,6 +106,7 @@ describe('Media API Integration Tests', () => {
 
 			const response = await request(app)
 				.post('/upload-media')
+				.set('Authorization', `Bearer ${token}`)
 				.attach('file', jpegBuffer, 'test.jpg')
 				.field('Content-Type', 'image/jpeg');
 
@@ -101,7 +115,8 @@ describe('Media API Integration Tests', () => {
 		});
 
 		it('should return 500 when no file is provided', async () => {
-			const response = await request(app).post('/upload-media');
+			const response = await request(app).post('/upload-media')
+				.set('Authorization', `Bearer ${token}`);
 
 			expect(response.status).toBe(500);
 			expect(response.body.success).toBe(false);
@@ -120,6 +135,7 @@ describe('Media API Integration Tests', () => {
 
 			const uploadResponse = await request(app)
 				.post('/upload-media')
+				.set('Authorization', `Bearer ${token}`)
 				.attach('file', imageBuffer, 'test.jpg');
 
 			if (uploadResponse.body?.name) {

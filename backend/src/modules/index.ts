@@ -72,6 +72,10 @@ router.post('/upload-media', VerifySession, async function (req, res, next) {
 		field_name: 'file',
 		options: {
 			fileFilter: ONLY_MEDIA_ALLOWED,
+			// Every other upload path in the app caps file size; this one did not,
+			// which let any authenticated account write unbounded data to the
+			// server's disk. 25MB matches the JSON body cap.
+			limits: { fileSize: 25 * 1024 * 1024, files: 1 },
 		},
 	};
 

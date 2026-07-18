@@ -56,7 +56,7 @@ describe('Transaction Service', () => {
 				amount: 500,
 				currency: 'INR',
 				reference_id: 'ref123',
-				status: 'created',
+				status: 'pending',
 			};
 
 			(RazorpayCustomers.createCustomer as jest.Mock).mockResolvedValue(mockCustomer);
@@ -125,7 +125,7 @@ describe('Transaction Service', () => {
 				razorpay_order_id: 'order_test123',
 				razorpay_customer_id: 'cust_test123',
 				transaction_id: 'trans_test123',
-				status: 'created',
+				status: 'pending',
 				amount: 500,
 				currency: 'INR',
 			});
@@ -154,7 +154,7 @@ describe('Transaction Service', () => {
 				razorpay_order_id: 'order_test123',
 				razorpay_customer_id: 'cust_test123',
 				transaction_id: 'trans_test123',
-				status: 'created',
+				status: 'pending',
 				amount: 500,
 				currency: 'INR',
 			});
@@ -185,7 +185,7 @@ describe('Transaction Service', () => {
 				razorpay_order_id: 'order_test123',
 				razorpay_customer_id: 'cust_test123',
 				transaction_id: 'trans_test123',
-				status: 'created',
+				status: 'pending',
 				amount: 500,
 				currency: 'INR',
 			});
@@ -214,7 +214,7 @@ describe('Transaction Service', () => {
 				razorpay_order_id: 'order_old',
 				razorpay_customer_id: 'cust_test123',
 				transaction_id: 'trans_old',
-				status: 'created',
+				status: 'pending',
 				amount: 500,
 				currency: 'INR',
 			});
@@ -229,7 +229,7 @@ describe('Transaction Service', () => {
 				razorpay_order_id: 'order_new',
 				razorpay_customer_id: 'cust_test123',
 				transaction_id: 'trans_new',
-				status: 'created',
+				status: 'pending',
 				amount: 500,
 				currency: 'INR',
 			});

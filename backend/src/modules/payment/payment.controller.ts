@@ -14,6 +14,15 @@ async function handleWebhook(req: Request, res: Response, next: NextFunction) {
 			return next(new BadRequestError('Missing x-razorpay-signature header'));
 		}
 
+		// Razorpay carries the event identifier in this header — never in the body.
+		// It is what makes retry-deduplication possible, so a delivery without it
+		// cannot be processed safely.
+		const eventId = req.headers['x-razorpay-event-id'] as string;
+
+		if (!eventId) {
+			return next(new BadRequestError('Missing x-razorpay-event-id header'));
+		}
+
 		// Use raw body for signature verification
 		const rawBody = (req as any).rawBody as Buffer;
 		if (!rawBody) {
@@ -27,7 +36,7 @@ async function handleWebhook(req: Request, res: Response, next: NextFunction) {
 		}
 
 		// Process the webhook event
-		const result = await PaymentService.handleWebhookEvent(req.body);
+		const result = await PaymentService.handleWebhookEvent(req.body, eventId);
 
 		return Respond({
 			res,

@@ -37,6 +37,10 @@ email.
 18. [Guide Availability & Booking Conflict System (Phase 3)](#guide-availability--booking-conflict-system-phase-3)
 19. [Testing](#testing)
 20. [Production Readiness Hardening (July 2026)](#production-readiness-hardening-july-2026)
+21. [Enterprise Schema Layer (Phase 4)](#enterprise-schema-layer-phase-4)
+22. [Direct Guide Booking, Split Payments & Refunds (Phase 5)](#direct-guide-booking-split-payments--refunds-phase-5)
+23. [Guide Approval, Earnings & Payouts (Phase 6)](#guide-approval-earnings--payouts-phase-6)
+24. [In-App Messaging, Invoices & Locations (Phase 7)](#in-app-messaging-invoices--locations-phase-7)
 
 ---
 
@@ -58,6 +62,8 @@ email.
 | Validation | Zod (backend request validators) |
 | Testing | Jest + mongodb-memory-server (unit/integration) |
 | Charts | Recharts, via the shadcn/ui `chart.tsx` wrapper — Phase 2 Reports & Analytics only |
+| PDF generation | PDFKit + QRCode — Phase 7 invoices, streamed through the session |
+| Dialogs | SweetAlert2 via `frontend/lib/swal.ts` (lazy-imported; replaces all native `alert`/`confirm`) |
 
 ---
 
@@ -102,7 +108,13 @@ Backend (`backend/.env`):
 | `COMPANY_*` (`NAME`/`ADDRESS`/`LOGO_URL`/`SUPPORT_EMAIL`/`SUPPORT_PHONE`/`WEBSITE`) | Branding shown in emails/invoices |
 | `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PHONE` / `ADMIN_PASSWORD` | Used only by `scripts/seedAdmin.ts` (password ≥ 12 chars) |
 | `NOTIFICATION_WATCHER_INTERVAL_MS` | Phase 2 notification-watcher poll interval (default 5 min) |
+| `PLATFORM_COMMISSION_RATE` | Platform's cut of a completed trip, in **percent** (default `20`) — Phase 6 earnings ledger |
+| `EARNING_HOLD_DAYS` | Days a guide's earning stays `pending` before becoming `payable` (default `3`) |
 | `GUIDE_PAYMENT_LINK_BASE_URL` | Legacy, unused email template reference |
+
+Two money-related constants are **not** env-tunable and live in `config/const.ts`:
+`BOOKING_ADVANCE_RATE = 0.2` (the 20% advance taken up front on a split-payment booking) and
+`GUIDE_MEMBERSHIP_FEE = 500` / `GUIDE_MEMBERSHIP_DURATION_DAYS = 30`.
 
 Frontend (`frontend/.env`):
 
@@ -334,9 +346,11 @@ matters a lot here because the two have genuinely different monetization models.
      finalizes the membership (see [Guide Membership Lifecycle](#guide-membership-lifecycle)
      below for the exact extension math and idempotency guarantees).
 
-5. Once paid, the guide's `Guide` document has `isVisible: true` and an unexpired
-   `membershipExpiryDate` — they now appear in the public guide listing
-   (`GET /guide/all`, consumed by `find-guides`, `guides`, etc.) and in `GET /guide/:id`.
+5. Once paid **and approved by an admin**, the guide's `Guide` document has `isVisible: true`,
+   `approvalStatus: 'approved'` and an unexpired `membershipExpiryDate` — they now appear in the
+   public guide listing (`GET /guide/all`, consumed by `find-guides`, `guides`, etc.) and in
+   `GET /guide/:id`. Payment alone is no longer sufficient to be listed; see
+   [Phase 6](#guide-approval-earnings--payouts-phase-6).
 
 **Backend (`backend/src/modules/guide/`, `backend/src/services/guide.ts`):**
 
@@ -423,6 +437,11 @@ true` so they're never forced through the registration form as a blocking gate.
 The membership payment endpoints serve **both** the very first payment and every future renewal —
 there's no separate "renew" endpoint.
 
+> **Superseded in part by Phase 6.** The extension math below is unchanged, but a *first* payment no
+> longer starts the 30-day window on its own — the window opens when an admin **approves** the
+> guide's KYC, and a rejection auto-refunds the fee. See
+> [Guide Approval, Earnings & Payouts](#guide-approval-earnings--payouts-phase-6).
+
 **Finalization math** (`GuideService.finalizeMembershipPaymentByGuideId`):
 
 ```
@@ -506,6 +525,14 @@ random token). That change was intentional and confirmed — see the note in
 | `Notification` | Phase 2 — in-app notification inbox; idempotent via a unique `dedupeKey` index. |
 | `ActivityLog` | Phase 2 — shared audit trail written by Assignment/Trip/Review actions and the notification watcher. |
 | `GuideLeave` | Phase 3 — a guide's self-declared vacation/emergency leave period (date range + reason). |
+| `Counter` | Phase 4 — atomic per-entity sequence source behind the human-facing business codes (`TO`/`GU`/`BK`/`TR`/`AS`/`PM`). |
+| `RefundRequest` | Phase 5 — tourist/guide cancellation request and its admin decision, plus the per-transaction Razorpay refund results. |
+| `Earning` | Phase 6 — one row per completed `Trip`: gross, commission, net, and payout state. Unique on `trip`. |
+| `Payout` | Phase 6 — an admin-recorded manual settlement covering a batch of `Earning` rows. |
+| `CashPayment` | Phase 6 — cash an admin records as collected on a guide's behalf, outside Razorpay entirely. |
+| `Message` | Phase 7 — in-app chat message scoped to a single `Booking` thread. |
+| `Invoice` | Phase 7 — immutable invoice document with party/booking snapshots; rendered to PDF on demand. |
+| `Location` | Phase 7 — admin-managed destination list (slug, city, image, popular flag) powering discovery. |
 
 ---
 
@@ -538,11 +565,28 @@ admin).
 | GET | `/guide/profile` | VerifySession | Own profile (Account + Guide) |
 | PUT | `/guide/profile` | VerifyMinLevel('guide') | One-time registration (multipart: KYC + files) |
 | PATCH | `/guide/profile` | VerifyMinLevel('guide') | Post-registration edit — phone/city/type/languages only |
+| PUT/DELETE | `/guide/profile/photo` | VerifyMinLevel('guide') | Replace or remove the profile photo on its own |
+| PUT/DELETE | `/guide/profile/documents/:type` | VerifyMinLevel('guide') | Replace or remove one identity document by type |
+| GET | `/guide/profile/documents/:type/view` | VerifyMinLevel('guide') | **Streams** the guide's own KYC doc through the session (never a raw Cloudinary link) |
 | PUT | `/guide/availability` | VerifySession | Unavailable dates |
+| GET | `/guide/subscription-history` | VerifyMinLevel('guide') | Past membership windows (`membershipHistory`) |
 | POST | `/guide/membership/create-order` | VerifyMinLevel('guide'), idempotency | Membership Razorpay order |
-| POST | `/guide/membership/confirm-payment` | VerifyMinLevel('guide') | Finalize membership |
-| GET | `/guide/all` | public | Public listing — isVisible + unexpired membership |
-| GET | `/guide/admin/all` | VerifyMinLevel('admin') | Every guide (active + inactive) + profile, KYC, membership. Powers the admin panel. |
+| POST | `/guide/membership/confirm-payment` | VerifyMinLevel('guide') | Pay the fee — starts the window only if already approved (see [Phase 6](#guide-approval-earnings--payouts-phase-6)) |
+| PUT | `/guide/pricing` | VerifyMinLevel('guide') | Publish half-day / full-day rates — required before direct booking works |
+| PUT | `/guide/bank-details` | VerifyMinLevel('guide') | Payout destination (returned only to the owner and admins) |
+| GET | `/guide/my-bookings` | VerifyMinLevel('guide') | Own direct bookings |
+| GET | `/guide/my-bookings/:id` | VerifyMinLevel('guide') | One own booking |
+| GET | `/guide/all`, `/guide/all-guides` | public | Public listing — **approved** + visible + unexpired membership |
+| GET | `/guide/:id/pricing-details` | public | Published rates for the booking form |
+| GET | `/guide/admin/all` | VerifyMinLevel('admin') | Every guide (active + inactive) + profile, KYC, membership |
+| GET | `/guide/admin/pending-approvals` | VerifyMinLevel('admin') | The KYC review queue |
+| GET | `/guide/admin/:id` | VerifyMinLevel('admin') | Full admin detail view for one guide |
+| GET | `/guide/admin/:id/identity-documents/:type` | VerifyMinLevel('admin') | Streams a KYC doc to the reviewing admin |
+| PATCH | `/guide/:id/approve` | VerifyMinLevel('admin') | Approve KYC — **this is what starts the membership window** |
+| PATCH | `/guide/:id/reject` | VerifyMinLevel('admin') | Reject with a reason — auto-refunds the membership fee |
+| PATCH | `/guide/:id/reactivate` | VerifyMinLevel('admin') | Return a rejected/deactivated guide to review |
+| PUT | `/guide/:id/notes` | VerifyMinLevel('admin') | Internal admin notes (never exposed to the guide) |
+| GET | `/guide/:id/documents/:index` | VerifyMinLevel('admin') | Download a KYC document by index |
 | POST | `/guide/contact-inquiry` | public | Contact form |
 | GET | `/guide/contact-inquiries` | VerifyMinLevel('admin') | List contact inquiries |
 | GET | `/guide/:id` | public | Single guide profile, not visibility-gated |
@@ -654,6 +698,72 @@ bookings), dispatched internally by `reference_type`.
 | GET | `/guide-availability/guides?startDate&endDate?` | VerifyMinLevel('admin') | Assignable guides annotated `isAvailable` + conflict reasons for a date (range) |
 | GET | `/guide-availability/calendar/:id` | VerifyMinLevel('admin') | Merged calendar for any guide |
 
+### `/tourguide` — Phase 5 (direct guide booking)
+
+The tourist picks the guide themselves and pays a 20% advance against that guide's published day
+rate; the balance is collected later. Distinct from `/booking`, where an admin allocates a guide
+after the fact. Every literal path is registered **before** the `/:id` matcher.
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| GET | `/tourguide/quote` | public | Server-computed price breakdown (total / advance / balance) |
+| POST | `/tourguide/create-order` | tourist or admin, idempotency | Advance Razorpay order; availability is checked here |
+| POST | `/tourguide/verify-and-create` | tourist or admin | Verify the advance and create the booking |
+| GET | `/tourguide/user-bookings` | tourist or admin | The caller's direct bookings |
+| GET | `/tourguide/all` | VerifyMinLevel('admin') | All direct bookings |
+| POST | `/tourguide/:id/create-final-order` | VerifySession, idempotency | Order for the outstanding balance |
+| POST | `/tourguide/:id/verify-final-payment` | VerifySession | Settle the balance |
+| POST | `/tourguide/:id/cancel` | VerifySession | Cancel (opens a `RefundRequest`) |
+| PATCH | `/tourguide/:id/status` | VerifyMinLevel('admin') | Move the booking's status |
+| PATCH | `/tourguide/:id/reassign-guide` | VerifyMinLevel('admin') | Swap the guide on a direct booking |
+| GET | `/tourguide/:id` | VerifySession | One booking (ownership checked in the service) |
+
+### `/refund` — Phase 5
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| POST | `/refund/request` | VerifySession | Open a cancellation request; one pending request per booking (partial unique index) |
+| GET | `/refund/my` | VerifySession | Own requests |
+| GET | `/refund` | VerifyMinLevel('admin') | All requests, filterable |
+| PATCH | `/refund/:id/approve` | VerifyMinLevel('admin') | Approve — issues the Razorpay refund(s) |
+| PATCH | `/refund/:id/reject` | VerifyMinLevel('admin') | Reject with a note |
+| POST | `/refund/:id/retry` | VerifyMinLevel('admin') | Retry a refund that came back `failed` |
+| GET | `/refund/:id` | VerifySession | One request |
+
+### `/earning` and `/cash-payment` — Phase 6
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| GET | `/earning/my` | VerifyMinLevel('guide') | Own earnings ledger |
+| GET | `/earning/my/summary` | VerifyMinLevel('guide') | Pending / payable / paid totals |
+| GET | `/earning/my/payouts` | VerifyMinLevel('guide') | Own settlement history |
+| GET | `/earning` | VerifyMinLevel('admin') | All earnings |
+| GET | `/earning/payout-queue` | VerifyMinLevel('admin') | Guides with `payable` earnings awaiting settlement |
+| GET/POST | `/earning/payouts` | VerifyMinLevel('admin') | List / record a manual payout against a batch of earnings |
+| GET | `/cash-payment/my` | VerifyMinLevel('guide') | Cash recorded against the calling guide |
+| GET | `/cash-payment/guide/:id` | VerifyMinLevel('admin') | Cash for one guide |
+| GET/POST | `/cash-payment` | VerifyMinLevel('admin') | List / record a cash collection |
+| PATCH/DELETE | `/cash-payment/:id` | VerifyMinLevel('admin') | Correct, or **void** (soft, with a reason — never hard-deleted) |
+
+### `/message`, `/invoice`, `/location`, `/dashboard` — Phase 7
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| GET | `/message/threads` | VerifySession | The caller's booking threads |
+| GET | `/message/unread-count` | VerifySession | `{ count }` |
+| GET/POST | `/message/booking/:id` | VerifySession | Read / post in one booking's thread |
+| PATCH | `/message/booking/:id/read` | VerifySession | Mark the thread read |
+| GET | `/invoice` | VerifySession | Own invoices (admins see all) |
+| GET | `/invoice/:id` | VerifySession | One invoice |
+| GET | `/invoice/:id/download` | VerifySession | Streams the rendered PDF |
+| POST | `/invoice/:id/resend` | VerifyMinLevel('admin') | Re-email the invoice |
+| GET | `/invoice/admin/export` | VerifyMinLevel('admin') | Bulk export for accounting |
+| GET | `/location` (also `/locations`) | public | Active destinations |
+| GET | `/location/:id` | public | One destination |
+| POST/PATCH/PUT/DELETE | `/location[/:id]` | VerifyMinLevel('admin') | Destination CRUD (multipart image upload) |
+| GET | `/location/admin/all` | VerifyMinLevel('admin') | Includes inactive/soft-deleted |
+| GET | `/dashboard/stats` | VerifySession | **Role-aware** summary tiles — the shape is chosen server-side from the session, so the frontend calls it without knowing the role |
+
 ---
 
 ## Frontend Route Map
@@ -676,8 +786,10 @@ bookings), dispatched internally by `reference_type`.
     user/                   tourist dashboard (hard-redirects to onboarding if incomplete)
       trips/                Phase 2 — read-only trip timeline
       reviews/               Phase 2 — leave a review once a trip is completed
+      my-bookings/, my-bookings/[bookingId]/   Phase 5 — booking detail, balance payment, chat, invoices
+      payment-success/       Phase 5 — post-payment landing
     guide/
-      page.tsx              guide dashboard — profile-completion + membership status
+      page.tsx              guide dashboard — profile-completion + approval + membership status
       profile/              guide profile form (post-signup, or ongoing edits)
       buy-subscription/     membership payment / renewal
       availability/          Blocked Dates (unchanged) + Phase 3 tabs: Vacation & Emergency Leave, Working Schedule
@@ -685,12 +797,20 @@ bookings), dispatched internally by `reference_type`.
       assignments/           Phase 2 — accept/decline proposed bookings
       trips/, trips/[tripId]/  Phase 2 — start/complete trips
       reviews/               Phase 2 — reviews received + rating
+      rates/                 Phase 5 — publish half-day / full-day pricing
+      earnings/              Phase 6 — earnings ledger, payout history, bank details
+      payments/              Phase 6 — cash recorded against this guide
     admin/                   Phase 2 — NEW travel-ops section (own client-side role guard, since
                              dashboard/layout.tsx has no role gating). Distinct from the legacy
                              app/(website)/admin/page.tsx monolith below, which is untouched.
       page.tsx               KPI overview + booking/revenue trend chart
       assignments/, trips/, reviews/, reports/, activity-log/
       guide-calendar/        Phase 3 — available/unavailable guides today, conflict alerts, per-guide merged calendar
+      guide-approvals/       Phase 6 — the KYC review queue (approve / reject with reason)
+      guides/, guides/[accountId]/   Phase 6 — guide directory + full admin detail view
+      refunds/               Phase 5 — approve/reject cancellation requests
+      payouts/, payments/    Phase 6 — payout queue, manual settlement, cash records
+      tourists/, enquiries/, advertisements/, services/
   admin/                    LEGACY standalone admin dashboard (raw fetch, tab-based) — pre-dates
                             the cookie-auth migration, left running as-is; not to be confused with
                             dashboard/admin/ above
@@ -743,8 +863,29 @@ Located in `backend/src/scripts/`, run via
   also reports any orphan enrollments (no matching `Account`), which have nowhere to migrate to.
   (Supersedes the deleted `migrateGuideMembership.ts`, which created the `Guide` rows in the first
   place but copied only `languages`, `city` and `photo`.)
+- **`backfillBusinessCodes.ts`** — Phase 4. Mints the human-facing codes (`TO`/`GU`/`BK`/`TR`/`AS`/
+  `PM`) onto documents that predate the code fields. Computes its starting sequence from the highest
+  code already in use *plus* the `Counter`, so it can never collide with codes the schema hooks have
+  minted since deploy; oldest documents get the lowest numbers. **Dry run by default**, `--commit`
+  to write.
+- **`backfillGuideApproval.ts`** — Phase 6. Sets `approvalStatus` on guides that predate the KYC
+  review flow: `isVisible: true → 'approved'` (grandfathered — they were already live),
+  `isVisible: false → 'pending'`. Until this runs, `utils/guideApproval.ts` reads an *absent* status
+  as approved-if-already-visible, so nobody gets delisted; the script just makes that inference
+  explicit in the data. Only touches rows still lacking a status, so it can't overwrite a real admin
+  decision. **Dry run by default**, `--commit` to write. ⚠️ **Not yet run against production.**
+- **`secureGuideIdentityProofs.ts`** — flips existing Cloudinary KYC assets from public `upload` to
+  `access_mode: authenticated`, so a proof can only be delivered through a signed URL. The delivery
+  URL is unchanged, so **no database migration is involved**. Run it *before* enabling PDF/ZIP
+  delivery in the Cloudinary console, so the image proofs are private before that setting makes the
+  PDFs deliverable too. Idempotent (already-authenticated assets are skipped). **Dry run by
+  default**, `--commit` to write.
 - **`seedAdmin.ts`** — the *only* supported way to create an admin account (reads
   `ADMIN_NAME/EMAIL/PHONE/PASSWORD` from env). Public signup can never create an admin.
+
+Every backfill script above is **dry-run by default and requires `--commit` to write**, deliberately:
+the local `.env` points at the live production cluster, so the harmless behavior has to be the
+default one.
 
 ---
 
@@ -769,16 +910,20 @@ Documented here so it isn't mistaken for something broken or in-scope for future
 - `POST /session/signup` (plain, non-OTP signup) still exists and works, but no frontend page
   calls it — superseded by the OTP-registration flow. Left mounted rather than deleted, in case
   anything external still depends on it.
-- Several frontend thunks call backend routes that **don't exist** — whole unimplemented domains,
-  not just stray endpoints: `/tourguide/*` (direct guide-booking + final-payment flow),
-  `/languages` + `/locations` (admin-managed location/language group-pricing the find-guides →
-  book → checkout flow depends on), `/subscriptions/*` (subscription-plan CRUD), and
-  `/guides/:id/pricing-details`, `/guides/all-guides`, `/guides/:id/approve`, `/guides/my-bookings`.
-  Building these out is feature work, out of scope for a bug-fix pass. As of the July 2026 hardening
-  pass, `fetchGuidesForTour` was repointed from the non-existent `/guides/for-tour` to the real
-  `/guides/all` (no server-side date-range availability filtering), and `upcomming-tours` still
-  renders local mock data rather than the API. See the [Production Readiness Hardening](#production-readiness-hardening-july-2026)
-  section for the full list.
+- **The missing-backend gap list is now closed.** The July 2026 hardening pass recorded whole
+  frontend domains calling routes that didn't exist; Phases 5–7 implemented them. `/tourguide/*`,
+  `/locations`, `/guides/:id/pricing-details`, `/guides/all-guides`, `/guides/:id/approve` and
+  `/guides/my-bookings` all exist and are documented above. Two items from that list resolved
+  differently and are worth knowing:
+  - `/subscriptions/*` (subscription-plan CRUD) was **not** built — it was removed as a concept, and
+    no frontend code calls it any more. There is exactly one payment concept for guides: the 30-day
+    membership.
+  - `/languages` is **still a dead route** — there is no backend module for it, but
+    `lib/redux/thunks/admin/languageThunks.ts` and `app/location/[id]/page.tsx` still call it. This
+    is the one unclosed item from the original gap list; either build the module or drop the two
+    call sites.
+- `dashboard/guide/upcomming-tours` still renders local mock data rather than the API — the one
+  genuinely unfinished page left from that list.
 - Forgot-password was **changed** from an emailed reset-link+token to OTP-based (confirmed correct
   by the project owner) — if you see references to a `pwreset:<token>` `Storage` key pattern in
   old notes/history, that's the retired mechanism; the current one uses `pwreset-otp:<email>`.
@@ -1081,3 +1226,205 @@ Both codebases now typecheck clean (`tsc --noEmit` → 0 errors on each) and a f
 - `dashboard/guide/upcomming-tours` renders local mock data, not the API.
 - A possible pricing double-count in `utils/priceCalculator.ts` (excursion allowance added to two
   buckets) is flagged but untouched pending product confirmation.
+
+> **Note**: the "known limitations" above describe the state *at the time of that pass*. The
+> missing-backend domains listed there were subsequently built — see Phases 4–7 below.
+
+---
+
+## Enterprise Schema Layer (Phase 4)
+
+An **additive** pass over the existing collections: human-facing identifiers, soft delete, and
+history trails, without changing how any existing feature behaves.
+
+### Business codes
+
+Every major entity now carries a stable, human-readable code alongside its ObjectId —
+`TO`(urist), `GU`(ide), `BK` booking, `TR`ip, `AS`signment, `PM` payment. Codes are minted by a
+`pre('save')` hook off the `Counter` collection, which hands out sequence numbers atomically via
+`findOneAndUpdate($inc)` — so two concurrent inserts can't collide on a number. Code fields are
+`unique: true, sparse: true`: sparse matters, because documents predating the field have no code at
+all and a non-sparse unique index would treat every one of them as a duplicate `null`.
+
+Support staff quote `BK-1042` rather than a 24-character hex string; that's the whole point.
+`backfillBusinessCodes.ts` assigns codes to pre-existing rows (see [Migration Scripts](#migration-scripts)).
+
+### Soft delete
+
+`deletedAt: Date | null` on `Booking`, `Guide`, `Location` and others, paired with a `pre('find')`
+hook that appends `{ deletedAt: null }` to any query that didn't explicitly ask about `deletedAt`.
+Deleted rows therefore disappear from ordinary reads without every call site being rewritten, while
+an admin or script can still reach them by naming `deletedAt` in the filter.
+
+**Gotcha worth knowing** (it cost real debugging time): in Mongoose, declaring a field as a bare
+`{}` produces a *phantom nested object* rather than a mixed-type field, and writes to it silently
+vanish. Nested schema fields in this layer are declared explicitly, field by field, for that reason.
+
+### History trails
+
+`Guide.membershipHistory[]` records every membership window (plan, start, expiry, transaction) so a
+renewal never overwrites the record of the previous one. `CashPayment` and `RefundRequest` carry
+`createdBy`/`updatedBy`/`deletedBy` + timestamps, so a money record's edit history survives.
+
+---
+
+## Direct Guide Booking, Split Payments & Refunds (Phase 5)
+
+Phase 5 closed the largest gap on the July 2026 list: the frontend had a whole direct-booking flow
+calling `/tourguide/*`, which had no backend at all.
+
+### Direct booking vs. allocated booking
+
+Two booking models now coexist, deliberately:
+
+| | `/booking` (pre-existing) | `/tourguide` (Phase 5) |
+|---|---|---|
+| Who picks the guide | An admin allocates one afterwards | The tourist picks from the guide's profile |
+| Price source | Package / quote pricing | The guide's **published day rate** (`Guide.pricing`) |
+| Payment | Full amount up front | 20% advance now, balance later |
+
+### Server-derived pricing — the security property
+
+`GET /tourguide/quote` computes total, advance and balance **server-side** from
+`Guide.pricing.fullDay` and `BOOKING_ADVANCE_RATE`. The client never sends a price. At verify time,
+`verify-and-create` re-computes the expected advance and compares it against the amount actually
+captured on the `Transaction` (`if (pricing.advance !== transaction.amount) → reject`). A tampered
+client cannot book a ₹10,000 guide for ₹1.
+
+### The balance leg
+
+`services/balancePayment.ts` handles the outstanding amount, and is shared by package tours and
+direct bookings alike since both split payment identically. `Booking` gained `advance_paid`,
+`balance_due`, `balance_paid_at` and `balance_order_id` (the in-flight Razorpay order, matched at
+verify time). This service is kept **out of** `services/payment.ts` on purpose — that file is the
+Razorpay webhook path and is deliberately left untouched.
+
+### Admin-approved refunds
+
+Cancelling doesn't refund money directly. It opens a `RefundRequest`, which an admin approves or
+rejects:
+
+```
+RefundRequest { booking, requestedBy, requesterRole, reason, amountPaid, approvedAmount?,
+                status: 'pending'|'processed'|'rejected'|'failed',
+                refunds[]: { transaction, razorpay_payment_id, razorpay_refund_id,
+                             amount, status, failureReason },
+                adminNote?, processedBy?, processedAt? }
+```
+
+A partial unique index on `{ booking }` **filtered to `status: 'pending'`** means a booking can
+have only one open request at a time, while still allowing a second request after the first is
+resolved. Because a booking may have been paid across several transactions (advance + balance), the
+refund is issued per-transaction and each leg records its own result — so a partial failure is
+visible rather than silently lost, and `POST /refund/:id/retry` can re-drive just the failed legs.
+
+---
+
+## Guide Approval, Earnings & Payouts (Phase 6)
+
+### KYC approval now gates listing — and starts the clock
+
+A guide paying the membership fee is no longer sufficient to be listed. `Guide.approvalStatus`
+(`pending` | `approved` | `rejected`) is reviewed by an admin, and **the 30-day membership window
+opens at approval, not at payment**. That's the point of the split between:
+
+- `membershipPaidAt` — when the fee was captured.
+- `membershipStartDate` — when the window actually opened.
+- `membershipPendingActivation` — paid, but still waiting on review.
+
+Without this, a guide stuck in a review queue for a week would silently burn a week of the
+membership they'd paid for.
+
+`approvalStatus` and `membershipPendingActivation` deliberately have **no schema default**. Rows
+written before this flow existed must stay distinguishable from a guide an admin has actually
+looked at — a default would erase that distinction. Reads treat an absent status as approved *if the
+guide is already visible* (grandfathering), which is exactly what `backfillGuideApproval.ts` then
+makes explicit.
+
+**Rejection auto-refunds** the membership fee. The presence of `Guide.membershipRefund` is what
+stops a second rejection from refunding the same payment twice.
+
+`Guide.adminNotes` are internal: never projected onto a public or guide-facing response, enforced by
+explicit field lists in `services/guide.ts` rather than by relying on callers to strip them.
+
+### Earnings ledger
+
+`TripService.complete` accrues one `Earning` per completed trip:
+
+```
+gross = booking amount
+commission = gross × PLATFORM_COMMISSION_RATE%   (default 20)
+net = gross − commission
+payableAt = now + EARNING_HOLD_DAYS              (default 3)
+status: pending → payable → paid   (or reversed)
+```
+
+Two design decisions worth preserving:
+
+1. **`accrueForTrip` never throws.** A ledger failure must not roll back a trip the guide has
+   already finished in the real world — it logs and moves on.
+2. **The unique index on `Earning.trip` is the idempotency guard**, not an application check. A
+   retry or double-complete hits a duplicate-key error, which is swallowed *by error code
+   specifically* (11000) and nothing else, making the accrual a no-op rather than paying twice.
+
+### Manual payouts
+
+There is **no automated disbursement** — payouts are settled out-of-band and *recorded*. An admin
+selects a batch of `payable` earnings and records a `Payout` with a method
+(`bank_transfer`/`upi`/`cash`/`other`) and a reference. `Payout.paidTo` is a **snapshot, not a
+ref**: if the guide later edits their bank details, the record of where money actually went must not
+change retroactively.
+
+### Cash payments
+
+`/cash-payment` records cash an admin collected on a guide's behalf, entirely outside Razorpay.
+Voiding a record is **soft** — `status: 'voided'` with a `voidReason`, never a hard delete, because
+a money record that can vanish is a money record you can't audit.
+
+---
+
+## In-App Messaging, Invoices & Locations (Phase 7)
+
+### Messaging
+
+`Message` is scoped to a single `Booking` — there is no free-form DM surface, which keeps the
+authorization rule simple: whoever can see the booking (its tourist, its guide, any admin) can see
+its thread. Read state is a `readBy[]` array of account ids rather than a per-user join table.
+Two compound indexes back the only two queries that exist: `{ booking, createdAt }` for paginating
+a thread by cursor, and `{ booking, readBy }` for unread counts.
+
+### Invoices
+
+`Invoice` is written for `booking`, `guide_membership` and `trip_completion` payments. Every party
+is stored as a **snapshot** (`customerSnapshot`, `guideSnapshot`, `bookingSnapshot`) rather than a
+populated ref — an invoice is a historical record, so a guide renaming themselves next year must not
+rewrite last year's invoice. PDFs are rendered on demand (PDFKit + QRCode) and **streamed through
+the session** via `GET /invoice/:id/download`; a raw storage link is never handed out.
+
+The router is mounted at **`/invoice` only** — not also at `/invoices`, unlike the
+`/guide`+`/guides` and `/user`+`/users` pairs. Worth remembering when writing a thunk.
+
+### Locations
+
+Admin-managed destinations (name, slug, city, image, `isActive`, `isPopular`, soft delete) replacing
+what used to be hardcoded frontend lists. Mounted at both `/location` and `/locations`. Images are
+uploaded via multer **memory** storage and pushed straight to Cloudinary rather than hitting disk.
+
+### KYC document delivery — how the Cloudinary 401 was solved
+
+KYC proofs were originally uploaded to Cloudinary as **public** assets, meaning the raw delivery URL
+was world-readable to anyone who had it. They are now `access_mode: authenticated`, and the app
+never hands out a Cloudinary link at all: `GET /guide/profile/documents/:type/view` (owner) and
+`GET /guide/admin/:id/identity-documents/:type` (admin) **stream the document through the session**.
+
+The 401 that made PDF proofs unviewable was *not* an auth bug in this codebase — it was Cloudinary's
+account-level "Allow delivery of PDF and ZIP files" setting being off. The fix was to stop relying
+on delivery URLs entirely and download through the Admin API server-side, which bypasses that gate.
+`secureGuideIdentityProofs.ts` locks down the assets uploaded before this change.
+
+### UI conventions introduced alongside
+
+`frontend/lib/swal.ts` (SweetAlert2) replaces every native `alert()` / `confirm()` in the app. It
+**lazy-imports** SweetAlert2 inside the call rather than importing at module scope — a top-level
+import breaks SSR, since the library touches `document` at import time. Use these helpers rather
+than reintroducing native dialogs or a second modal library.

@@ -65,6 +65,13 @@ const TransactionSchema = new mongoose.Schema<ITransaction>(
 			sparse: true,
 			trim: true,
 		},
+		// What this order was quoted for, captured server-side at creation. The
+		// client also carries a copy through Razorpay, but that copy is only ever
+		// a hint — this is the authoritative record, so the guide/dates/party size
+		// cannot be substituted between paying and redeeming.
+		metadata: {
+			type: mongoose.Schema.Types.Mixed,
+		},
 	},
 	{
 		timestamps: true,

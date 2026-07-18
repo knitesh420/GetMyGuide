@@ -10,7 +10,7 @@ import { verifyRazorpaySignature } from '@utils/paymentVerify';
 import { calculateBookingPrice } from '@utils/priceCalculator';
 import { randomBytes } from 'crypto';
 import { Types } from 'mongoose';
-import { NotFoundError, ServerError } from 'node-be-utilities';
+import { ConflictError, NotFoundError, ServerError } from 'node-be-utilities';
 import InvoiceService from './invoice';
 import TransactionService from './transaction';
 
@@ -160,6 +160,39 @@ function transformBooking(booking: IBooking): TransformedBooking {
 		createdAt: booking.createdAt,
 		updatedAt: booking.updatedAt,
 	};
+}
+
+/**
+ * A verified Razorpay signature proves a payment happened — it does NOT prove
+ * the payment hasn't already been spent. The verify handlers are reachable more
+ * than once (double-click, retried network call, or a deliberate replay of a
+ * captured `{order_id, payment_id, signature}` triple), so every one of them
+ * must ask whether this transaction has already produced a booking before
+ * creating another against the same money.
+ *
+ * Returns the booking this transaction already created, or null if it is
+ * genuinely unspent.
+ */
+async function findBookingForSpentTransaction(transaction: {
+	reference_type: string;
+	reference_id: string;
+	status: string;
+	transaction_id: string;
+}): Promise<IBooking | null> {
+	if (transaction.reference_type === 'booking') {
+		const existing = await BookingDB.findById(transaction.reference_id);
+		if (existing) return existing;
+	}
+
+	// Fallback for a transaction marked paid whose reference never got rewritten
+	// (a crash between the two writes). transaction_id is unique on Booking.
+	if (transaction.status === 'paid' || transaction.status === 'success') {
+		const existing = await BookingDB.findOne({ transaction_id: transaction.transaction_id });
+		if (existing) return existing;
+		throw new ConflictError('This payment has already been used');
+	}
+
+	return null;
 }
 
 class BookingService {
@@ -322,6 +355,13 @@ class BookingService {
 			throw new NotFoundError('Transaction not found');
 		}
 
+		// Step 2.5: Refuse to spend the same payment twice. Without this, replaying
+		// one valid signature triple yields one booking per replay.
+		const alreadyCreated = await findBookingForSpentTransaction(transaction);
+		if (alreadyCreated) {
+			return transformBooking(alreadyCreated);
+		}
+
 		// Step 3: Decode booking data
 		const data: CreateBookingData = JSON.parse(Buffer.from(booking_data, 'base64').toString());
 
@@ -340,9 +380,21 @@ class BookingService {
 		}
 		data.booking_configuration.price = priceBreakdown.total;
 
-		// Step 4: Create booking now that payment is verified
+		// Step 4: Create booking now that payment is verified.
+		//
+		// The four fields below are the entire tourist-supplied surface of a
+		// booking. They are listed explicitly rather than spread from `data`,
+		// because `data` is an attacker-controlled base64 blob and spreading it
+		// hands over every other schema field too — `allocated_guide`,
+		// `balance_due`, `advance_paid`, `bookingCode`, `end_date`, `package`.
+		// The price check above only constrains `booking_configuration`, so a
+		// spread let someone pay the smallest valid advance and still submit
+		// `balance_due: 0` with a guide of their choosing already attached.
 		const booking = await BookingDB.create({
-			...data,
+			tourist_info: data.tourist_info,
+			travel_details: data.travel_details,
+			guide_preferences: data.guide_preferences,
+			booking_configuration: data.booking_configuration,
 			...(user_id ? { linked_to: new Types.ObjectId(user_id) } : {}),
 			transaction_id: transaction.transaction_id,
 			status: 'successful',
@@ -496,6 +548,12 @@ class BookingService {
 		const transaction = await TransactionDB.findOne({ razorpay_order_id });
 		if (!transaction) {
 			throw new NotFoundError('Transaction not found');
+		}
+
+		// Same replay guard as the customised-booking path: one payment, one booking.
+		const alreadyCreated = await findBookingForSpentTransaction(transaction);
+		if (alreadyCreated) {
+			return transformBooking(alreadyCreated);
 		}
 
 		const decoded: {

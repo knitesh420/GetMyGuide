@@ -25,15 +25,21 @@ import connectDB from '@mongo';
 import { AccountDB } from '@mongo';
 
 async function main() {
-	const dryRun = process.argv.includes('--dry-run');
+	// Dry run by default, matching every other script in this directory.
+	// This one used to WRITE by default with `--dry-run` as the opt-out, which is
+	// the wrong way round for a script whose .env points at the live cluster —
+	// running it with no arguments to "see what it would do" mutated production.
+	// `--dry-run` is still accepted so existing runbooks keep working.
+	const commit = process.argv.includes('--commit');
 
 	await connectDB(DATABASE_URL);
 	try {
 		const filter = { emailVerified: { $exists: false } };
 		const matched = await AccountDB.countDocuments(filter);
 
-		if (dryRun) {
+		if (!commit) {
 			console.log(`[dry-run] Would set emailVerified:true on ${matched} account(s).`);
+			console.log('Nothing was written. Re-run with --commit to apply.');
 			return;
 		}
 

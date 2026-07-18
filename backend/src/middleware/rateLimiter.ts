@@ -30,26 +30,28 @@ export function rateLimit(options: RateLimitOptions) {
 			const identifier = keyFn?.(req) ?? req.ip ?? 'unknown';
 			const key = `rl:${prefix}:${identifier}`;
 
-			const currentRaw = await StorageDB.getString(key);
-			const current = currentRaw ? parseInt(currentRaw, 10) : 0;
+			// One atomic round trip: increment and read back the new value.
+			//
+			// This was previously read → compare → find → save, which is a
+			// check-then-act race. Requests arriving together all read the same
+			// count, all saw it under the limit, and all passed — defeating the
+			// limiter under exactly the concurrent-burst conditions it exists to
+			// stop, and losing increments to overwrites on top of that.
+			//
+			// $inc on a missing document upserts it starting from 0, and
+			// $setOnInsert fixes the window's expiry only on that first write, so
+			// the window stays fixed rather than sliding forward on every hit.
+			const record = await StorageDB.findOneAndUpdate(
+				{ key },
+				{
+					$inc: { count: 1 },
+					$setOnInsert: { expireAt: new Date(Date.now() + windowSeconds * 1000) },
+				},
+				{ upsert: true, new: true, setDefaultsOnInsert: false }
+			);
 
-			if (current >= max) {
+			if ((record?.count ?? 0) > max) {
 				return next(new TooManyRequestsError('Too many requests, please try again later'));
-			}
-
-			// Increment counter. First write also sets TTL via schema default.
-			// To respect windowSeconds, explicitly set an expireAt when first created.
-			const next_count = current + 1;
-			const existing = await StorageDB.findOne({ key });
-			if (!existing) {
-				await StorageDB.create({
-					key,
-					value: String(next_count),
-					expireAt: new Date(Date.now() + windowSeconds * 1000),
-				});
-			} else {
-				existing.value = String(next_count);
-				await existing.save();
 			}
 
 			next();

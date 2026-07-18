@@ -16,6 +16,12 @@ export default interface ITransaction extends Document {
 	amount: number;
 	currency: string;
 	paymentCode?: string;
+	/**
+	 * Server-held snapshot of what this order was actually quoted for. Written at
+	 * order-creation time and read back at verify, so the parameters of a booking
+	 * cannot be swapped between paying and redeeming.
+	 */
+	metadata?: Record<string, unknown>;
 	createdAt: Date;
 	updatedAt: Date;
 }

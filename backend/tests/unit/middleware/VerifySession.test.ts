@@ -1,6 +1,7 @@
+import { AccountDB } from '@mongo';
 import VerifySession, { VerifyMinLevel } from '@middleware/VerifySession';
 import JWTService from '@services/jwt';
-import { UnauthorizedError } from 'node-be-utilities';
+import { ForbiddenError, UnauthorizedError } from 'node-be-utilities';
 import {
 	createMockNext,
 	createMockRequest,
@@ -9,6 +10,23 @@ import {
 } from '../../helpers/testHelpers';
 
 jest.mock('@services/jwt');
+jest.mock('@mongo', () => ({ AccountDB: { findById: jest.fn() } }));
+
+/**
+ * VerifySession resolves the caller in two steps: verify the token, then look
+ * the account up to compare tokenVersion (which is what makes logout and
+ * password-reset revoke previously issued tokens). Both have to be stubbed, and
+ * the middleware awaited — it is async.
+ */
+function stubAccount(user: { tokenVersion?: number; isActive?: boolean } = {}) {
+	(AccountDB.findById as jest.Mock).mockReturnValue({
+		select: jest.fn().mockResolvedValue({
+			tokenVersion: user.tokenVersion ?? 0,
+			isActive: user.isActive ?? true,
+			role: 'tourist',
+		}),
+	});
+}
 
 describe('VerifySession Middleware', () => {
 	let mockRequest: any;
@@ -23,48 +41,54 @@ describe('VerifySession Middleware', () => {
 	});
 
 	describe('VerifySession', () => {
-		it('should verify token from Authorization header and attach user', () => {
+		it('should verify token from Authorization header and attach user', async () => {
 			const mockUser = createMockUser();
 			const token = 'valid-token';
 			mockRequest.headers.authorization = `Bearer ${token}`;
-			(JWTService.verifyToken as jest.Mock).mockReturnValue(mockUser);
+			(JWTService.verifyAccessToken as jest.Mock).mockReturnValue(mockUser);
+			stubAccount({ tokenVersion: mockUser.tokenVersion });
 
-			VerifySession(mockRequest, mockResponse, mockNext);
+			await VerifySession(mockRequest, mockResponse, mockNext);
 
-			expect(JWTService.verifyToken).toHaveBeenCalledWith(token);
+			expect(JWTService.verifyAccessToken).toHaveBeenCalledWith(token);
 			expect(mockRequest.locals.user).toEqual(mockUser);
 			expect(mockNext).toHaveBeenCalledWith();
 		});
 
-		it('should verify token from cookie when Authorization header is missing', () => {
+		it('should verify token from cookie when Authorization header is missing', async () => {
 			const mockUser = createMockUser();
 			const token = 'valid-token';
 			mockRequest.cookies = { 'auth-cookie': token };
-			(JWTService.verifyToken as jest.Mock).mockReturnValue(mockUser);
+			(JWTService.verifyAccessToken as jest.Mock).mockReturnValue(mockUser);
+			stubAccount({ tokenVersion: mockUser.tokenVersion });
 
-			VerifySession(mockRequest, mockResponse, mockNext);
+			await VerifySession(mockRequest, mockResponse, mockNext);
 
-			expect(JWTService.verifyToken).toHaveBeenCalledWith(token);
+			expect(JWTService.verifyAccessToken).toHaveBeenCalledWith(token);
 			expect(mockRequest.locals.user).toEqual(mockUser);
 			expect(mockNext).toHaveBeenCalledWith();
 		});
 
-		it('should prefer Authorization header over cookie', () => {
+		it('should prefer the cookie over the Authorization header', async () => {
+			// The cookie is the primary transport; the header exists as a fallback
+			// for non-browser clients. This assertion used to be the other way
+			// round, from before that decision was made.
 			const mockUser = createMockUser();
 			const headerToken = 'header-token';
 			const cookieToken = 'cookie-token';
 			mockRequest.headers.authorization = `Bearer ${headerToken}`;
 			mockRequest.cookies = { 'auth-cookie': cookieToken };
-			(JWTService.verifyToken as jest.Mock).mockReturnValue(mockUser);
+			(JWTService.verifyAccessToken as jest.Mock).mockReturnValue(mockUser);
+			stubAccount({ tokenVersion: mockUser.tokenVersion });
 
-			VerifySession(mockRequest, mockResponse, mockNext);
+			await VerifySession(mockRequest, mockResponse, mockNext);
 
-			expect(JWTService.verifyToken).toHaveBeenCalledWith(headerToken);
-			expect(JWTService.verifyToken).not.toHaveBeenCalledWith(cookieToken);
+			expect(JWTService.verifyAccessToken).toHaveBeenCalledWith(cookieToken);
+			expect(JWTService.verifyAccessToken).not.toHaveBeenCalledWith(headerToken);
 		});
 
-		it('should call next with UnauthorizedError when no token is provided', () => {
-			VerifySession(mockRequest, mockResponse, mockNext);
+		it('should call next with UnauthorizedError when no token is provided', async () => {
+			await VerifySession(mockRequest, mockResponse, mockNext);
 
 			expect(mockNext).toHaveBeenCalledWith(expect.any(UnauthorizedError));
 			const error = mockNext.mock.calls[0][0];
@@ -72,34 +96,34 @@ describe('VerifySession Middleware', () => {
 			expect(mockRequest.locals.user).toBeUndefined();
 		});
 
-		it('should call next with UnauthorizedError for invalid token', () => {
+		it('should call next with UnauthorizedError for invalid token', async () => {
 			const token = 'invalid-token';
 			mockRequest.headers.authorization = `Bearer ${token}`;
-			(JWTService.verifyToken as jest.Mock).mockReturnValue(null);
+			(JWTService.verifyAccessToken as jest.Mock).mockReturnValue(null);
 
-			VerifySession(mockRequest, mockResponse, mockNext);
+			await VerifySession(mockRequest, mockResponse, mockNext);
 
 			expect(mockNext).toHaveBeenCalledWith(expect.any(UnauthorizedError));
 			const error = mockNext.mock.calls[0][0];
 			expect(error.message).toBe('Invalid or expired token');
 		});
 
-		it('should handle Authorization header without Bearer prefix', () => {
+		it('should handle Authorization header without Bearer prefix', async () => {
 			const token = 'token-without-bearer';
 			mockRequest.headers.authorization = token;
-			(JWTService.verifyToken as jest.Mock).mockReturnValue(null);
+			(JWTService.verifyAccessToken as jest.Mock).mockReturnValue(null);
 
-			VerifySession(mockRequest, mockResponse, mockNext);
+			await VerifySession(mockRequest, mockResponse, mockNext);
 
 			// Should not extract token, so should fail with no token error
 			expect(mockNext).toHaveBeenCalledWith(expect.any(UnauthorizedError));
 		});
 
-		it('should handle empty Authorization header', () => {
+		it('should handle empty Authorization header', async () => {
 			mockRequest.headers.authorization = '';
 			mockRequest.cookies = {};
 
-			VerifySession(mockRequest, mockResponse, mockNext);
+			await VerifySession(mockRequest, mockResponse, mockNext);
 
 			expect(mockNext).toHaveBeenCalledWith(expect.any(UnauthorizedError));
 		});
@@ -173,7 +197,7 @@ describe('VerifySession Middleware', () => {
 
 			middleware(mockRequest, mockResponse, mockNext);
 
-			expect(mockNext).toHaveBeenCalledWith(expect.any(UnauthorizedError));
+			expect(mockNext).toHaveBeenCalledWith(expect.any(ForbiddenError));
 			const error = mockNext.mock.calls[0][0];
 			expect(error.message).toBe('Insufficient permissions');
 		});
@@ -185,7 +209,7 @@ describe('VerifySession Middleware', () => {
 
 			middleware(mockRequest, mockResponse, mockNext);
 
-			expect(mockNext).toHaveBeenCalledWith(expect.any(UnauthorizedError));
+			expect(mockNext).toHaveBeenCalledWith(expect.any(ForbiddenError));
 			const error = mockNext.mock.calls[0][0];
 			expect(error.message).toBe('Insufficient permissions');
 		});
@@ -197,7 +221,7 @@ describe('VerifySession Middleware', () => {
 
 			middleware(mockRequest, mockResponse, mockNext);
 
-			expect(mockNext).toHaveBeenCalledWith(expect.any(UnauthorizedError));
+			expect(mockNext).toHaveBeenCalledWith(expect.any(ForbiddenError));
 			const error = mockNext.mock.calls[0][0];
 			expect(error.message).toBe('Insufficient permissions');
 		});
@@ -221,7 +245,7 @@ describe('VerifySession Middleware', () => {
 			middleware(mockRequest, mockResponse, mockNext);
 
 			// Unknown role should have level 0, which is less than tourist level 1
-			expect(mockNext).toHaveBeenCalledWith(expect.any(UnauthorizedError));
+			expect(mockNext).toHaveBeenCalledWith(expect.any(ForbiddenError));
 		});
 	});
 });

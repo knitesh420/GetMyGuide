@@ -1,7 +1,23 @@
 export const DATABASE_URL = process.env.DATABASE_URL as string;
 
 export const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-export const IS_WINDOWS = process.env.OS === 'WINDOWS';
+// Windows reports OS=Windows_NT, so the old `=== 'WINDOWS'` check was never true.
+// Ask Node directly rather than trusting an environment variable.
+export const IS_WINDOWS = process.platform === 'win32';
+
+/**
+ * SameSite policy for the auth cookies.
+ *
+ * 'lax' is correct whenever the frontend and the API share a registrable domain
+ * (getmyguide.in and api.getmyguide.in do), and it is what stops a cross-site
+ * form POST from carrying the session — the other half of the CSRF fix, along
+ * with not parsing urlencoded bodies at all. Override with COOKIE_SAMESITE=none
+ * only if the frontend is genuinely moved to an unrelated domain, and understand
+ * that doing so re-opens that surface.
+ */
+export const COOKIE_SAMESITE = (process.env.COOKIE_SAMESITE ?? 'lax') as 'lax' | 'strict' | 'none';
+// Lets one cookie serve both getmyguide.in and api.getmyguide.in. Unset in dev.
+export const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || undefined;
 
 export const PORT = process.env.PORT || 8000;
 
@@ -90,18 +106,43 @@ export function assertProductionEnv(): void {
 	if (!IS_PRODUCTION) return;
 
 	const problems: string[] = [];
+	const warnings: string[] = [];
 
 	if (!process.env.DATABASE_URL) problems.push('DATABASE_URL is not set');
 	if (JWT_ACCESS_SECRET === 'dev-access-secret-change-me')
 		problems.push('JWT_ACCESS_SECRET is using the insecure development default');
 	if (JWT_REFRESH_SECRET === 'dev-refresh-secret-change-me')
 		problems.push('JWT_REFRESH_SECRET is using the insecure development default');
+	// A secret that isn't the dev default can still be too short to be worth
+	// anything. 24 chars is the hard floor — below that it is brute-forceable and
+	// the process must not start. Between 24 and 32 it is warned about rather
+	// than rejected, because raising the bar mid-life would invalidate every
+	// issued token and force a fleet-wide re-login on deploy.
+	for (const [name, secret] of [
+		['JWT_ACCESS_SECRET', JWT_ACCESS_SECRET],
+		['JWT_REFRESH_SECRET', JWT_REFRESH_SECRET],
+	] as const) {
+		if (secret.length < 24) {
+			problems.push(`${name} is too short (${secret.length} chars); use at least 32`);
+		} else if (secret.length < 32) {
+			warnings.push(
+				`${name} is ${secret.length} chars; 32+ is recommended. Rotating it will log every user out once.`
+			);
+		}
+	}
 	if (RESEND_API_KEY === 'RESEND_API_KEY') problems.push('RESEND_API_KEY is not set');
 	if (RAZORPAY_API_KEY === 'RAZORPAY_API_KEY') problems.push('RAZORPAY_API_KEY is not set');
 	if (RAZORPAY_API_SECRET === 'RAZORPAY_API_SECRET')
 		problems.push('RAZORPAY_API_SECRET is not set');
 	if (RAZORPAY_WEBHOOK_SECRET === 'RAZORPAY_WEBHOOK_SECRET')
 		problems.push('RAZORPAY_WEBHOOK_SECRET is not set');
+
+	if (warnings.length > 0) {
+		// eslint-disable-next-line no-console
+		console.warn(
+			'Configuration warnings:\n' + warnings.map((w) => `  - ${w}`).join('\n')
+		);
+	}
 
 	if (problems.length > 0) {
 		throw new Error(

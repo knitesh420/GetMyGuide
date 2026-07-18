@@ -131,8 +131,13 @@ class AuthService {
 		}
 
 		// Admin accounts must go through OTP — block password-only login.
+		//
+		// Deliberately the same message as a bad password: a distinct one told an
+		// attacker holding valid credentials that they had found an admin, and
+		// told anyone probing addresses which ones were privileged. Admins reach
+		// their own flow through the admin login page, not by discovering this.
 		if (user.role === 'admin') {
-			throw new UnauthorizedError('Admin accounts must log in via OTP');
+			throw new UnauthorizedError('Invalid email or password');
 		}
 
 		// NOTE: only ever ship this check after backfillEmailVerified.ts has been

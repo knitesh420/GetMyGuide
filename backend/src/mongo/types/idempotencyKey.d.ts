@@ -5,7 +5,8 @@ export default interface IIdempotencyKey extends Document {
 	key: string;
 	endpoint: string;
 	requestHash: string;
-	response: {
+	/** Filled once the original request replies; absent while it is in flight. */
+	response?: {
 		statusCode: number;
 		body: any;
 	};

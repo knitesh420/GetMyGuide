@@ -23,6 +23,12 @@ interface CreateTransactionOptions {
 	type: TransactionType;
 	data?: TransactionData;
 	description?: string;
+	/**
+	 * Server-side snapshot of what is being bought. Stored on the transaction and
+	 * read back at verify time so the order's terms can't be swapped after payment.
+	 * Never sent to Razorpay — use `data` for that.
+	 */
+	metadata?: Record<string, unknown>;
 }
 
 interface CreateTransactionResult {
@@ -51,7 +57,14 @@ class TransactionService {
 		amount: number,
 		options: CreateTransactionOptions
 	): Promise<CreateTransactionResult> {
-		const { reference_id, reference_type, type, data = {}, description = 'Payment' } = options;
+		const {
+			reference_id,
+			reference_type,
+			type,
+			data = {},
+			description = 'Payment',
+			metadata,
+		} = options;
 		// Create Razorpay customer
 		const customer = await RazorpayCustomers.createCustomer({
 			name: customerInfo.name,
@@ -85,6 +98,7 @@ class TransactionService {
 			status: 'pending',
 			amount: order.amount,
 			currency: order.currency,
+			...(metadata ? { metadata } : {}),
 		});
 
 		return {

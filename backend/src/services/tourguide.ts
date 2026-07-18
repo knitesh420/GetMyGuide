@@ -130,18 +130,24 @@ class TourGuideService {
 			throw new NotFoundError('Account not found');
 		}
 
-		// Carried through Razorpay and handed back at verify. Prices are recomputed
-		// server-side there, so tampering with this blob buys nothing.
-		const booking_data = Buffer.from(
-			JSON.stringify({
-				guideId: input.guideId,
-				location: input.location,
-				language: input.language,
-				startDate: input.startDate,
-				endDate: input.endDate,
-				numberOfTravelers: input.numberOfTravelers,
-			})
-		).toString('base64');
+		// The terms of this order. Kept server-side on the transaction (below) and
+		// ALSO handed to the browser, which needs them to render the checkout —
+		// but only the server-side copy is trusted at verify time.
+		//
+		// Recomputing the price at verify is not sufficient on its own: many
+		// (guide, date-range) pairs produce the same advance, so a blob swapped
+		// between paying and redeeming can pass the amount check while buying a
+		// different, longer trip than the one paid for.
+		const booking_terms = {
+			guideId: input.guideId,
+			location: input.location,
+			language: input.language,
+			startDate: input.startDate,
+			endDate: input.endDate,
+			numberOfTravelers: input.numberOfTravelers,
+		};
+
+		const booking_data = Buffer.from(JSON.stringify(booking_terms)).toString('base64');
 
 		const tempReference = randomBytes(12).toString('base64').slice(0, 16);
 
@@ -157,6 +163,7 @@ class TourGuideService {
 				reference_type: 'pending_direct_booking',
 				type: 'tourist',
 				description: `Advance payment for a guided tour with ${guide.name}`,
+				metadata: booking_terms,
 			}
 		);
 
@@ -204,14 +211,21 @@ class TourGuideService {
 			if (existing) return existing;
 		}
 
-		const decoded: {
+		type BookingTerms = {
 			guideId: string;
 			location: string;
 			language: string;
 			startDate: string;
 			endDate: string;
 			numberOfTravelers: number;
-		} = JSON.parse(Buffer.from(booking_data, 'base64').toString());
+		};
+
+		// Prefer the terms recorded on the transaction when the order was opened.
+		// The client's copy is accepted only for orders created before those terms
+		// started being stored, so checkouts already in flight at deploy time
+		// still complete.
+		const decoded: BookingTerms = (transaction.metadata as BookingTerms | undefined) ??
+			(JSON.parse(Buffer.from(booking_data, 'base64').toString()) as BookingTerms);
 
 		const startDate = new Date(decoded.startDate);
 		const endDate = new Date(decoded.endDate);

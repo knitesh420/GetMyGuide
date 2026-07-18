@@ -3,6 +3,7 @@ import { AccountDB, TransactionDB } from '@mongo';
 import WebhookEventDB from '@mongo/repo/WebhookEvent';
 import RazorpayProvider from '@provider/razorpay';
 import GuideService from '@services/guide';
+import { timingSafeCompare } from '@utils/paymentVerify';
 import crypto from 'crypto';
 import { error as logError, info } from 'node-be-utilities';
 
@@ -18,15 +19,21 @@ class PaymentService {
 			.update(rawBody)
 			.digest('hex');
 
-		return expectedSignature === signature;
+		return timingSafeCompare(expectedSignature, signature);
 	}
 
 	/**
 	 * Process a Razorpay webhook event.
 	 * Handles deduplication, payment.captured, and payment.failed.
+	 *
+	 * `eventId` comes from the `x-razorpay-event-id` REQUEST HEADER, not the body.
+	 * Razorpay's webhook payload carries no event identifier of its own, so
+	 * deriving it from the body (as this used to) always yielded `undefined` —
+	 * which Mongoose strips from a query, turning the dedup lookup into a
+	 * match-anything `findOne({})` and making the subsequent insert fail the
+	 * `required` validator on every single delivery.
 	 */
-	async handleWebhookEvent(payload: any): Promise<{ message: string }> {
-		const eventId: string = payload.event_id || payload.id;
+	async handleWebhookEvent(payload: any, eventId: string): Promise<{ message: string }> {
 		const eventType: string = payload.event;
 		const paymentEntity = payload.payload?.payment?.entity;
 
@@ -37,11 +44,26 @@ class PaymentService {
 		const paymentId: string = paymentEntity.id;
 		const orderId: string = paymentEntity.order_id;
 
-		// Step 1: Deduplicate — skip already-processed events
-		const existingEvent = await WebhookEventDB.findOne({ eventId });
-		if (existingEvent) {
-			info('Webhook: Duplicate event skipped', { eventId, eventType });
-			return { message: 'Event already processed' };
+		// Step 1: Claim the event BEFORE doing any work. Razorpay retries
+		// aggressively and can have two deliveries of the same event in flight at
+		// once; a check-then-insert leaves a window where both pass the check and
+		// both process. The unique index on `eventId` makes this claim atomic, so
+		// exactly one delivery proceeds and the loser exits as a duplicate.
+		try {
+			await WebhookEventDB.create({
+				eventId,
+				eventType,
+				paymentId,
+				orderId,
+				status: 'processed',
+				processedAt: new Date(),
+			});
+		} catch (err: any) {
+			if (err?.code === 11000) {
+				info('Webhook: Duplicate event skipped', { eventId, eventType });
+				return { message: 'Event already processed' };
+			}
+			throw err;
 		}
 
 		// Step 2: Route to handler
@@ -66,15 +88,12 @@ class PaymentService {
 			logError('Webhook: Event processing failed', { eventId, eventType, error: err });
 		}
 
-		// Step 3: Record the event
-		await WebhookEventDB.create({
-			eventId,
-			eventType,
-			paymentId,
-			orderId,
-			status,
-			processedAt: new Date(),
-		});
+		// Step 3: Record the outcome against the claim made in step 1. Best-effort:
+		// the claim itself is what guarantees single processing, so a failure to
+		// annotate it must not turn a handled event into a 500 and another retry.
+		if (status === 'failed') {
+			await WebhookEventDB.updateOne({ eventId }, { status }).catch(() => {});
+		}
 
 		return { message: `Event ${eventType} ${status}` };
 	}

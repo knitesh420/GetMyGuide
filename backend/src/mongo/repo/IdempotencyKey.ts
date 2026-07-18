@@ -18,15 +18,17 @@ const IdempotencyKeySchema = new mongoose.Schema<IIdempotencyKey>(
 			required: true,
 			trim: true,
 		},
+		// Absent while the original request is still in flight — the record is
+		// created up front to reserve the key, and filled in once the handler
+		// replies. Hence optional, and `_id: false` so an unset response stays
+		// genuinely undefined rather than materialising as an empty subdocument.
 		response: {
-			statusCode: {
-				type: Number,
-				required: true,
+			type: {
+				statusCode: { type: Number, required: true },
+				body: { type: mongoose.Schema.Types.Mixed, required: true },
 			},
-			body: {
-				type: mongoose.Schema.Types.Mixed,
-				required: true,
-			},
+			required: false,
+			_id: false,
 		},
 	},
 	{

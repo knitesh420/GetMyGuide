@@ -28,12 +28,23 @@ const storage = multer.diskStorage({
 	},
 });
 
+// Multer applies no size cap unless told to, so an omitted `limits` means
+// "unbounded" — a disk-exhaustion DoS one forgetful call site away. Default to
+// something sane; call sites can still raise or lower it via options.
+const DEFAULT_UPLOAD_LIMITS: multer.Options['limits'] = {
+	fileSize: 25 * 1024 * 1024,
+};
+
 const SingleFileUpload = (
 	req: Request,
 	res: Response,
 	{ field_name = 'file', options = {} }: SingleFileUploadOptions
 ) => {
-	const upload = multer({ storage, ...options }).single(field_name);
+	const upload = multer({
+		storage,
+		...options,
+		limits: { ...DEFAULT_UPLOAD_LIMITS, ...options.limits },
+	}).single(field_name);
 
 	return new Promise((resolve: (resolvedFile: ResolvedFile) => void, reject) => {
 		upload(req, res, (err) => {
@@ -59,7 +70,11 @@ const MultiFileUpload = (
 	res: Response,
 	{ field_names = [], options = {} }: MultipleFileUploadOptions
 ) => {
-	const multi_upload = multer({ storage, ...options }).fields(
+	const multi_upload = multer({
+		storage,
+		...options,
+		limits: { ...DEFAULT_UPLOAD_LIMITS, ...options.limits },
+	}).fields(
 		field_names.map((name) => ({
 			name,
 			maxCount: 1,

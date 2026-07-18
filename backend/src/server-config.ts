@@ -4,15 +4,20 @@ import express, { Express, NextFunction, Request, Response } from 'express';
 import fs from 'fs';
 import routes from './modules';
 
+import path from 'path';
 import { createLoggerContext, errorHandler } from 'node-be-utilities';
-import { IS_PRODUCTION, IS_WINDOWS, Path } from './config/const';
+import { IS_PRODUCTION, Path } from './config/const';
 
-const allowlist = [
-	'http://localhost:5173',
-	'http://localhost:3000',
-	'https://getmyguide.in',
-	'https://www.getmyguide.in',
-];
+// Origins permitted to make credentialed cross-origin requests. Overridable via
+// CORS_ORIGINS (comma-separated) so a new frontend host doesn't need a code
+// change; the defaults below are what production has always used.
+const allowlist = (
+	process.env.CORS_ORIGINS ??
+	'http://localhost:5173,http://localhost:3000,https://getmyguide.in,https://www.getmyguide.in'
+)
+	.split(',')
+	.map((origin) => origin.trim())
+	.filter(Boolean);
 
 const corsOptionsDelegate = (req: any, callback: any) => {
 	let corsOptions;
@@ -41,10 +46,16 @@ export default function (app: Express) {
 	//   prod (compiled): backend/build/src
 	// Strip one level to get the immediate parent, then strip again if that parent
 	// is 'build' (compiled mode).
-	const sep = IS_WINDOWS ? '\\' : '/';
-	let basedir = __dirname.slice(0, __dirname.lastIndexOf(sep));
-	if (basedir.endsWith('build') || basedir.endsWith('build/') || basedir.endsWith('build\\')) {
-		basedir = basedir.slice(0, basedir.lastIndexOf(sep));
+	//
+	// This used to pick the separator from an IS_WINDOWS flag that was never true
+	// (Windows sets OS=Windows_NT, not WINDOWS), so on Windows it searched for '/'
+	// in a '\'-separated path, found nothing, and slice(0, -1) lopped off a single
+	// character instead of a path segment — which is where the stray `backend/s`
+	// and `backend/sr` upload directories came from. path.dirname handles both
+	// separators correctly on every platform.
+	let basedir = path.dirname(__dirname);
+	if (path.basename(basedir) === 'build') {
+		basedir = path.dirname(basedir);
 	}
 	global.__basedir = basedir;
 
@@ -68,6 +79,14 @@ export default function (app: Express) {
 		res.setHeader('X-Frame-Options', 'DENY');
 		res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
 		res.setHeader('X-DNS-Prefetch-Control', 'off');
+		// This process serves a JSON API and user-uploaded media — never HTML that
+		// should run script. Locking the API's own origin down costs nothing here
+		// and contains anything that manages to get reflected or stored. The
+		// frontend's CSP is a separate concern and is set by Next.
+		res.setHeader(
+			'Content-Security-Policy',
+			"default-src 'none'; img-src 'self' data:; media-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		);
 		if (process.env.NODE_ENV === 'production') {
 			res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
 		}
@@ -77,9 +96,17 @@ export default function (app: Express) {
 	//Initialize all the middleware
 	app.use(cookieParser());
 	// Body-size limits: file/media uploads go through multer (multipart), not
-	// these parsers, so a generous-but-bounded JSON/urlencoded limit is safe and
-	// removes the previous 2GB DoS surface.
-	app.use(express.urlencoded({ extended: true, limit: '25mb' }));
+	// this parser, so a generous-but-bounded JSON limit is safe and removes the
+	// previous 2GB DoS surface.
+	//
+	// NOTE: there is deliberately no express.urlencoded() here. Auth rides on
+	// cookies, and a urlencoded body is a "simple request" — a cross-origin HTML
+	// form can POST one with the victim's cookies attached and no CORS preflight
+	// to stop it, which is a working CSRF against every state-changing endpoint.
+	// JSON bodies always trigger a preflight, which the allowlist above rejects,
+	// so accepting JSON only is what makes cookie auth safe here. Nothing in this
+	// API consumes form-encoded bodies; multipart uploads are unaffected (multer
+	// parses those itself).
 	app.use(
 		express.json({
 			limit: '25mb',
@@ -90,7 +117,11 @@ export default function (app: Express) {
 		})
 	);
 	app.use(cors(corsOptionsDelegate));
-	app.use(express.static(__basedir + 'static'));
+	// path.join, not string concatenation — `__basedir + 'static'` produced
+	// '/…/backendstatic', a directory that has never existed, silently disabling
+	// this middleware. (Media is really served by the /media route in
+	// modules/index.ts, which is why nobody noticed.)
+	app.use(express.static(path.join(__basedir, 'static')));
 
 	app.route('/api-status').get((req, res) => {
 		res.status(200).json({

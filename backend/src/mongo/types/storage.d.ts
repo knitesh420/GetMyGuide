@@ -4,6 +4,8 @@ export default interface IStorage extends Document {
 	key: string;
 	value: string | undefined;
 	object: object | undefined;
+	/** Atomic counter, used by the rate limiter. Absent on other Storage rows. */
+	count?: number;
 	expireAt: Date;
 }
 

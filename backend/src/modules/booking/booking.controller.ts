@@ -175,8 +175,7 @@ async function getRazorpayKey(req: Request, res: Response, next: NextFunction) {
 
 async function verifyAndCreateGuestBooking(req: Request, res: Response, next: NextFunction) {
 	try {
-		const { razorpay_order_id, razorpay_payment_id, razorpay_signature, booking_data, user_id } =
-			req.body;
+		const { razorpay_order_id, razorpay_payment_id, razorpay_signature, booking_data } = req.body;
 
 		if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !booking_data) {
 			return res.status(400).json({
@@ -185,12 +184,17 @@ async function verifyAndCreateGuestBooking(req: Request, res: Response, next: Ne
 			});
 		}
 
+		// `user_id` is deliberately NOT read from the body. This route is
+		// unauthenticated, so a caller-supplied account id is an identity claim
+		// nobody has verified — it let anyone attach a booking to any account by
+		// supplying its ObjectId. A guest booking has no owner; a tourist who
+		// wants one linked to their account goes through /verify-booking, which
+		// takes the id from the session instead.
 		const booking = await BookingService.verifyAndCreateBooking({
 			razorpay_order_id,
 			razorpay_payment_id,
 			razorpay_signature,
 			booking_data,
-			user_id,
 		});
 
 		return Respond({

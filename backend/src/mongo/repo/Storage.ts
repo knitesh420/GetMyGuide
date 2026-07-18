@@ -13,6 +13,11 @@ const StorageSchema = new mongoose.Schema<IStorage>({
 	object: {
 		type: Object,
 	},
+	// Used by the rate limiter, which needs a numeric field it can $inc
+	// atomically. `value` is a string and cannot be incremented in place.
+	count: {
+		type: Number,
+	},
 	expireAt: {
 		type: Date,
 		required: true,

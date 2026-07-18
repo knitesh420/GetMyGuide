@@ -2,6 +2,21 @@ import crypto from 'crypto';
 import { RAZORPAY_API_SECRET } from '@config/const';
 
 /**
+ * Constant-time comparison of two hex digests.
+ *
+ * `===` on a signature short-circuits at the first differing byte, which leaks
+ * how much of a forged signature was correct. `timingSafeEqual` requires equal
+ * lengths, so the length check is done first (and is not itself secret — the
+ * digest length is fixed and public).
+ */
+export function timingSafeCompare(expected: string, actual: string): boolean {
+	if (typeof actual !== 'string' || expected.length !== actual.length) {
+		return false;
+	}
+	return crypto.timingSafeEqual(Buffer.from(expected, 'utf8'), Buffer.from(actual, 'utf8'));
+}
+
+/**
  * Verify Razorpay payment signature using HMAC SHA256.
  * This MUST be called before saving any data to the database after payment.
  *
@@ -22,5 +37,5 @@ export function verifyRazorpaySignature(
 		.update(body)
 		.digest('hex');
 
-	return expectedSignature === razorpay_signature;
+	return timingSafeCompare(expectedSignature, razorpay_signature);
 }

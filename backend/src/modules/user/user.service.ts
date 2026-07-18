@@ -34,10 +34,15 @@ class UserService {
 		const filter: any = { role: 'tourist' };
 
 		if (query) {
+			// Escape before it becomes a regex — an unescaped search term is both a
+			// ReDoS vector (e.g. '(a+)+$' stalls the event loop) and a way to match
+			// far more rows than the caller typed. Same treatment as the search in
+			// getAccountsByRole below.
+			const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 			filter.$or = [
-				{ name: { $regex: query, $options: 'i' } },
-				{ email: { $regex: query, $options: 'i' } },
-				{ phone: { $regex: query, $options: 'i' } },
+				{ name: { $regex: escaped, $options: 'i' } },
+				{ email: { $regex: escaped, $options: 'i' } },
+				{ phone: { $regex: escaped, $options: 'i' } },
 			];
 		}
 

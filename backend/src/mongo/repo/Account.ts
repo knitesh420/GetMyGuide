@@ -78,6 +78,17 @@ const AccountSchema = new mongoose.Schema<IAccount>(
 	}
 );
 
+// Only `email` was indexed (implicitly, via unique). These cover the queries the
+// app actually runs: the admin-fanout on every direct booking, and the paginated
+// admin listings of tourists/guides.
+AccountSchema.index({ role: 1, isActive: 1 });
+AccountSchema.index({ role: 1, createdAt: -1 });
+// Registration checks phone uniqueness with a query, which is a check-then-act
+// race. Indexed (not unique) here so that lookup is cheap; making it unique
+// needs a duplicate sweep against live data first — see the note in
+// scripts/backfillEmailVerified.ts for how that has been handled before.
+AccountSchema.index({ phone: 1 });
+
 // Hash password before saving
 AccountSchema.pre('save', async function () {
 	if (!this.isModified('password')) {
