@@ -1,18 +1,22 @@
-import { UploadApiResponse } from 'cloudinary';
+import { UploadApiOptions, UploadApiResponse } from 'cloudinary';
 import fs from 'fs/promises';
 import cloudinary from '../config/cloudinary';
 
 const uploadToCloudinary = async (
 	file: string | Buffer,
-	folder: string = 'getmyguide'
+	folder: string = 'getmyguide',
+	options: UploadApiOptions = {}
 ): Promise<UploadApiResponse> => {
+	const uploadOptions: UploadApiOptions = {
+		resource_type: 'auto',
+		folder,
+		...options,
+	};
+
 	if (Buffer.isBuffer(file)) {
 		return new Promise((resolve, reject) => {
 			const uploadStream = cloudinary.uploader.upload_stream(
-				{
-					resource_type: 'auto',
-					folder,
-				},
+				uploadOptions,
 				(error, result) => {
 					if (error) {
 						return reject(error);
@@ -30,10 +34,7 @@ const uploadToCloudinary = async (
 		});
 	}
 
-	const result = await cloudinary.uploader.upload(file, {
-		resource_type: 'auto',
-		folder,
-	});
+	const result = await cloudinary.uploader.upload(file, uploadOptions);
 
 	return result;
 };
@@ -44,12 +45,19 @@ const uploadToCloudinary = async (
  * The guide upload middleware writes to `static/misc` first, so the temp file
  * is removed once Cloudinary has the bytes. A failed unlink is not fatal — the
  * image is already safely stored — so it must not fail the request.
+ *
+ * `options` is passed straight through to Cloudinary. KYC uploads use
+ * `{ type: 'authenticated' }` so the resulting asset is NOT publicly readable by
+ * URL — it can only be delivered via a server-signed URL (see
+ * `utils/cloudinaryDelivery.ts`). Public assets (profile photos, package images)
+ * pass nothing and stay on the default public `upload` type.
  */
 export const uploadMulterImage = async (
 	file: Express.Multer.File,
-	folder: string
+	folder: string,
+	options: UploadApiOptions = {}
 ): Promise<string> => {
-	const result = await uploadToCloudinary(file.path, folder);
+	const result = await uploadToCloudinary(file.path, folder, options);
 
 	try {
 		await fs.unlink(file.path);

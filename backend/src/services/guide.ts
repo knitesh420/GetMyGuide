@@ -40,10 +40,30 @@ function realRefund(guide: Pick<IGuide, 'membershipRefund'> | null | undefined) 
  * (`{}` with no `url`) as if it were a real upload — a slot is only "filled"
  * once it has a `url`. Returns null for an empty/absent slot.
  */
-function publicIdentityDocument(doc: GuideIdentityDocument | undefined | null) {
+export const IDENTITY_DOCUMENT_LABELS: Record<GuideIdentityDocumentType, string> = {
+	aadhaar: 'Aadhaar Card',
+	guideLicence: 'Guide Licence',
+};
+
+function publicIdentityDocument(
+	doc: GuideIdentityDocument | undefined | null,
+	/**
+	 * Path (relative to the API origin) of the authenticated streaming route for
+	 * this document. The frontend prefixes NEXT_PUBLIC_API_URL.
+	 */
+	viewPath: string
+) {
 	if (!doc?.url) return null;
 	return {
-		url: doc.url,
+		// Deliberately NOT the Cloudinary URL. A bare one is a 401 (these are
+		// uploaded as `authenticated`), and a signed one carries no expiry, so
+		// handing it to the browser would leave a permanently-readable link to an
+		// identity document in history, screenshots and referrers. The route below
+		// streams the bytes behind the caller's session instead — which is also the
+		// only way to read a PDF at all while the Cloudinary account's PDF delivery
+		// setting is off.
+		url: viewPath,
+		downloadUrl: `${viewPath}?download=1`,
 		mimeType: doc.mimeType ?? null,
 		originalName: doc.originalName ?? null,
 		size: doc.size ?? null,
@@ -235,8 +255,14 @@ class GuideService {
 			// guide's own UI needs (never the admin-only audit trail). `null` for a
 			// slot the guide has not uploaded yet.
 			identityDocuments: {
-				aadhaar: publicIdentityDocument(guide?.identityDocuments?.aadhaar),
-				guideLicence: publicIdentityDocument(guide?.identityDocuments?.guideLicence),
+				aadhaar: publicIdentityDocument(
+					guide?.identityDocuments?.aadhaar,
+					'/guides/profile/documents/aadhaar/view'
+				),
+				guideLicence: publicIdentityDocument(
+					guide?.identityDocuments?.guideLicence,
+					'/guides/profile/documents/guideLicence/view'
+				),
 			},
 			// Legacy field names some existing frontend code still reads
 			serviceLocations: guide?.city ? [guide.city] : [],
@@ -1055,8 +1081,14 @@ class GuideService {
 			// Additive to `documents` above (the legacy positional store); admins
 			// see both so nothing a guide re-uploads is hidden from review.
 			identityDocuments: {
-				aadhaar: publicIdentityDocument(guide?.identityDocuments?.aadhaar),
-				guideLicence: publicIdentityDocument(guide?.identityDocuments?.guideLicence),
+				aadhaar: publicIdentityDocument(
+					guide?.identityDocuments?.aadhaar,
+					`/guides/admin/${account._id.toString()}/identity-documents/aadhaar`
+				),
+				guideLicence: publicIdentityDocument(
+					guide?.identityDocuments?.guideLicence,
+					`/guides/admin/${account._id.toString()}/identity-documents/guideLicence`
+				),
 			},
 
 			// ---- Internal notes (admin-only) ----
@@ -1146,6 +1178,49 @@ class GuideService {
 		}
 
 		return document;
+	}
+
+	/**
+	 * One of the two managed identity documents, resolved for streaming.
+	 *
+	 * Shared by the guide's own view route and the admin's — the difference is
+	 * only which account id is looked up, which the caller has already
+	 * authorised. `storage` decides where the bytes come from; a slot with no
+	 * `url` is an empty slot, not a document (see `publicIdentityDocument` on why
+	 * Mongoose can materialise one).
+	 */
+	private async resolveIdentityDocument(accountId: string, type: GuideIdentityDocumentType) {
+		const guide = await GuideDB.findOne({ accountId: new Types.ObjectId(accountId) })
+			.select('identityDocuments')
+			.lean();
+
+		const document = guide?.identityDocuments?.[type];
+		if (!document?.url) {
+			throw new NotFoundError(`No ${IDENTITY_DOCUMENT_LABELS[type]} has been uploaded`);
+		}
+
+		return {
+			value: document.url,
+			storage: document.storage === 'remote' ? ('remote' as const) : ('local' as const),
+			label: IDENTITY_DOCUMENT_LABELS[type],
+		};
+	}
+
+	/** The calling guide's own Aadhaar / licence. */
+	async getOwnIdentityDocument(accountId: string, type: GuideIdentityDocumentType) {
+		return this.resolveIdentityDocument(accountId, type);
+	}
+
+	/** The same, for an admin reviewing a specific guide. */
+	async getIdentityDocumentForAdmin(guideAccountId: string, type: GuideIdentityDocumentType) {
+		const account = await AccountDB.findOne({ _id: guideAccountId, role: 'guide' })
+			.select('_id')
+			.lean();
+		if (!account) {
+			throw new NotFoundError('Guide not found');
+		}
+
+		return this.resolveIdentityDocument(account._id.toString(), type);
 	}
 
 	// ---- Admin KYC review ---------------------------------------------------

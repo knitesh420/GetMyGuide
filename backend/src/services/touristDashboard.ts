@@ -96,7 +96,9 @@ class TouristDashboardService {
 		// The hero card and the "Upcoming Trips" stat must agree, so both are read
 		// off the same candidate set rather than each applying its own filter.
 		const upcomingCandidates = this.upcomingCandidates(trips);
+
 		const upcomingTrip = await this.buildUpcomingTrip(upcomingCandidates[0]);
+
 		const pendingReviews = this.buildPendingReviews(trips, reviewedBookingIds);
 		const payments = this.buildPayments(invoices, bookings);
 

@@ -100,7 +100,7 @@ export function ProfileSummary({
           variant="outline"
           className="h-10 w-full rounded-lg border-gray-200 text-gray-700 hover:bg-teal-500/10 hover:text-teal-700"
         >
-          <Link href="/tourist/onboarding">
+          <Link href="/tourist/onboarding?edit=1">
             <Pencil aria-hidden="true" className="mr-1.5 h-4 w-4" />
             Edit Profile
           </Link>

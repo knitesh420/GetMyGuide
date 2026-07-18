@@ -327,7 +327,14 @@ export interface GuidePricing {
 
 /** One managed identity document as returned to the guide/admin. */
 export interface GuideIdentityDocumentInfo {
+  /**
+   * Path (relative to the API origin) of the authenticated streaming route —
+   * NOT a Cloudinary URL. Prefix with NEXT_PUBLIC_API_URL before using it as an
+   * href or img src; the request must carry the session cookie.
+   */
   url: string;
+  /** The same route, forcing a save dialog instead of inline rendering. */
+  downloadUrl: string;
   mimeType: string | null;
   originalName: string | null;
   size: number | null;

@@ -126,8 +126,21 @@ const Field = ({
 const sameLanguages = (a: string[], b: string[]) =>
   a.length === b.length && [...a].sort().join("|") === [...b].sort().join("|");
 
+// `doc.url` is an API route with no file extension, so the stored mime type is
+// the reliable signal; `originalName` covers older rows that never recorded one.
 const isPdf = (doc: GuideIdentityDocumentInfo) =>
-  doc.mimeType === "application/pdf" || /\.pdf(\?|$)/i.test(doc.url);
+  doc.mimeType === "application/pdf" ||
+  /\.pdf$/i.test(doc.originalName ?? "") ||
+  /\.pdf(\?|$)/i.test(doc.url);
+
+/**
+ * Identity documents are streamed from the API behind the guide's session, not
+ * served from Cloudinary — `doc.url` is a path relative to the API origin. The
+ * request has to carry the session cookie, which a top-level navigation does on
+ * its own; an <img> needs `crossOrigin="use-credentials"` to do the same.
+ */
+const documentUrl = (path: string) =>
+  `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${path}`;
 
 // ---------------------------------------------------------------------------
 // Profile photo — upload with a preview-before-save step, replace, and remove.
@@ -365,7 +378,8 @@ function DocumentCard({
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={doc.url}
+              src={documentUrl(doc.url)}
+              crossOrigin="use-credentials"
               alt={label}
               className="h-12 w-12 shrink-0 rounded object-cover ring-1 ring-slate-200"
             />
@@ -382,7 +396,7 @@ function DocumentCard({
             </p>
           </div>
           <a
-            href={doc.url}
+            href={documentUrl(doc.url)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700"

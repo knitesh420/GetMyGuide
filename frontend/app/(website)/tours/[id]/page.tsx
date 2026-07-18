@@ -2,7 +2,7 @@
 "use client";
 import { useMemo, useState, useEffect, useCallback } from "react";
 import DOMPurify from "dompurify";
-import { notFound, useRouter } from "next/navigation";
+import { notFound, useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { MapPin, Clock, CheckCircle } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
@@ -76,9 +76,11 @@ function sanitizeHtml(html: string): string {
   });
 }
 
-export default function TourDetailPage({ params }: { params: { id: string } }) {
+export default function TourDetailPage() {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
+  const params = useParams();
+  const tourId = Array.isArray(params.id) ? params.id[0] : params.id;
 
   // ── All hooks at the top — before any conditional returns ──
   const { items: packages, recommended, loading } = useSelector(
@@ -93,12 +95,13 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
   const [numberOfTourists, setNumberOfTourists] = useState(1);
 
   useEffect(() => {
+    if (!tourId) return;
     setIsFetchingById(true);
-    (dispatch(fetchPackageById(params.id)) as any).finally(() => {
+    (dispatch(fetchPackageById(tourId)) as any).finally(() => {
       setIsFetchingById(false);
     });
     dispatch(fetchRecommendedPackages({ limit: 8 }));
-  }, [dispatch, params.id]);
+  }, [dispatch, tourId]);
 
   useEffect(() => {
     if (packages.length === 0) {
@@ -108,7 +111,7 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
 
   const { language } = useLanguage();
 
-  const tour = packages.find((p) => p._id === params.id);
+  const tour = packages.find((p) => p._id === tourId);
 
   // Resolve translations: active language → English fallback → top-level fallback
   const activeLang = language as LocaleKey;
@@ -182,7 +185,7 @@ export default function TourDetailPage({ params }: { params: { id: string } }) {
     const fmt = (d: Date) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     router.push(
-      `/tours/${params.id}/select-guide?startDate=${fmt(range.from)}&endDate=${fmt(range.to)}&tourists=${numberOfTourists}`,
+      `/tours/${tourId}/select-guide?startDate=${fmt(range.from)}&endDate=${fmt(range.to)}&tourists=${numberOfTourists}`,
     );
   };
 

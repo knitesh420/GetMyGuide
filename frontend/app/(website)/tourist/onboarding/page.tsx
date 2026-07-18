@@ -33,6 +33,16 @@ export default function TouristOnboardingPage() {
     endDate: "",
   });
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
+  // `?edit=1` (from the dashboard's "Edit Profile" / "Complete your profile"
+  // links) turns this page into the profile editor. Without the flag a finished
+  // profile is still bounced to the dashboard, so the first-time onboarding flow
+  // is completely unchanged. Stays `null` until resolved on the client so the
+  // redirect never fires before we know which mode we're in.
+  const [editMode, setEditMode] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    setEditMode(new URLSearchParams(window.location.search).get("edit") === "1");
+  }, []);
 
   useEffect(() => {
     dispatch(getMyTouristProfile());
@@ -40,10 +50,10 @@ export default function TouristOnboardingPage() {
   }, [dispatch]);
 
   useEffect(() => {
-    if (myProfile?.registrationCompleted) {
+    if (editMode === false && myProfile?.registrationCompleted) {
       router.push("/dashboard/user");
     }
-  }, [myProfile, router]);
+  }, [editMode, myProfile, router]);
 
   useEffect(() => {
     if (myProfile) {
@@ -90,7 +100,7 @@ export default function TouristOnboardingPage() {
     );
 
     if (updateMyTouristProfile.fulfilled.match(result)) {
-      toast.success("Profile saved! Welcome aboard.");
+      toast.success(editMode ? "Profile updated!" : "Profile saved! Welcome aboard.");
       router.push("/dashboard/user");
     } else {
       toast.error((result.payload as string) || "Failed to save profile.");
@@ -106,10 +116,12 @@ export default function TouristOnboardingPage() {
       <div className="bg-card p-6 md:p-8 rounded-lg shadow-md border">
         <div className="text-center mb-6">
           <h1 className="text-2xl md:text-3xl font-bold text-card-foreground">
-            Tell Us About Your Trip
+            {editMode ? "Edit Your Travel Preferences" : "Tell Us About Your Trip"}
           </h1>
           <p className="text-muted-foreground mt-2">
-            A few quick details so we can personalize your experience.
+            {editMode
+              ? "Keep your details up to date to get better guide matches."
+              : "A few quick details so we can personalize your experience."}
           </p>
         </div>
 
@@ -220,7 +232,7 @@ export default function TouristOnboardingPage() {
           <div className="pt-4 flex items-center justify-end gap-4">
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" disabled={loading} className="w-full red-gradient" size="lg">
-              {loading ? "Saving..." : "Continue to Dashboard"}
+              {loading ? "Saving..." : editMode ? "Save Changes" : "Continue to Dashboard"}
             </Button>
           </div>
         </form>

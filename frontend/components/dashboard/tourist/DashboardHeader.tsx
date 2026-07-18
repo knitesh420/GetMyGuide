@@ -83,7 +83,7 @@ export function DashboardHeader({
             />
             {!isComplete && (
               <Link
-                href="/tourist/onboarding"
+                href="/tourist/onboarding?edit=1"
                 className="mt-2 inline-block rounded text-xs font-medium text-teal-700 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
               >
                 Complete your profile

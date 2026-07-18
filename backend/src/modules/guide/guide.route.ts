@@ -69,6 +69,14 @@ router
 	)
 	.delete(VerifySession, VerifyMinLevel('guide'), Controller.deleteIdentityDocument);
 
+// The guide reading back their own identity document. Streamed from here rather
+// than linked on Cloudinary: the asset is private, and a signed CDN URL would be
+// a permanently-readable link to an identity document sitting in browser
+// history. `?download=1` saves instead of rendering inline.
+router
+	.route('/profile/documents/:type/view')
+	.get(VerifySession, VerifyMinLevel('guide'), Controller.viewOwnIdentityDocument);
+
 // The calling guide's own membership/subscription history (newest first).
 router
 	.route('/subscription-history')
@@ -127,6 +135,13 @@ router
 router
 	.route('/admin/:id')
 	.get(VerifySession, VerifyMinLevel('admin'), IDValidator, Controller.getGuideDetailForAdmin);
+
+// Admin only - the same guide-managed identity documents (Aadhaar, licence) the
+// guide sees on their own profile, streamed for KYC review. Distinct from
+// '/:id/documents/:index' above, which indexes the legacy positional store.
+router
+	.route('/admin/:id/identity-documents/:type')
+	.get(VerifySession, VerifyMinLevel('admin'), IDValidator, Controller.viewGuideIdentityDocument);
 
 // Contact inquiry routes
 router.route('/contact-inquiry').post(ContactInquiryValidator, Controller.createContactInquiry);
