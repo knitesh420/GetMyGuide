@@ -35,7 +35,9 @@ export const IMAGES = {
   howItWorkHero: `${BASE}/how-it-work.jpg`,
 
   // About page images
-  aboutHero: `${BASE}/about-hero.jpg`,
+  // Served from /public rather than the CDN: this is a self-contained flyer
+  // (headline + trust badges baked in), so it ships with the app.
+  aboutHero: "/about-banner.jpg",
   aboutAims: `${BASE}/about-aims.jpg`,
   aboutGuide: `${BASE}/about-guide.jpg`,
   aboutVideo: `${BASE}/about-video.jpg`,

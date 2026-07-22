@@ -183,15 +183,19 @@ export default function HowItWorksPage() {
             <div className="mx-auto mt-4 h-1 w-20 rounded-full bg-gradient-to-r from-primary to-rose-500 sm:mt-5 sm:w-28" />
           </div>
 
-          {/* Banner image, full and uncropped with no black frame around it */}
-          <div className="container mx-auto max-w-7xl px-4">
+          {/* Banner image, full and uncropped with no black frame around it.
+              Held at 90% of the viewport so it fills the screen with a thin
+              gutter on either side, and capped at the flyer's native 1600px so
+              very wide monitors don't upscale it into softness. The box keeps
+              the native 1600x800 ratio, so it is never cropped or letterboxed. */}
+          <div className="mx-auto w-[90%] max-w-400">
             <div className="relative w-full aspect-[2/1] overflow-hidden rounded-2xl shadow-lg md:rounded-3xl">
               <Image
                 src={IMAGES.howItWorkHero}
                 alt="How GetMyGuide works — booking a certified local guide step by step"
                 fill
                 priority
-                sizes="(min-width: 1280px) 1248px, 100vw"
+                sizes="(min-width: 1778px) 1600px, 90vw"
                 className="object-contain object-center"
               />
             </div>

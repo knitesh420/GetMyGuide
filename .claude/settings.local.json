@@ -11,7 +11,8 @@
       "Bash(git status:*)",
       "Bash(curl -s http://localhost:8000/advertisement)",
       "Bash(curl -s http://localhost:8000/advertisement/admin/all)",
-      "Bash(npx jest *)"
+      "Bash(npx jest *)",
+      "Bash(curl -s \"https://res.cloudinary.com/dmpz3k4mb/image/upload/fl_getinfo/getmyguide/public/how-it-work.jpg\")"
     ]
   }
 }
