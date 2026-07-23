@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import HeroSection from "@/components/all/CommonHeroSection";
+import Image from "next/image";
 import { IMAGES } from "@/lib/images";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
@@ -79,13 +79,29 @@ export default function ContactPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <HeroSection
-        badgeText={t("contact_badge")}
-        title={t("contact_title")}
-        description={t("contact_desc")}
-        backgroundImage={IMAGES.scene5}
-        imageAlt="Contact the GetMyGuide team"
-      />
+      {/* Banner. The flyer carries its own headline, phone, email and address,
+          so it is shown on its own with nothing overlaid on it. Held at 90% of
+          the viewport so it fills the screen with a thin gutter on either side,
+          and capped at the flyer's native 1600px so very wide monitors don't
+          upscale it into softness. The box keeps the native 1600x800 ratio, so
+          the image is never cropped and no backing colour is ever visible
+          around it. The page's h1 lives inside the image, so it is repeated for
+          screen readers and search engines. */}
+      <h1 className="sr-only">{t("contact_title")}</h1>
+      <section className="w-full py-6 md:py-10">
+        <div className="mx-auto w-[90%] max-w-400">
+          <div className="relative w-full aspect-2/1 overflow-hidden rounded-2xl shadow-lg md:rounded-3xl">
+            <Image
+              src={IMAGES.contactHero}
+              alt="Contact us to create your lifetime memory — the GetMyGuide team at work. Call +91-7470222666 or +91-9891888444, email contact@getmyguide.in, or visit A-1/100 Chhatarpur Ext., New Delhi - 110074, India."
+              fill
+              priority
+              sizes="(min-width: 1778px) 1600px, 90vw"
+              className="object-cover object-center"
+            />
+          </div>
+        </div>
+      </section>
 
       {/* Contact info cards */}
       <section className="py-16 bg-gray-50">
@@ -281,16 +297,22 @@ export default function ContactPage() {
         </div>
       </section>
 
-      {/* Map placeholder */}
-      <section className="py-16 bg-gray-50">
-        <div className="max-w-4xl mx-auto px-4">
-          <h2 className="text-3xl font-bold text-gray-900 text-center mb-8">{t("contact_map_section_title")}</h2>
-          <div className="bg-gray-200 h-80 rounded-xl flex items-center justify-center">
-            <div className="text-center">
-              <MapPin className="w-12 h-12 text-red-600 mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 mb-1">{t("contact_map_office_name")}</h3>
-              <p className="text-gray-500 text-sm">A-1/100 Chattarpur Extension birla Farm<br />New Delhi - 110074, India</p>
-            </div>
+      {/* Address. The flyer holds the office location, map and communication
+          address. Sized exactly like the banner above — 90% of the viewport,
+          capped at its own native 1536px — so the two line up and no dead space
+          is left at the sides. The box keeps the native 1536x1024 ratio, so the
+          image is never cropped and no backing colour shows around it. */}
+      <section className="w-full py-6 md:py-10">
+        <h2 className="sr-only">{t("contact_map_section_title")}</h2>
+        <div className="mx-auto w-[90%] max-w-384">
+          <div className="relative aspect-3/2 w-full overflow-hidden rounded-2xl shadow-lg md:rounded-3xl">
+            <Image
+              src={IMAGES.contactAddress}
+              alt="Reach out to us at getmyguide.in — our office location and communication address: A-1/100, Chhatarpur Ext., New Delhi - 110074, India."
+              fill
+              sizes="(min-width: 1707px) 1536px, 90vw"
+              className="object-cover object-center"
+            />
           </div>
         </div>
       </section>

@@ -44,6 +44,12 @@ export const IMAGES = {
   aboutYoutube: `${BASE}/about-youtube.jpg`,
   goldenTriangle: `${BASE}/Golden_Triangle.jpg`,
 
+  // Contact page images
+  // Also served from /public: both are self-contained flyers with their own
+  // headline, phone, email and address baked in.
+  contactHero: "/contact-us.jpg",
+  contactAddress: "/address.jpg",
+
   // Brand assets
   logo: `${BASE}/images/new_logo.jpg`,
   mastercard: `${BASE}/mastercard.png`,
