@@ -16,6 +16,11 @@ function SigninContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const infoMessage = searchParams.get("message");
+  // A same-origin path to return to after signing in (e.g. the booking page
+  // sends "?redirect=/register-tourist"). Ignored unless it's an internal path.
+  const redirectParam = searchParams.get("redirect");
+  const safeRedirect =
+    redirectParam && redirectParam.startsWith("/") ? redirectParam : null;
 
   const { login, loading, error, clearAuthError } = useAuth();
   const { isAuthenticated, user } = useSelector(
@@ -28,10 +33,11 @@ function SigninContent() {
   useEffect(() => {
     if (isAuthenticated && user) {
       router.push(
-        user.role === "guide" ? "/dashboard/guide" : "/dashboard/user",
+        safeRedirect ??
+          (user.role === "guide" ? "/dashboard/guide" : "/dashboard/user"),
       );
     }
-  }, [isAuthenticated, user, router]);
+  }, [isAuthenticated, user, router, safeRedirect]);
 
   useEffect(() => {
     if (infoMessage) toast.info(infoMessage);
@@ -51,9 +57,9 @@ function SigninContent() {
         return;
       }
       clearAuthError();
-      await login({ email: email.trim(), password });
+      await login({ email: email.trim(), password }, safeRedirect ?? undefined);
     },
-    [email, password, login, clearAuthError],
+    [email, password, login, clearAuthError, safeRedirect],
   );
 
   if (isAuthenticated) return null;

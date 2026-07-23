@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
 import RoleGuard from "@/components/auth/RoleGuard";
 import { showError } from "@/lib/swal";
@@ -13,6 +14,40 @@ declare global {
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+// Where a half-filled booking is parked while the traveller signs in. The form
+// is restored (and the payment resumed) the moment they return to this page.
+const BOOKING_DRAFT_KEY = "register-tourist:pending-booking";
+
+// Payment auto-resumes only when the traveller returns promptly from signing
+// in. An older draft (e.g. a tab left open, or a different account signing in
+// later in the same session) still restores the form, but waits for a fresh
+// click rather than opening the payment sheet on its own.
+const RESUME_WINDOW_MS = 15 * 60 * 1000;
+
+// A same-session fetch that survives a just-expired access token: on a 401 it
+// asks the backend to refresh the session cookie once and retries, mirroring
+// what apiService's axios interceptor does for the rest of the app. The booking
+// page talks to the API with raw fetch (to stay outside Redux), so it needs its
+// own refresh step — otherwise a stale access token would look like "logged
+// out" and silently drop the account link on the booking.
+const authedFetch = async (
+  url: string,
+  init: RequestInit,
+): Promise<Response> => {
+  const opts: RequestInit = { ...init, credentials: "include" };
+  let res = await fetch(url, opts);
+  if (res.status === 401) {
+    const refreshed = await fetch(`${API_BASE_URL}/session/refresh`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (refreshed.ok) {
+      res = await fetch(url, opts);
+    }
+  }
+  return res;
+};
 
 const loadRazorpayScript = (): Promise<boolean> => {
   return new Promise((resolve) => {
@@ -184,6 +219,7 @@ const EXTRA_ALLOWANCE_EXCURSIONS = [
 ];
 
 function CombinedGuideBookingForm() {
+  const router = useRouter();
   const { user, isAuthenticated, fetchCurrentUser } = useAuth();
 
   const [bookingData, setBookingData] = useState<BookingFormData>({
@@ -227,11 +263,49 @@ function CombinedGuideBookingForm() {
   const [bookingId, setBookingId] = useState("");
   const [travelerConsent, setTravelerConsent] = useState(false);
   const [travelerConsentError, setTravelerConsentError] = useState("");
+  // Set when the traveller returns from signing in mid-booking: once the session
+  // is confirmed, the stashed form has been restored and payment auto-resumes.
+  const [shouldResume, setShouldResume] = useState(false);
 
-  // Ensure the signed-in user's profile is loaded so we can prefill their details.
+  // Ensure the session is resolved so we can prefill the signed-in user's
+  // details and know whether payment is allowed. Only fetch while the auth
+  // state is still unknown (null); false already means "resolved: signed out".
   useEffect(() => {
-    if (!isAuthenticated) fetchCurrentUser();
+    if (isAuthenticated === null) fetchCurrentUser();
   }, [isAuthenticated, fetchCurrentUser]);
+
+  // Restore a booking that was parked while the traveller signed in. Runs once
+  // on mount and consumes the draft so a later manual visit starts clean.
+  // sessionStorage is client-only, so this is read after mount (not in a lazy
+  // initializer) to stay SSR/hydration-safe — hence the intentional setState.
+  useEffect(() => {
+    let draft:
+      | {
+          bookingData?: BookingFormData;
+          serviceDetails?: ServiceDetails;
+          travelerConsent?: boolean;
+          resume?: boolean;
+          savedAt?: number;
+        }
+      | undefined;
+    try {
+      const raw = sessionStorage.getItem(BOOKING_DRAFT_KEY);
+      if (!raw) return;
+      draft = JSON.parse(raw);
+      sessionStorage.removeItem(BOOKING_DRAFT_KEY);
+    } catch {
+      return;
+    }
+    const isFresh =
+      typeof draft?.savedAt === "number" &&
+      Date.now() - draft.savedAt < RESUME_WINDOW_MS;
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (draft?.bookingData) setBookingData(draft.bookingData);
+    if (draft?.serviceDetails) setServiceDetails(draft.serviceDetails);
+    if (draft?.travelerConsent) setTravelerConsent(true);
+    if (draft?.resume && isFresh) setShouldResume(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
 
   // Prefill the traveller's own details from their account. Only fill fields the
   // user hasn't already typed into, so this never clobbers manual edits.
@@ -610,20 +684,35 @@ function CombinedGuideBookingForm() {
     setTravelerConsentError("");
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateAllFields()) {
-      return;
-    }
-
-    if (!travelerConsent) {
-      setTravelerConsentError(
-        "Please accept the traveler declaration to proceed.",
+  // Park the in-progress booking and send the traveller to sign in. They land
+  // back here afterwards, the form is restored, and payment resumes — so no
+  // booking or payment is ever taken from an anonymous visitor, and every
+  // booking links to the account that will see it in "My Bookings".
+  const persistDraftAndSignIn = () => {
+    try {
+      sessionStorage.setItem(
+        BOOKING_DRAFT_KEY,
+        JSON.stringify({
+          bookingData,
+          serviceDetails,
+          travelerConsent,
+          resume: true,
+          savedAt: Date.now(),
+        }),
       );
-      return;
+    } catch {
+      // If storage is unavailable the sign-in still proceeds; the traveller
+      // just re-enters the form on return.
     }
+    router.push(`/signin?redirect=${encodeURIComponent("/register-tourist")}`);
+  };
 
+  // Create the Razorpay order, take payment, then verify + persist the booking.
+  // Requires an authenticated session: the order is created through the
+  // account-scoped endpoint so both the payment and the booking link to the
+  // tourist. If the session can't be established, the form is stashed and the
+  // traveller is sent to sign in instead of paying.
+  const startPayment = async () => {
     setIsSubmitting(true);
 
     const totalAmount = calculateFees.total;
@@ -688,35 +777,24 @@ function CombinedGuideBookingForm() {
         throw new Error("Payment gateway key missing. Please try again later.");
       }
 
-      const createBookingOrder = (useAuthed: boolean) =>
-        fetch(
-          `${API_BASE_URL}${
-            useAuthed ? "/booking/customised-booking" : "/booking/guest-booking"
-          }`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-idempotency-key": crypto.randomUUID(),
-            },
-            // Send the session cookie for authenticated tourists so the booking
-            // links to their account; guests book without credentials.
-            credentials: useAuthed ? "include" : "same-origin",
-            body: JSON.stringify(payload),
-          },
-        );
+      // Authenticated tourists only — the booking is created against their
+      // account so it lands in their dashboard (and the admin/guide dashboards
+      // downstream). authedFetch refreshes a stale access token first; a real
+      // 401 means the session is genuinely gone, so we park the form and sign
+      // the traveller in rather than falling back to an unlinked guest booking.
+      const res = await authedFetch(`${API_BASE_URL}/booking/customised-booking`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-idempotency-key": crypto.randomUUID(),
+        },
+        body: JSON.stringify(payload),
+      });
 
-      // The session cookie is the source of truth for auth. The client-side
-      // `isAuthenticated` flag may not have hydrated yet when the form is
-      // submitted, so we ALWAYS try the authenticated endpoint first — that's
-      // what links the booking to the tourist's account (so it shows under "My
-      // Bookings"). Only fall back to a guest booking if the server rejects the
-      // session with a 401.
-      let usedAuthed = true;
-      let res = await createBookingOrder(true);
       if (res.status === 401) {
-        usedAuthed = false;
-        res = await createBookingOrder(false);
+        setIsSubmitting(false);
+        persistDraftAndSignIn();
+        return;
       }
 
       const responseBody = await res.json();
@@ -760,34 +838,38 @@ function CombinedGuideBookingForm() {
 
         handler: async (response: any) => {
           try {
-            // Verify payment signature and create booking in database.
-            // Use the same auth mode the order was created with so an
-            // authenticated booking is linked to the tourist's account.
-            const verifyBooking = (useAuthed: boolean) =>
-              fetch(
-                `${API_BASE_URL}${
-                  useAuthed
-                    ? "/booking/verify-booking"
-                    : "/booking/verify-guest-booking"
-                }`,
+            // Verify the payment signature and persist the booking against the
+            // tourist's account (authedFetch refreshes a stale token first).
+            const verifyBody = JSON.stringify({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              booking_data: data.booking_data,
+            });
+
+            let verifyRes = await authedFetch(
+              `${API_BASE_URL}/booking/verify-booking`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: verifyBody,
+              },
+            );
+
+            if (verifyRes.status === 401) {
+              // The session lapsed in the seconds between paying and verifying
+              // (very rare — the order was just created authenticated). Never
+              // lose a captured payment: record it through the guest verify
+              // path so the booking is still saved and visible to admins; it
+              // can be linked to the account by support afterwards.
+              verifyRes = await fetch(
+                `${API_BASE_URL}/booking/verify-guest-booking`,
                 {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  credentials: useAuthed ? "include" : "same-origin",
-                  body: JSON.stringify({
-                    razorpay_order_id: response.razorpay_order_id,
-                    razorpay_payment_id: response.razorpay_payment_id,
-                    razorpay_signature: response.razorpay_signature,
-                    booking_data: data.booking_data,
-                  }),
+                  body: verifyBody,
                 },
               );
-
-            let verifyRes = await verifyBooking(usedAuthed);
-            if (usedAuthed && verifyRes.status === 401) {
-              // Session lapsed after payment — still record the booking as a
-              // guest so the paid booking is never lost.
-              verifyRes = await verifyBooking(false);
             }
 
             const verifyData = await verifyRes.json();
@@ -835,6 +917,46 @@ function CombinedGuideBookingForm() {
       setIsSubmitting(false);
     }
   };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!validateAllFields()) {
+      return;
+    }
+
+    if (!travelerConsent) {
+      setTravelerConsentError(
+        "Please accept the traveler declaration to proceed.",
+      );
+      return;
+    }
+
+    // Block payment for anyone who isn't signed in: stash the form and route
+    // them through sign in first. `false` is a resolved "signed out" state; a
+    // still-unknown (`null`) session is handled by startPayment's 401 path so a
+    // logged-in traveller who clicks quickly isn't bounced unnecessarily.
+    if (isAuthenticated === false) {
+      persistDraftAndSignIn();
+      return;
+    }
+
+    await startPayment();
+  };
+
+  // After returning from sign in, resume payment automatically once the session
+  // is confirmed. Guarded by `shouldResume` so it fires exactly once per return.
+  useEffect(() => {
+    if (!shouldResume || isAuthenticated !== true || isSubmitting) return;
+    // Intentional: this consumes the one-shot resume flag and kicks off payment
+    // exactly once after returning from sign in.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setShouldResume(false);
+    void startPayment();
+    // startPayment reads the freshly restored form from the current render's
+    // closure; re-running on its identity change would risk a double charge.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shouldResume, isAuthenticated]);
 
   // Success Page Component
   if (showSuccess) {

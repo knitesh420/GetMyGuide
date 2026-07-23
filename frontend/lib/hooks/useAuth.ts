@@ -41,7 +41,11 @@ export const useAuth = () => {
   );
 
   const login = useCallback(
-    async (credentials: LoginRequest) => {
+    // `redirectTo` lets a flow that sent the user to sign in (e.g. the booking
+    // page) bring them straight back to where they were, instead of the default
+    // role landing page. Only same-origin paths are honoured. RoleGuard on the
+    // target still enforces access, so an off-limits target self-corrects.
+    async (credentials: LoginRequest, redirectTo?: string) => {
       try {
         const result = await dispatch(loginUser(credentials)).unwrap();
 
@@ -50,7 +54,9 @@ export const useAuth = () => {
         const userName = userData?.name || "User";
 
         showToast.success(`Welcome back ${userName}!`);
-        router.push(ROLE_ROUTES[role] ?? "/dashboard");
+        const safeRedirect =
+          redirectTo && redirectTo.startsWith("/") ? redirectTo : null;
+        router.push(safeRedirect ?? ROLE_ROUTES[role] ?? "/dashboard");
 
         return result;
       } catch (err: any) {

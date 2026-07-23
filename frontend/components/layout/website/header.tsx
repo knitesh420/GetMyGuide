@@ -1,6 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Globe,
@@ -36,6 +41,7 @@ import { SearchModal } from "./SearchModal";
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isMobileLoginOpen, setIsMobileLoginOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -44,6 +50,7 @@ export function Header() {
   const pathname = usePathname();
   const router = useRouter();
   const profileRef = useRef<HTMLDivElement>(null);
+  const loginTriggerRef = useRef<HTMLButtonElement>(null);
   const { user, isAuthenticated, loading, logout } = useAuth();
 
   // The session lives in an HTTP-only cookie that SSR never reads, so the
@@ -87,9 +94,60 @@ export function Header() {
 
   useEffect(() => {
     setIsMenuOpen(false);
+    setIsMobileLoginOpen(false);
   }, [pathname]);
 
-  const handleLogin = () => router.push("/signin");
+  // Escape closes any open login/profile dropdown.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsProfileOpen(false);
+        setIsMobileLoginOpen(false);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  // When the signed-out login menu opens, move focus to its first option so
+  // keyboard users land inside the menu.
+  useEffect(() => {
+    if (isProfileOpen && !signedIn) {
+      const first = profileRef.current?.querySelector<HTMLElement>(
+        '[role="menuitem"]',
+      );
+      if (first) requestAnimationFrame(() => first.focus());
+    }
+  }, [isProfileOpen, signedIn]);
+
+  const handleLoginNav = (path: string) => {
+    router.push(path);
+    setIsProfileOpen(false);
+    setIsMobileLoginOpen(false);
+  };
+  const handleMenuKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const items = Array.from(
+      e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+    );
+    if (items.length === 0) return;
+    const activeIndex = items.indexOf(document.activeElement as HTMLElement);
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      items[(activeIndex + 1) % items.length]?.focus();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      items[(activeIndex - 1 + items.length) % items.length]?.focus();
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      items[0]?.focus();
+    } else if (e.key === "End") {
+      e.preventDefault();
+      items[items.length - 1]?.focus();
+    } else if (e.key === "Escape") {
+      setIsProfileOpen(false);
+      loginTriggerRef.current?.focus();
+    }
+  };
   const handleLogout = async () => { await logout(); setIsProfileOpen(false); };
   const handleProfileClick = () => {
     if (user) {
@@ -214,29 +272,52 @@ export function Header() {
                 <Globe className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
               </div>
 
-              {/* Profile */}
+              {/* Profile / Login */}
               <div className="relative" ref={profileRef}>
-                <motion.button
-                  onClick={() => setIsProfileOpen(!isProfileOpen)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all"
-                  disabled={busy}
-                  whileTap={{ scale: 0.97 }}
-                >
-                  <div className="relative">
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${signedIn ? "bg-primary" : "bg-gray-100"}`}>
-                      <User className={`w-3.5 h-3.5 ${signedIn ? "text-white" : "text-gray-600"}`} />
-                    </div>
-                    {signedIn && (
+                {signedIn ? (
+                  <motion.button
+                    onClick={() => setIsProfileOpen(!isProfileOpen)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all"
+                    disabled={busy}
+                    whileTap={{ scale: 0.97 }}
+                    aria-haspopup="menu"
+                    aria-expanded={isProfileOpen}
+                    aria-label="Account menu"
+                  >
+                    <div className="relative">
+                      <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-primary">
+                        <User className="w-3.5 h-3.5 text-white" />
+                      </div>
                       <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-white" />
-                    )}
-                  </div>
-                  <ChevronDown className={`w-3 h-3 text-gray-500 transition-transform duration-200 ${isProfileOpen ? "rotate-180" : ""}`} />
-                </motion.button>
+                    </div>
+                    <ChevronDown className={`w-3 h-3 text-gray-500 transition-transform duration-200 ${isProfileOpen ? "rotate-180" : ""}`} />
+                  </motion.button>
+                ) : (
+                  <motion.button
+                    ref={loginTriggerRef}
+                    onClick={() => setIsProfileOpen(!isProfileOpen)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all"
+                    disabled={busy}
+                    whileTap={{ scale: 0.97 }}
+                    aria-haspopup="menu"
+                    aria-expanded={isProfileOpen}
+                    aria-label={t("profile_login")}
+                  >
+                    <div className="w-7 h-7 bg-primary/10 rounded-lg flex items-center justify-center">
+                      <LogIn className="w-3.5 h-3.5 text-primary" />
+                    </div>
+                    <span className="text-xs font-semibold text-gray-700">{t("profile_login")}</span>
+                    <ChevronDown className={`w-3 h-3 text-gray-500 transition-transform duration-200 ${isProfileOpen ? "rotate-180" : ""}`} />
+                  </motion.button>
+                )}
 
                 <AnimatePresence>
                   {isProfileOpen && (
                     <motion.div
                       className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 overflow-hidden"
+                      role="menu"
+                      aria-label={signedIn ? "Account menu" : t("profile_login")}
+                      onKeyDown={handleMenuKeyDown}
                       initial={{ opacity: 0, y: 8, scale: 0.95 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: 8, scale: 0.95 }}
@@ -249,13 +330,30 @@ export function Header() {
                             <p className="text-[11px] text-gray-500">{t("profile_signin_prompt")}</p>
                           </div>
                           <button
-                            onClick={handleLogin}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-gray-700 hover:bg-primary/5 hover:text-primary transition-colors"
+                            role="menuitem"
+                            onClick={() => handleLoginNav("/signin")}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-primary/5 transition-colors group focus:outline-none focus:bg-primary/5"
                           >
-                            <div className="w-7 h-7 bg-primary/10 rounded-lg flex items-center justify-center">
-                              <LogIn className="w-3.5 h-3.5 text-primary" />
+                            <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
+                              <Users className="w-4 h-4 text-primary" />
                             </div>
-                            <span className="font-semibold">{t("profile_login")}</span>
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-gray-900 group-hover:text-primary">Tourist &amp; Guide</p>
+                              <p className="text-[11px] text-gray-500">Sign In / Sign Up</p>
+                            </div>
+                          </button>
+                          <button
+                            role="menuitem"
+                            onClick={() => handleLoginNav("/login")}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 transition-colors group focus:outline-none focus:bg-gray-50"
+                          >
+                            <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
+                              <Shield className="w-4 h-4 text-slate-600" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-gray-900 group-hover:text-slate-700">Admin</p>
+                              <p className="text-[11px] text-gray-500">Admin Login</p>
+                            </div>
                           </button>
                         </>
                       ) : (
@@ -375,13 +473,62 @@ export function Header() {
 
                 {/* Mobile auth */}
                 {!signedIn ? (
-                  <button
-                    onClick={handleLogin}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-primary bg-primary/8 rounded-xl hover:bg-primary/12 transition-colors"
-                  >
-                    <LogIn className="w-4 h-4" />
-                    {t("profile_login")}
-                  </button>
+                  <div>
+                    <button
+                      onClick={() => setIsMobileLoginOpen(!isMobileLoginOpen)}
+                      aria-haspopup="menu"
+                      aria-expanded={isMobileLoginOpen}
+                      className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-sm font-semibold text-primary bg-primary/8 rounded-xl hover:bg-primary/12 transition-colors"
+                    >
+                      <span className="flex items-center gap-3">
+                        <LogIn className="w-4 h-4" />
+                        {t("profile_login")}
+                      </span>
+                      <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isMobileLoginOpen ? "rotate-180" : ""}`} />
+                    </button>
+                    <AnimatePresence initial={false}>
+                      {isMobileLoginOpen && (
+                        <motion.div
+                          role="menu"
+                          aria-label={t("profile_login")}
+                          className="overflow-hidden"
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                        >
+                          <div className="space-y-1 pt-1 pl-2">
+                            <button
+                              role="menuitem"
+                              onClick={() => handleLoginNav("/signin")}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-gray-50 transition-colors focus:outline-none focus:bg-gray-50"
+                            >
+                              <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
+                                <Users className="w-4 h-4 text-primary" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-gray-900">Tourist &amp; Guide</p>
+                                <p className="text-xs text-gray-500">Sign In / Sign Up</p>
+                              </div>
+                            </button>
+                            <button
+                              role="menuitem"
+                              onClick={() => handleLoginNav("/login")}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-gray-50 transition-colors focus:outline-none focus:bg-gray-50"
+                            >
+                              <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
+                                <Shield className="w-4 h-4 text-slate-600" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-gray-900">Admin</p>
+                                <p className="text-xs text-gray-500">Admin Login</p>
+                              </div>
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 ) : (
                   <div className="space-y-1">
                     <div className="px-3 py-2 bg-gray-50 rounded-xl">
