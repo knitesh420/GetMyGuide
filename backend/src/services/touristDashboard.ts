@@ -1,6 +1,7 @@
 import { AccountDB, BookingDB, InvoiceDB, NotificationDB, ReviewDB, TripDB } from '@mongo';
 import { Types } from 'mongoose';
 import BookingService from './booking';
+import PaymentService from './payment';
 import TouristService from './tourist';
 
 /**
@@ -32,9 +33,13 @@ const RECENT_ACTIVITY = 8;
 type ActivityType =
 	| 'booking-created'
 	| 'payment-successful'
+	| 'payment-failed'
 	| 'guide-assigned'
 	| 'trip-updated'
 	| 'review-submitted';
+
+/** One row of PaymentService.listMyFailedPayments, as the widget consumes it. */
+type FailedPaymentRow = Awaited<ReturnType<typeof PaymentService.listMyFailedPayments>>[number];
 
 interface ActivityEntry {
 	id: string;
@@ -73,23 +78,35 @@ class TouristDashboardService {
 	async getOverview(accountId: string) {
 		const userId = new Types.ObjectId(accountId);
 
-		const [profile, account, bookings, trips, notifications, unreadNotifications, reviews, invoices] =
-			await Promise.all([
-				TouristService.getTouristProfile(accountId),
-				AccountDB.findById(accountId).select('createdAt').lean(),
-				BookingService.getMyBookings(userId),
-				this.getTripsForTourist(accountId),
-				NotificationDB.find({ recipient: accountId })
-					.sort({ createdAt: -1 })
-					.limit(RECENT_NOTIFICATIONS)
-					.lean(),
-				NotificationDB.countDocuments({ recipient: accountId, isRead: false }),
-				ReviewDB.find({ tourist: accountId }).select('booking rating createdAt').sort({ createdAt: -1 }).lean(),
-				InvoiceDB.find({ touristAccount: accountId, status: 'paid' })
-					.select('invoiceNumber invoiceDate paymentDate paymentInfo bookingSnapshot')
-					.sort({ paymentDate: -1, createdAt: -1 })
-					.lean(),
-			]);
+		const [
+			profile,
+			account,
+			bookings,
+			trips,
+			notifications,
+			unreadNotifications,
+			reviews,
+			invoices,
+			failedPayments,
+		] = await Promise.all([
+			TouristService.getTouristProfile(accountId),
+			AccountDB.findById(accountId).select('createdAt').lean(),
+			BookingService.getMyBookings(userId),
+			this.getTripsForTourist(accountId),
+			NotificationDB.find({ recipient: accountId })
+				.sort({ createdAt: -1 })
+				.limit(RECENT_NOTIFICATIONS)
+				.lean(),
+			NotificationDB.countDocuments({ recipient: accountId, isRead: false }),
+			ReviewDB.find({ tourist: accountId }).select('booking rating createdAt').sort({ createdAt: -1 }).lean(),
+			InvoiceDB.find({ touristAccount: accountId, status: 'paid' })
+				.select('invoiceNumber invoiceDate paymentDate paymentInfo bookingSnapshot')
+				.sort({ paymentDate: -1, createdAt: -1 })
+				.lean(),
+			// Invoices only exist for money that arrived, so a declined card is
+			// invisible in every other source here.
+			PaymentService.listMyFailedPayments(accountId),
+		]);
 
 		const reviewedBookingIds = new Set(reviews.map((r) => r.booking?.toString()).filter(Boolean));
 
@@ -100,7 +117,7 @@ class TouristDashboardService {
 		const upcomingTrip = await this.buildUpcomingTrip(upcomingCandidates[0]);
 
 		const pendingReviews = this.buildPendingReviews(trips, reviewedBookingIds);
-		const payments = this.buildPayments(invoices, bookings);
+		const payments = this.buildPayments(invoices, bookings, failedPayments);
 
 		return {
 			profile: {
@@ -127,7 +144,7 @@ class TouristDashboardService {
 			notifications,
 			payments,
 			pendingReviews,
-			activity: this.buildActivity(bookings, trips, reviews, invoices),
+			activity: this.buildActivity(bookings, trips, reviews, invoices, failedPayments),
 		};
 	}
 
@@ -275,8 +292,17 @@ class TouristDashboardService {
 	 * accounting record), while what's still owed is read from the bookings — a
 	 * package booking carries its outstanding balance in `balance_due`, and a
 	 * booking stuck at 'payment-pending' owes its full price.
+	 *
+	 * Attempts that never became money are a fourth source: they leave no invoice
+	 * and no booking, so without `failedPayments` a tourist whose card was
+	 * declined sees a dashboard that looks exactly like one where they never
+	 * tried to pay at all.
 	 */
-	private buildPayments(invoices: InvoiceRow[], bookings: TouristBooking[]) {
+	private buildPayments(
+		invoices: InvoiceRow[],
+		bookings: TouristBooking[],
+		failedPayments: FailedPaymentRow[]
+	) {
 		const totalPaid = invoices.reduce((sum, invoice) => sum + (invoice.paymentInfo?.grandTotal ?? 0), 0);
 
 		const pendingAmount = bookings.reduce((sum, booking) => {
@@ -293,6 +319,8 @@ class TouristDashboardService {
 			totalPaid,
 			pendingAmount,
 			invoiceCount: invoices.length,
+			failedCount: failedPayments.length,
+			failedPayments,
 			latestInvoice: latest
 				? {
 						_id: latest._id.toString(),
@@ -315,7 +343,8 @@ class TouristDashboardService {
 		bookings: TouristBooking[],
 		trips: TouristTrip[],
 		reviews: ReviewRow[],
-		invoices: InvoiceRow[]
+		invoices: InvoiceRow[],
+		failedPayments: FailedPaymentRow[]
 	): ActivityEntry[] {
 		const entries: ActivityEntry[] = [];
 
@@ -339,6 +368,23 @@ class TouristDashboardService {
 					invoice.paymentInfo?.grandTotal ?? 0
 				).toLocaleString('en-IN')} · ${invoice.invoiceNumber}`,
 				at: new Date(invoice.paymentDate ?? invoice.invoiceDate),
+			});
+		}
+
+		for (const payment of failedPayments) {
+			entries.push({
+				id: `payment-failed-${payment._id}`,
+				type: 'payment-failed',
+				title: 'Payment failed',
+				description: `${payment.currency} ${payment.amount.toLocaleString('en-IN')}${
+					payment.failure?.description ? ` · ${payment.failure.description}` : ''
+				}`,
+				at: new Date(payment.attemptedAt),
+				// Only a booking that exists can be paid for again from here; an
+				// abandoned checkout has nothing to return to.
+				href: payment.bookingId
+					? `/dashboard/user/my-bookings/${payment.bookingId}`
+					: undefined,
 			});
 		}
 

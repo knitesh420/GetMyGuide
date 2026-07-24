@@ -248,6 +248,7 @@ class BookingService {
 				reference_id: tempReference,
 				reference_type: 'pending_booking',
 				type: 'tourist',
+				account: userId,
 				description: 'Get My Guide Customised Booking Payment',
 			}
 		);
@@ -510,6 +511,7 @@ class BookingService {
 				reference_id: tempReference,
 				reference_type: 'pending_package_booking',
 				type: 'tourist',
+				account: account._id,
 				description: 'Get My Guide Tour Package Advance Payment',
 			}
 		);

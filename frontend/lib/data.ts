@@ -183,10 +183,7 @@ export type Guide = {
 };
 
 export type BookingStatus =
-  | "Upcoming"
-  | "Completed"
-  | "Cancelled"
-  | "Awaiting Substitute";
+  "Upcoming" | "Completed" | "Cancelled" | "Awaiting Substitute";
 export type PaymentStatus = "Advance Paid" | "Fully Paid" | "Refunded";
 
 // NOTE: The second conflicting 'Booking' interface has been REMOVED.
@@ -358,7 +355,9 @@ export interface GuideSubscriptionRecord {
   paymentStatus: string;
   transactionId: string;
   razorpayPaymentId: string | null;
-  status: "Active" | "Expired" | "Pending" | "Cancelled";
+  status: "Active" | "Expired" | "Pending" | "Cancelled" | "Failed";
+  /** Why the bank declined it. Null unless this attempt failed. */
+  failureReason: string | null;
   invoiceId: string | null;
   invoiceNumber: string | null;
 }
@@ -534,7 +533,8 @@ export interface PopulatedBookingSummary {
   status: string;
 }
 
-export type AssignmentStatus = "pending" | "accepted" | "declined" | "reassigned";
+export type AssignmentStatus =
+  "pending" | "accepted" | "declined" | "reassigned";
 
 export interface Assignment {
   _id: string;
@@ -808,11 +808,7 @@ export interface AdminTourist {
 // yet (awaiting a guide). It is never persisted — the backend derives it for the
 // tourist's My Trips view; a real Trip always starts at 'not-started'.
 export type TripStatus =
-  | "planned"
-  | "not-started"
-  | "in-progress"
-  | "completed"
-  | "cancelled";
+  "planned" | "not-started" | "in-progress" | "completed" | "cancelled";
 
 export interface Trip {
   _id: string;
@@ -1109,18 +1105,45 @@ export interface TouristLatestInvoice {
   destination: string | null;
 }
 
+/**
+ * A payment attempt that never became money. It leaves no invoice and, for an
+ * abandoned checkout, no booking either — so it has to be carried explicitly or
+ * it is invisible to the person who made it.
+ */
+export interface FailedPaymentEntry {
+  _id: string;
+  paymentCode: string | null;
+  referenceType: string;
+  status: "failed" | "pending_verification" | string;
+  amount: number;
+  currency: string;
+  /** Set only when a booking exists to pay for again. */
+  bookingId: string | null;
+  failure: {
+    code?: string;
+    description?: string;
+    reason?: string;
+    method?: string;
+  } | null;
+  attemptedAt: string;
+}
+
 export interface TouristPaymentSummary {
   /** Sum of paid invoices. */
   totalPaid: number;
   /** Still owed: full price of unpaid bookings + any outstanding package balance. */
   pendingAmount: number;
   invoiceCount: number;
+  /** Unsuccessful attempts, newest first. */
+  failedCount: number;
+  failedPayments: FailedPaymentEntry[];
   latestInvoice: TouristLatestInvoice | null;
 }
 
 export type TouristActivityType =
   | "booking-created"
   | "payment-successful"
+  | "payment-failed"
   | "guide-assigned"
   | "trip-updated"
   | "review-submitted";

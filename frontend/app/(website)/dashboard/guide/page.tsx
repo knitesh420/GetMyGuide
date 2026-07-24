@@ -34,6 +34,7 @@ import {
   GuideTableCell,
   GuideTableHead,
   GuideTableRow,
+  MembershipPaymentAlert,
 } from "@/components/guide";
 import CountUp from "@/components/animations/CountUp";
 
@@ -224,9 +225,13 @@ export default function GuideDashboardPage() {
               </h1>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <HeroPill icon={BadgeInfo}>
-                  <span className="font-mono">Guide ID: {profile?.guideCode ?? "—"}</span>
+                  <span className="font-mono">
+                    Guide ID: {profile?.guideCode ?? "—"}
+                  </span>
                 </HeroPill>
-                <HeroPill icon={isMembershipActive ? ShieldCheck : AlertTriangle}>
+                <HeroPill
+                  icon={isMembershipActive ? ShieldCheck : AlertTriangle}
+                >
                   {isMembershipActive ? "Membership active" : "Not listed"}
                 </HeroPill>
                 {profile?.city && (
@@ -268,6 +273,12 @@ export default function GuideDashboardPage() {
           </div>
         </div>
       </section>
+
+      {/* A declined fee is its own state, and the banner chain below can't
+          express it: "Membership expired" blames the calendar for what was
+          actually the bank refusing the card. Shown alongside, not instead —
+          together they say both what is wrong and why. */}
+      <MembershipPaymentAlert />
 
       {/* Only states that need the guide to act get a banner; a healthy
           membership is already reported by the pill in the hero. */}
@@ -345,7 +356,9 @@ export default function GuideDashboardPage() {
           icon={Star}
           label="Average Rating"
           // Guides with no reviews get an em dash, not a counter ticking to 0.
-          value={reviewCount > 0 ? <CountUp to={averageRating} decimals={1} /> : "—"}
+          value={
+            reviewCount > 0 ? <CountUp to={averageRating} decimals={1} /> : "—"
+          }
           hint={
             reviewCount > 0
               ? `Across ${reviewCount} review${reviewCount === 1 ? "" : "s"}`

@@ -5,6 +5,7 @@ import RazorpayCustomers from '@provider/razorpay/api/customers';
 import RazorpayOrders from '@provider/razorpay/api/orders';
 import RazorpayRefunds from '@provider/razorpay/api/refunds';
 import { randomBytes } from 'crypto';
+import { Types } from 'mongoose';
 import { NotFoundError, ServerError, error as logError, info } from 'node-be-utilities';
 
 interface CustomerInfo {
@@ -21,6 +22,12 @@ interface CreateTransactionOptions {
 	reference_id: string;
 	reference_type: string;
 	type: TransactionType;
+	/**
+	 * The account paying. Pass it whenever the caller is authenticated — it is
+	 * what lets a failed attempt show up on that person's own dashboard, which
+	 * `reference_id` can't do for bookings. Omitted only for guest bookings.
+	 */
+	account?: Types.ObjectId | string;
 	data?: TransactionData;
 	description?: string;
 	/**
@@ -61,6 +68,7 @@ class TransactionService {
 			reference_id,
 			reference_type,
 			type,
+			account,
 			data = {},
 			description = 'Payment',
 			metadata,
@@ -98,6 +106,15 @@ class TransactionService {
 			status: 'pending',
 			amount: order.amount,
 			currency: order.currency,
+			account: account ?? null,
+			// Snapshot the payer. Booking orders write no Booking until payment
+			// clears, so without this a failed booking leaves nothing behind that
+			// says who was trying to pay.
+			customer: {
+				name: customerInfo.name,
+				email: customerInfo.email,
+				phone: customerInfo.phone_number,
+			},
 			...(metadata ? { metadata } : {}),
 		});
 

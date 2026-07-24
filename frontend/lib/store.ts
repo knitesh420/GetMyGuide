@@ -27,6 +27,7 @@ import refundReducer from "@/lib/redux/refundSlice";
 import messageReducer from "@/lib/redux/messageSlice";
 import invoiceReducer from "@/lib/redux/invoiceSlice";
 import cashPaymentReducer from "@/lib/redux/cashPaymentSlice";
+import failedPaymentReducer from "@/lib/redux/failedPaymentSlice";
 export const store = configureStore({
   reducer: {
     auth: authReducer,
@@ -57,6 +58,7 @@ export const store = configureStore({
     messages: messageReducer,
     invoices: invoiceReducer,
     cashPayments: cashPaymentReducer,
+    failedPayments: failedPaymentReducer,
   },
 });
 

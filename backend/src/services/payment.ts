@@ -1,13 +1,49 @@
 import { RAZORPAY_WEBHOOK_SECRET } from '@config/const';
-import { AccountDB, TransactionDB } from '@mongo';
+import { AccountDB, GuideDB, TransactionDB } from '@mongo';
 import WebhookEventDB from '@mongo/repo/WebhookEvent';
+import type ITransaction from '@mongo/types/transaction';
+import type { ITransactionFailure } from '@mongo/types/transaction';
 import RazorpayProvider from '@provider/razorpay';
 import GuideService from '@services/guide';
 import { timingSafeCompare } from '@utils/paymentVerify';
 import crypto from 'crypto';
+import { Types } from 'mongoose';
 import { error as logError, info } from 'node-be-utilities';
 
 const MAX_RETRIES = 3;
+
+/**
+ * A payment is "unsuccessful" if the gateway declined it, or if it cleared but
+ * our own follow-up bookkeeping never completed. Both need a human to look, so
+ * the admin view treats them as one list.
+ */
+const UNSUCCESSFUL_STATUSES = ['failed', 'pending_verification'] as const;
+
+/**
+ * Pull Razorpay's failure fields off a payment entity.
+ *
+ * Every field is optional on their side, so this returns `undefined` rather than
+ * an empty husk when the payload carries no diagnosis at all — an absent
+ * `failure` then honestly means "we were told nothing".
+ */
+function toFailureRecord(paymentEntity: any): ITransactionFailure | undefined {
+	const record: ITransactionFailure = {
+		code: paymentEntity?.error_code ?? undefined,
+		description: paymentEntity?.error_description ?? undefined,
+		source: paymentEntity?.error_source ?? undefined,
+		step: paymentEntity?.error_step ?? undefined,
+		reason: paymentEntity?.error_reason ?? undefined,
+		method: paymentEntity?.method ?? undefined,
+		// Razorpay timestamps are unix seconds.
+		at: paymentEntity?.created_at ? new Date(paymentEntity.created_at * 1000) : new Date(),
+	};
+
+	const hasDiagnosis = Boolean(
+		record.code || record.description || record.source || record.step || record.reason
+	);
+
+	return hasDiagnosis ? record : undefined;
+}
 
 class PaymentService {
 	/**
@@ -76,7 +112,7 @@ class PaymentService {
 					break;
 
 				case 'payment.failed':
-					await this.handlePaymentFailed(orderId, paymentId);
+					await this.handlePaymentFailed(orderId, paymentId, paymentEntity);
 					break;
 
 				default:
@@ -129,18 +165,18 @@ class PaymentService {
 		await transaction.save();
 
 		// Update registration status with retry
-		await this.updateRegistrationStatus(
-			transaction.reference_id,
-			transaction.type,
-			transaction.reference_type,
-			'completed'
-		);
+		await this.updateRegistrationStatus(transaction, 'completed');
 	}
 
 	/**
-	 * Handle payment.failed — mark transaction as FAILED.
+	 * Handle payment.failed — mark transaction as FAILED and record Razorpay's
+	 * stated reason.
 	 */
-	private async handlePaymentFailed(orderId: string, paymentId: string): Promise<void> {
+	private async handlePaymentFailed(
+		orderId: string,
+		paymentId: string,
+		paymentEntity: any
+	): Promise<void> {
 		const transaction = await TransactionDB.findOne({ razorpay_order_id: orderId });
 
 		if (!transaction) {
@@ -155,27 +191,35 @@ class PaymentService {
 
 		transaction.razorpay_payment_id = paymentId;
 		transaction.status = 'failed';
+		transaction.failure = toFailureRecord(paymentEntity);
 		await transaction.save();
 
+		info('Webhook: Payment failed', {
+			orderId,
+			paymentId,
+			referenceType: transaction.reference_type,
+			code: transaction.failure?.code,
+			description: transaction.failure?.description,
+		});
+
 		// Update registration status
-		await this.updateRegistrationStatus(
-			transaction.reference_id,
-			transaction.type,
-			transaction.reference_type,
-			'failed'
-		);
+		await this.updateRegistrationStatus(transaction, 'failed');
 	}
 
 	/**
 	 * Update the registration record (Guide membership or Account) with retry.
 	 * If all retries fail, marks transaction as PENDING_VERIFICATION.
+	 *
+	 * Takes the transaction itself rather than its fields: `reference_id` is not
+	 * unique (a guide has one per renewal), so the exhaustion path below has to
+	 * be able to stamp *this* row and no other.
 	 */
 	private async updateRegistrationStatus(
-		referenceId: string,
-		type: string,
-		referenceType: string,
+		transaction: ITransaction,
 		status: 'completed' | 'failed'
 	): Promise<void> {
+		const { reference_id: referenceId, type, reference_type: referenceType } = transaction;
+
 		for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
 			try {
 				if (referenceType === 'guide_membership') {
@@ -185,10 +229,34 @@ class PaymentService {
 						referenceId,
 						status === 'completed' ? 'success' : 'failed'
 					);
-				} else if (type === 'tourist' || type === 'booking') {
-					const accountStatus = status === 'completed' ? 'success' : 'failed';
-					await AccountDB.findByIdAndUpdate(referenceId, {
-						paymentStatus: accountStatus,
+				} else if (type === 'tourist') {
+					// Booking orders never reference an Account. A pending_* order
+					// carries a throwaway token (see BookingService.createBooking)
+					// and a settled one carries a Booking id, so the old
+					// findByIdAndUpdate(referenceId) either threw a CastError —
+					// burning all three retries and mis-stamping the transaction —
+					// or silently updated nothing. Resolve the account first and
+					// skip when there isn't one; the transaction's own status is
+					// the record of the payment either way.
+					//
+					// (The old `|| type === 'booking'` arm went with it —
+					// TransactionType is 'guide' | 'tourist', so it never matched.)
+					const account = Types.ObjectId.isValid(referenceId)
+						? await AccountDB.findById(referenceId).select('_id')
+						: null;
+
+					if (!account) {
+						info('Payment: Reference is not an account — transaction status is the record', {
+							referenceId,
+							type,
+							referenceType,
+							status,
+						});
+						return;
+					}
+
+					await AccountDB.findByIdAndUpdate(account._id, {
+						paymentStatus: status === 'completed' ? 'success' : 'failed',
 					});
 				}
 
@@ -210,15 +278,22 @@ class PaymentService {
 				});
 
 				if (attempt === MAX_RETRIES) {
-					// All retries exhausted — mark transaction for manual review
-					await TransactionDB.findOneAndUpdate(
-						{ reference_id: referenceId },
-						{ status: 'pending_verification' }
-					);
+					// All retries exhausted. A payment the gateway already told us
+					// failed stays 'failed' — that verdict is not in doubt, only our
+					// own bookkeeping is, and downgrading it to pending_verification
+					// would hide a real failure behind a "check this" flag.
+					if (status !== 'failed') {
+						await TransactionDB.updateOne(
+							{ _id: transaction._id },
+							{ status: 'pending_verification' }
+						);
+					}
 
-					logError('Payment: Marked as PENDING_VERIFICATION after max retries', {
+					logError('Payment: Registration update abandoned after max retries', {
 						referenceId,
 						type,
+						transactionId: transaction.transaction_id,
+						markedPendingVerification: status !== 'failed',
 					});
 				}
 			}
@@ -255,6 +330,184 @@ class PaymentService {
 				error: err,
 			});
 		}
+	}
+
+	/**
+	 * Admin view of money that never landed.
+	 *
+	 * The Payments screen lists invoices, which by construction only exist for
+	 * payments that succeeded — so until now a declined card was invisible to
+	 * anyone but whoever read the logs. This lists the other side: declined
+	 * payments and ones whose post-payment bookkeeping was abandoned.
+	 */
+	async listFailedPayments(
+		filters: {
+			status?: (typeof UNSUCCESSFUL_STATUSES)[number];
+			referenceType?: string;
+			account?: Types.ObjectId | string;
+			search?: string;
+			from?: string;
+			to?: string;
+		} = {},
+		{ page = 1, limit = 20 }: { page?: number; limit?: number } = {}
+	) {
+		const query: Record<string, unknown> = {
+			status: filters.status ?? { $in: [...UNSUCCESSFUL_STATUSES] },
+		};
+
+		if (filters.account) {
+			query.account = filters.account;
+		}
+
+		if (filters.referenceType) {
+			query.reference_type = filters.referenceType;
+		}
+
+		if (filters.from || filters.to) {
+			query.createdAt = {
+				...(filters.from ? { $gte: new Date(filters.from) } : {}),
+				...(filters.to ? { $lte: new Date(filters.to) } : {}),
+			};
+		}
+
+		if (filters.search) {
+			const escaped = filters.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+			const like = { $regex: escaped, $options: 'i' };
+			query.$or = [
+				{ 'customer.name': like },
+				{ 'customer.email': like },
+				{ 'customer.phone': like },
+				{ paymentCode: like },
+				{ razorpay_order_id: like },
+				{ razorpay_payment_id: like },
+				{ transaction_id: like },
+			];
+		}
+
+		const skip = (page - 1) * limit;
+		const [rows, total] = await Promise.all([
+			TransactionDB.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+			TransactionDB.countDocuments(query),
+		]);
+
+		const customerByTxnId = await this.resolveCustomers(rows);
+
+		return {
+			data: rows.map((t) => ({
+				_id: t._id.toString(),
+				paymentCode: t.paymentCode ?? null,
+				transaction_id: t.transaction_id,
+				razorpay_order_id: t.razorpay_order_id,
+				razorpay_payment_id: t.razorpay_payment_id ?? null,
+				referenceType: t.reference_type,
+				type: t.type,
+				status: t.status,
+				amount: t.amount,
+				currency: t.currency,
+				customer: customerByTxnId.get(t._id.toString()) ?? null,
+				failure: t.failure ?? null,
+				attemptedAt: t.createdAt,
+				updatedAt: t.updatedAt,
+			})),
+			total,
+			page,
+			totalPages: Math.ceil(total / limit) || 1,
+		};
+	}
+
+	/**
+	 * One person's own unsuccessful payments, for their dashboard.
+	 *
+	 * Deliberately narrower than the admin list: no customer block (they know who
+	 * they are) and no gateway order ids, but it does carry `bookingId` where one
+	 * exists so the dashboard can link straight to the thing that needs paying
+	 * for again.
+	 *
+	 * Guest bookings have no account and so appear nowhere here — there is no
+	 * dashboard to show them on.
+	 */
+	async listMyFailedPayments(
+		accountId: Types.ObjectId | string,
+		{ limit = 10 }: { limit?: number } = {}
+	) {
+		const rows = await TransactionDB.find({
+			account: accountId,
+			status: { $in: [...UNSUCCESSFUL_STATUSES] },
+		})
+			.sort({ createdAt: -1 })
+			.limit(limit)
+			.lean();
+
+		return rows.map((t) => ({
+			_id: t._id.toString(),
+			paymentCode: t.paymentCode ?? null,
+			referenceType: t.reference_type,
+			status: t.status,
+			amount: t.amount,
+			currency: t.currency,
+			// Present only once a booking exists — a checkout abandoned before
+			// payment never wrote one, so there is nothing to link to.
+			bookingId:
+				(t.reference_type === 'booking' || t.reference_type === 'booking_balance') &&
+				Types.ObjectId.isValid(t.reference_id)
+					? t.reference_id
+					: null,
+			failure: t.failure ?? null,
+			attemptedAt: t.createdAt,
+		}));
+	}
+
+	/**
+	 * Best-effort "who was this?" for a page of transactions.
+	 *
+	 * New rows carry their own customer snapshot. Older ones don't, but a
+	 * membership payment still points at a Guide, and a Guide at an Account — so
+	 * historical failures stay identifiable instead of showing as a blank row.
+	 */
+	private async resolveCustomers(
+		rows: Array<Pick<ITransaction, '_id' | 'customer' | 'reference_id' | 'reference_type'>>
+	): Promise<Map<string, { name?: string; email?: string; phone?: string }>> {
+		const resolved = new Map<string, { name?: string; email?: string; phone?: string }>();
+
+		const needsLookup: typeof rows = [];
+		for (const row of rows) {
+			if (row.customer?.email || row.customer?.name) {
+				resolved.set(row._id.toString(), row.customer);
+			} else if (
+				row.reference_type === 'guide_membership' &&
+				Types.ObjectId.isValid(row.reference_id)
+			) {
+				needsLookup.push(row);
+			}
+		}
+
+		if (needsLookup.length === 0) {
+			return resolved;
+		}
+
+		const guides = await GuideDB.find({ _id: { $in: needsLookup.map((r) => r.reference_id) } })
+			.select('accountId')
+			.lean();
+		const accountIdByGuideId = new Map(guides.map((g) => [g._id.toString(), g.accountId]));
+
+		const accounts = await AccountDB.find({ _id: { $in: [...accountIdByGuideId.values()] } })
+			.select('name email phone')
+			.lean();
+		const accountById = new Map(accounts.map((a) => [a._id.toString(), a]));
+
+		for (const row of needsLookup) {
+			const accountId = accountIdByGuideId.get(row.reference_id);
+			const account = accountId ? accountById.get(accountId.toString()) : undefined;
+			if (account) {
+				resolved.set(row._id.toString(), {
+					name: account.name,
+					email: account.email,
+					phone: account.phone,
+				});
+			}
+		}
+
+		return resolved;
 	}
 }
 

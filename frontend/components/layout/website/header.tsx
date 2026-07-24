@@ -454,46 +454,52 @@ export function Header() {
             </div>
           </div>
         </div>
+      </motion.header>
 
-        {/* ── Mobile menu — slides in from the right, over a dimmed page ── */}
-        <AnimatePresence>
-          {isMenuOpen && (
-            <>
-              <motion.div
-                className="lg:hidden fixed inset-0 top-0 bg-slate-900/40 backdrop-blur-[2px] z-40"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.25 }}
-                onClick={() => setIsMenuOpen(false)}
-                aria-hidden="true"
-              />
-              <motion.div
-                className="lg:hidden fixed top-0 right-0 bottom-0 w-[82%] max-w-sm bg-white shadow-2xl z-50 flex flex-col"
-                initial={{ x: "100%" }}
-                animate={{ x: 0 }}
-                exit={{ x: "100%" }}
-                transition={{ type: "spring", stiffness: 320, damping: 34 }}
-                role="dialog"
-                aria-modal="true"
-                aria-label="Navigation menu"
-              >
-                <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3.5">
-                  <p
-                    className="text-sm font-extrabold text-primary"
-                    style={{ fontFamily: "'Outfit', sans-serif" }}
-                  >
-                    GetMyGuide
-                  </p>
-                  <motion.button
-                    onClick={() => setIsMenuOpen(false)}
-                    className="p-2 rounded-lg border border-gray-200 text-gray-700"
-                    whileTap={{ scale: 0.92 }}
-                    aria-label="Close menu"
-                  >
-                    <X className="w-4 h-4" />
-                  </motion.button>
-                </div>
+      {/* ── Mobile menu — slides in from the right, over a dimmed page ──
+          Deliberately a *sibling* of the header rather than a child: the bar
+          carries `backdrop-blur`, and a non-none backdrop-filter makes an
+          element a containing block for `position: fixed` descendants. Nested
+          inside it, `top-0 right-0 bottom-0` resolved against the 56px bar and
+          the drawer collapsed to a sliver. */}
+      <AnimatePresence>
+        {isMenuOpen && (
+          <>
+            <motion.div
+              className="lg:hidden fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-55"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              onClick={() => setIsMenuOpen(false)}
+              aria-hidden="true"
+            />
+            <motion.div
+              className="lg:hidden fixed top-0 right-0 bottom-0 w-[82%] max-w-sm bg-white shadow-2xl z-60 flex flex-col"
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", stiffness: 320, damping: 34 }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Navigation menu"
+            >
+              <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3.5">
+                <p
+                  className="text-sm font-extrabold text-primary"
+                  style={{ fontFamily: "'Outfit', sans-serif" }}
+                >
+                  GetMyGuide
+                </p>
+                <motion.button
+                  onClick={() => setIsMenuOpen(false)}
+                  className="p-2 rounded-lg border border-gray-200 text-gray-700"
+                  whileTap={{ scale: 0.92 }}
+                  aria-label="Close menu"
+                >
+                  <X className="w-4 h-4" />
+                </motion.button>
+              </div>
               <div className="px-4 py-4 space-y-1 flex-1 overflow-y-auto">
                 {navigationItems.map((item, i) => (
                   <motion.div
@@ -608,12 +614,14 @@ export function Header() {
                 )}
               </div>
             </motion.div>
-            </>
-          )}
-        </AnimatePresence>
+          </>
+        )}
+      </AnimatePresence>
 
-        <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
-      </motion.header>
+      {/* Also a sibling, and for the same reason — trapped in the header its
+          `fixed inset-0` backdrop only covered the bar, so taps outside the
+          panel never closed it. */}
+      <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </>
   );
 }

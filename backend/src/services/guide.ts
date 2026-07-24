@@ -561,9 +561,14 @@ class GuideService {
 			const expiry = window?.expiryDate ? new Date(window.expiryDate) : null;
 			const invoice = invoiceByTxn.get(t._id.toString());
 
-			let status: 'Active' | 'Expired' | 'Pending' | 'Cancelled';
+			let status: 'Active' | 'Expired' | 'Pending' | 'Cancelled' | 'Failed';
 			if ((refundedTxnId && refundedTxnId === t._id.toString()) || t.status === 'refunded') {
 				status = 'Cancelled';
+			} else if (t.status === 'failed') {
+				// Previously collapsed into 'Pending', which told the guide their
+				// payment was still in flight when the bank had already declined it —
+				// so nobody knew to try again.
+				status = 'Failed';
 			} else if (!paid) {
 				status = 'Pending';
 			} else if (expiry && expiry > now) {
@@ -591,6 +596,10 @@ class GuideService {
 				currency: t.currency,
 				paymentMethod: invoice?.paymentInfo?.method ?? null,
 				paymentStatus: paid ? 'paid' : t.status,
+				// Why the bank turned it down, so the guide can act on it rather
+				// than just retrying the same card. Null when the payment didn't
+				// fail, or when Razorpay gave no reason.
+				failureReason: t.failure?.description ?? t.failure?.reason ?? null,
 				// Human-facing reference: prefer our own code, then the gateway id.
 				transactionId: t.paymentCode ?? t.razorpay_payment_id ?? t.transaction_id,
 				razorpayPaymentId: t.razorpay_payment_id ?? null,
@@ -631,6 +640,7 @@ class GuideService {
 				reference_id: guide._id.toString(),
 				reference_type: 'guide_membership',
 				type: 'guide',
+				account: account._id,
 				description: `Guide Membership Fee - ${GUIDE_MEMBERSHIP_DURATION_DAYS} days`,
 			}
 		);

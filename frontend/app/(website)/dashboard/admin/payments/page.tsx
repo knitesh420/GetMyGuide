@@ -11,6 +11,7 @@ import {
   resendInvoice,
 } from "@/lib/redux/thunks/invoice/invoiceThunks";
 import { PageHeader, EmptyState } from "@/components/admin/PageHeader";
+import FailedPaymentsTable from "@/components/admin/FailedPaymentsTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -85,12 +86,19 @@ async function downloadWithSession(path: string, filename: string) {
   }
 }
 
+/**
+ * An invoice only exists once money has arrived, so the invoice list can never
+ * show a payment that failed. The two tabs are the two halves of the ledger.
+ */
+type View = "invoices" | "failed";
+
 export default function AdminPaymentsPage() {
   const dispatch = useAppDispatch();
   const { invoices, total, loading, resending, error } = useAppSelector(
     (state) => state.invoices,
   );
 
+  const [view, setView] = useState<View>("invoices");
   const [invoiceType, setInvoiceType] = useState<InvoiceType | undefined>();
   const [status, setStatus] = useState<InvoiceStatus | undefined>();
   const [search, setSearch] = useState("");
@@ -99,15 +107,18 @@ export default function AdminPaymentsPage() {
   const [submittedSearch, setSubmittedSearch] = useState("");
 
   useEffect(() => {
+    if (view !== "invoices") return;
     dispatch(fetchInvoices({ invoiceType, status, search: submittedSearch }));
-  }, [dispatch, invoiceType, status, submittedSearch]);
+  }, [dispatch, view, invoiceType, status, submittedSearch]);
 
   const handleResend = async (invoiceId: string, email: string) => {
     const result = await dispatch(resendInvoice(invoiceId));
     if (resendInvoice.fulfilled.match(result)) {
       toast.success(`Invoice emailed to ${email}.`);
     } else {
-      toast.error((result.payload as string) || "Could not resend the invoice.");
+      toast.error(
+        (result.payload as string) || "Could not resend the invoice.",
+      );
     }
   };
 
@@ -123,169 +134,208 @@ export default function AdminPaymentsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Payments"
-        description={`Every invoice raised on the platform${total ? ` — ${total} in total` : ""}.`}
+        description={
+          view === "invoices"
+            ? `Every invoice raised on the platform${total ? ` — ${total} in total` : ""}.`
+            : "Payments the gateway declined, and payments that cleared but were never fully processed."
+        }
       >
-        <Button variant="outline" onClick={handleExport}>
-          <Download className="mr-1.5 h-4 w-4" />
-          Export CSV
-        </Button>
+        {view === "invoices" && (
+          <Button variant="outline" onClick={handleExport}>
+            <Download className="mr-1.5 h-4 w-4" />
+            Export CSV
+          </Button>
+        )}
       </PageHeader>
 
-      <div className="flex flex-wrap items-center gap-2">
-        {TYPE_FILTERS.map((filter) => (
+      <div className="flex w-fit gap-1 rounded-lg bg-slate-100 p-1">
+        {(
+          [
+            { label: "Invoices", value: "invoices" },
+            { label: "Failed payments", value: "failed" },
+          ] as { label: string; value: View }[]
+        ).map((tab) => (
           <button
-            key={filter.label}
-            onClick={() => setInvoiceType(filter.value)}
-            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-              invoiceType === filter.value
-                ? "bg-teal-600 text-white"
-                : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+            key={tab.value}
+            onClick={() => setView(tab.value)}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              view === tab.value
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-600 hover:text-slate-900"
             }`}
           >
-            {filter.label}
+            {tab.label}
           </button>
         ))}
-
-        <span className="mx-1 h-5 w-px bg-slate-200" />
-
-        {STATUS_FILTERS.map((filter) => (
-          <button
-            key={filter.label}
-            onClick={() => setStatus(filter.value)}
-            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-              status === filter.value
-                ? "bg-slate-800 text-white"
-                : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
-            }`}
-          >
-            {filter.label}
-          </button>
-        ))}
-
-        <form
-          className="ml-auto flex gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setSubmittedSearch(search.trim());
-          }}
-        >
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Invoice number, name or email"
-            className="w-64"
-          />
-          <Button type="submit" variant="secondary">
-            Search
-          </Button>
-        </form>
       </div>
 
-      {error && (
-        <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </p>
-      )}
-
-      {loading && invoices.length === 0 ? (
-        <Skeleton className="h-96" />
-      ) : invoices.length === 0 ? (
-        <EmptyState
-          icon={Receipt}
-          title="No payments match these filters"
-          description="Invoices are raised automatically when a booking or membership is paid for."
-        />
+      {view === "failed" ? (
+        <FailedPaymentsTable />
       ) : (
-        <div className="overflow-x-auto rounded-xl border bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50">
-              <tr className="text-left text-xs uppercase tracking-wider text-slate-500">
-                <th className="px-4 py-3 font-semibold">Invoice</th>
-                <th className="px-4 py-3 font-semibold">Type</th>
-                <th className="px-4 py-3 font-semibold">Customer</th>
-                <th className="px-4 py-3 text-right font-semibold">Amount</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Paid</th>
-                <th className="px-4 py-3 text-right font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {invoices.map((invoice) => (
-                <tr key={invoice._id} className="hover:bg-slate-50/70">
-                  <td className="whitespace-nowrap px-4 py-3">
-                    <p className="font-medium text-slate-900">
-                      {invoice.invoiceNumber}
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      {shortDate(invoice.invoiceDate)}
-                    </p>
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                    {TYPE_LABEL[invoice.invoiceType] ?? invoice.invoiceType}
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-slate-800">
-                      {invoice.customerSnapshot?.name ?? "—"}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {invoice.customerSnapshot?.email}
-                    </p>
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-slate-900">
-                    {currency.format(
-                      invoice.paymentInfo?.grandTotal ??
-                        invoice.paymentInfo?.amount ??
-                        0,
-                    )}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ring-1 ring-inset ${
-                        STATUS_BADGE[invoice.status] ?? STATUS_BADGE.cancelled
-                      }`}
-                    >
-                      {invoice.status}
-                    </span>
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                    {shortDate(invoice.paymentDate)}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        title="Download PDF"
-                        onClick={() =>
-                          downloadWithSession(
-                            `/invoice/${invoice._id}/download`,
-                            `${invoice.invoiceNumber}.pdf`,
-                          )
-                        }
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        title="Email to customer"
-                        disabled={resending}
-                        onClick={() =>
-                          handleResend(
-                            invoice._id,
-                            invoice.customerSnapshot?.email ?? "the customer",
-                          )
-                        }
-                      >
-                        <Send className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            {TYPE_FILTERS.map((filter) => (
+              <button
+                key={filter.label}
+                onClick={() => setInvoiceType(filter.value)}
+                className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                  invoiceType === filter.value
+                    ? "bg-teal-600 text-white"
+                    : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {filter.label}
+              </button>
+            ))}
+
+            <span className="mx-1 h-5 w-px bg-slate-200" />
+
+            {STATUS_FILTERS.map((filter) => (
+              <button
+                key={filter.label}
+                onClick={() => setStatus(filter.value)}
+                className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                  status === filter.value
+                    ? "bg-slate-800 text-white"
+                    : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {filter.label}
+              </button>
+            ))}
+
+            <form
+              className="ml-auto flex gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setSubmittedSearch(search.trim());
+              }}
+            >
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Invoice number, name or email"
+                className="w-64"
+              />
+              <Button type="submit" variant="secondary">
+                Search
+              </Button>
+            </form>
+          </div>
+
+          {error && (
+            <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </p>
+          )}
+
+          {loading && invoices.length === 0 ? (
+            <Skeleton className="h-96" />
+          ) : invoices.length === 0 ? (
+            <EmptyState
+              icon={Receipt}
+              title="No payments match these filters"
+              description="Invoices are raised automatically when a booking or membership is paid for."
+            />
+          ) : (
+            <div className="overflow-x-auto rounded-xl border bg-white shadow-sm">
+              <table className="min-w-full divide-y divide-slate-200 text-sm">
+                <thead className="bg-slate-50">
+                  <tr className="text-left text-xs uppercase tracking-wider text-slate-500">
+                    <th className="px-4 py-3 font-semibold">Invoice</th>
+                    <th className="px-4 py-3 font-semibold">Type</th>
+                    <th className="px-4 py-3 font-semibold">Customer</th>
+                    <th className="px-4 py-3 text-right font-semibold">
+                      Amount
+                    </th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 font-semibold">Paid</th>
+                    <th className="px-4 py-3 text-right font-semibold">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {invoices.map((invoice) => (
+                    <tr key={invoice._id} className="hover:bg-slate-50/70">
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <p className="font-medium text-slate-900">
+                          {invoice.invoiceNumber}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {shortDate(invoice.invoiceDate)}
+                        </p>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                        {TYPE_LABEL[invoice.invoiceType] ?? invoice.invoiceType}
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-slate-800">
+                          {invoice.customerSnapshot?.name ?? "—"}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {invoice.customerSnapshot?.email}
+                        </p>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-slate-900">
+                        {currency.format(
+                          invoice.paymentInfo?.grandTotal ??
+                            invoice.paymentInfo?.amount ??
+                            0,
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ring-1 ring-inset ${
+                            STATUS_BADGE[invoice.status] ??
+                            STATUS_BADGE.cancelled
+                          }`}
+                        >
+                          {invoice.status}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                        {shortDate(invoice.paymentDate)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title="Download PDF"
+                            onClick={() =>
+                              downloadWithSession(
+                                `/invoice/${invoice._id}/download`,
+                                `${invoice.invoiceNumber}.pdf`,
+                              )
+                            }
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title="Email to customer"
+                            disabled={resending}
+                            onClick={() =>
+                              handleResend(
+                                invoice._id,
+                                invoice.customerSnapshot?.email ??
+                                  "the customer",
+                              )
+                            }
+                          >
+                            <Send className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

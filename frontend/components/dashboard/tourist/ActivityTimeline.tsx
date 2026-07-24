@@ -6,6 +6,7 @@ import {
   Ticket,
   UserCheck,
   Waypoints,
+  XCircle,
   type LucideIcon,
 } from "lucide-react";
 import type { TouristActivityEntry, TouristActivityType } from "@/lib/data";
@@ -24,11 +25,18 @@ const ENTRY_STYLE: Record<
     icon: CreditCard,
     className: "bg-emerald-500/10 text-emerald-600",
   },
+  "payment-failed": {
+    icon: XCircle,
+    className: "bg-red-500/10 text-red-600",
+  },
   "guide-assigned": {
     icon: UserCheck,
     className: "bg-violet-500/10 text-violet-600",
   },
-  "trip-updated": { icon: Waypoints, className: "bg-teal-500/10 text-teal-600" },
+  "trip-updated": {
+    icon: Waypoints,
+    className: "bg-teal-500/10 text-teal-600",
+  },
   "review-submitted": {
     icon: Star,
     className: "bg-amber-500/10 text-amber-600",

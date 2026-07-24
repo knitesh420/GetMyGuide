@@ -72,6 +72,7 @@ class BalancePaymentService {
 				reference_id: booking._id.toString(),
 				reference_type: BALANCE_REFERENCE_TYPE,
 				type: 'tourist',
+				account: account._id,
 				description: 'Get My Guide — balance payment',
 			}
 		);

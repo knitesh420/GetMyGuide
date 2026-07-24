@@ -352,4 +352,56 @@ describe('Guide membership: approval-gated subscription start', () => {
 			expect(mockRefundPayment).not.toHaveBeenCalled();
 		});
 	});
+
+	describe('getSubscriptionHistory', () => {
+		it('shows a declined payment as Failed, with the bank’s reason', async () => {
+			// The regression: `failed` fell through to the generic "not paid" branch
+			// and rendered as 'Pending', so the guide was told their payment was
+			// still in flight when it had actually been declined — and never knew
+			// to try again.
+			const { account, guide } = await createRegisteredGuide();
+			await TransactionDB.create({
+				reference_id: guide._id.toString(),
+				reference_type: 'guide_membership',
+				type: 'guide',
+				razorpay_order_id: 'order_failed_1',
+				razorpay_customer_id: 'cust_test_1',
+				transaction_id: 'txn_failed_1',
+				status: 'failed',
+				amount: 500,
+				currency: 'INR',
+				failure: {
+					code: 'BAD_REQUEST_ERROR',
+					description: 'Your card has insufficient funds.',
+				},
+			});
+
+			const { data } = await GuideService.getSubscriptionHistory(account._id.toString());
+
+			expect(data).toHaveLength(1);
+			expect(data[0].status).toBe('Failed');
+			expect(data[0].failureReason).toBe('Your card has insufficient funds.');
+		});
+
+		it('still shows an unpaid attempt as Pending', async () => {
+			// The Failed branch must not swallow the genuinely-in-flight case.
+			const { account, guide } = await createRegisteredGuide();
+			await TransactionDB.create({
+				reference_id: guide._id.toString(),
+				reference_type: 'guide_membership',
+				type: 'guide',
+				razorpay_order_id: 'order_pending_1',
+				razorpay_customer_id: 'cust_test_1',
+				transaction_id: 'txn_pending_1',
+				status: 'pending',
+				amount: 500,
+				currency: 'INR',
+			});
+
+			const { data } = await GuideService.getSubscriptionHistory(account._id.toString());
+
+			expect(data[0].status).toBe('Pending');
+			expect(data[0].failureReason).toBeNull();
+		});
+	});
 });

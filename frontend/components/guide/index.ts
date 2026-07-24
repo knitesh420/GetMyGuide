@@ -9,6 +9,7 @@ export {
   GuideEmptyState,
 } from "./guide-shell";
 export { GuideStat, GuideStatCard, GuideStatStrip } from "./guide-stats";
+export { MembershipPaymentAlert } from "./MembershipPaymentAlert";
 export {
   GuideTable,
   GuideTableHead,

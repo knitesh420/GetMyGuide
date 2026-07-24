@@ -162,6 +162,7 @@ class TourGuideService {
 				reference_id: tempReference,
 				reference_type: 'pending_direct_booking',
 				type: 'tourist',
+				account: account._id,
 				description: `Advance payment for a guided tour with ${guide.name}`,
 				metadata: booking_terms,
 			}

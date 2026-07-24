@@ -4,6 +4,7 @@ import WebhookEventDB from '@mongo/repo/WebhookEvent';
 import PaymentService from '@services/payment';
 import crypto from 'crypto';
 import express from 'express';
+import { Types } from 'mongoose';
 import request from 'supertest';
 import configServer from '../../src/server-config';
 import { clearDatabase, connectTestDB, disconnectTestDB } from '../setup/db.setup';
@@ -37,7 +38,8 @@ describe('Payment integrity', () => {
 			.digest('hex');
 	}
 
-	async function seedPaidOrder(amount: number) {
+	/** `account` omitted models a guest checkout, which belongs to no dashboard. */
+	async function seedPaidOrder(amount: number, account?: Types.ObjectId) {
 		const orderId = `order_${crypto.randomBytes(6).toString('hex')}`;
 		const paymentId = `pay_${crypto.randomBytes(6).toString('hex')}`;
 
@@ -45,6 +47,7 @@ describe('Payment integrity', () => {
 			reference_id: 'temp-ref',
 			reference_type: 'pending_booking',
 			type: 'tourist',
+			account: account ?? null,
 			razorpay_order_id: orderId,
 			razorpay_customer_id: 'cust_test',
 			transaction_id: crypto.randomBytes(16).toString('hex'),
@@ -218,6 +221,121 @@ describe('Payment integrity', () => {
 		it('rejects a webhook with no signature header', async () => {
 			const res = await request(app).post('/payment/webhook').send(payload);
 			expect(res.status).toBeGreaterThanOrEqual(400);
+		});
+
+		/** A payment.failed body carrying Razorpay's diagnosis of the decline. */
+		function failedPayload(orderId: string, paymentId: string) {
+			return {
+				event: 'payment.failed',
+				payload: {
+					payment: {
+						entity: {
+							id: paymentId,
+							order_id: orderId,
+							method: 'card',
+							error_code: 'BAD_REQUEST_ERROR',
+							error_description: 'Your payment was declined by the bank.',
+							error_source: 'bank',
+							error_step: 'payment_authorization',
+							error_reason: 'payment_failed',
+						},
+					},
+				},
+			};
+		}
+
+		it('records why the payment failed, not just that it did', async () => {
+			const { orderId, paymentId } = await seedPaidOrder(1000);
+
+			await PaymentService.handleWebhookEvent(failedPayload(orderId, paymentId), 'evt_failed');
+
+			const transaction = await TransactionDB.findOne({ razorpay_order_id: orderId });
+			expect(transaction!.status).toBe('failed');
+			expect(transaction!.failure?.code).toBe('BAD_REQUEST_ERROR');
+			expect(transaction!.failure?.description).toBe('Your payment was declined by the bank.');
+			expect(transaction!.failure?.source).toBe('bank');
+			expect(transaction!.failure?.step).toBe('payment_authorization');
+			expect(transaction!.failure?.method).toBe('card');
+		});
+
+		it('leaves no failure record when Razorpay supplies no diagnosis', async () => {
+			const { orderId, paymentId } = await seedPaidOrder(1000);
+
+			await PaymentService.handleWebhookEvent(
+				{
+					event: 'payment.failed',
+					payload: { payment: { entity: { id: paymentId, order_id: orderId } } },
+				},
+				'evt_bare'
+			);
+
+			const transaction = await TransactionDB.findOne({ razorpay_order_id: orderId });
+			expect(transaction!.status).toBe('failed');
+			// An absent `failure` has to mean "we were told nothing" — never an
+			// empty husk that reads as a diagnosis in the admin view.
+			expect(transaction!.failure).toBeUndefined();
+		});
+
+		it('keeps a declined booking payment as failed, not pending_verification', async () => {
+			// The regression: a booking order's reference_id is a throwaway token,
+			// so updateRegistrationStatus cast it to an Account id, threw a
+			// CastError on all three attempts, and downgraded the gateway's
+			// verdict to pending_verification — hiding a real decline.
+			const { orderId, paymentId } = await seedPaidOrder(1000);
+
+			await PaymentService.handleWebhookEvent(failedPayload(orderId, paymentId), 'evt_no_cast');
+
+			const transaction = await TransactionDB.findOne({ razorpay_order_id: orderId });
+			expect(transaction!.status).toBe('failed');
+		});
+
+		it('puts a declined payment on the payer’s own dashboard', async () => {
+			// `reference_id` cannot answer "whose was this?" for a booking, so
+			// without the account link a tourist's declined card was invisible to
+			// them — no invoice, no booking, nothing.
+			const mine = new Types.ObjectId();
+			const someoneElse = new Types.ObjectId();
+
+			const own = await seedPaidOrder(1000, mine);
+			const other = await seedPaidOrder(2000, someoneElse);
+
+			await PaymentService.handleWebhookEvent(failedPayload(own.orderId, own.paymentId), 'evt_mine');
+			await PaymentService.handleWebhookEvent(
+				failedPayload(other.orderId, other.paymentId),
+				'evt_theirs'
+			);
+
+			const rows = await PaymentService.listMyFailedPayments(mine);
+
+			expect(rows).toHaveLength(1);
+			expect(rows[0].amount).toBe(1000);
+			expect(rows[0].failure?.description).toBe('Your payment was declined by the bank.');
+			// An abandoned checkout wrote no booking, so there is nothing to link to.
+			expect(rows[0].bookingId).toBeNull();
+		});
+
+		it('does not leak a guest booking failure into anyone’s dashboard', async () => {
+			const { orderId, paymentId } = await seedPaidOrder(1000);
+			await PaymentService.handleWebhookEvent(failedPayload(orderId, paymentId), 'evt_guest');
+
+			// Seeded with no account — a guest checkout. It belongs to no dashboard.
+			expect(await PaymentService.listMyFailedPayments(new Types.ObjectId())).toHaveLength(0);
+		});
+
+		it('does not mis-stamp an unrelated transaction sharing the reference id', async () => {
+			// reference_id is not unique — a guide has one per renewal. The old
+			// exhaustion path updated by reference_id alone and could stamp the
+			// wrong row.
+			const older = await seedPaidOrder(1000);
+			const newer = await seedPaidOrder(2000);
+
+			await PaymentService.handleWebhookEvent(
+				failedPayload(newer.orderId, newer.paymentId),
+				'evt_scoped'
+			);
+
+			const untouched = await TransactionDB.findOne({ razorpay_order_id: older.orderId });
+			expect(untouched!.status).toBe('pending');
 		});
 	});
 });

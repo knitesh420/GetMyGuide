@@ -36,8 +36,7 @@ import {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-const rupees = (amount: number) =>
-  `₹${(amount ?? 0).toLocaleString("en-IN")}`;
+const rupees = (amount: number) => `₹${(amount ?? 0).toLocaleString("en-IN")}`;
 
 const formatDate = (value?: string | null) =>
   value
@@ -53,9 +52,17 @@ const STATUS_STYLES: Record<GuideSubscriptionRecord["status"], string> = {
   Expired: "bg-slate-100 text-slate-600 ring-slate-200",
   Pending: "bg-amber-50 text-amber-700 ring-amber-200",
   Cancelled: "bg-red-50 text-red-700 ring-red-200",
+  // Distinct from Pending on purpose: a declined payment used to show as
+  // "Pending", which read as "still processing" and gave the guide no reason to
+  // try again.
+  Failed: "bg-red-50 text-red-700 ring-red-200",
 };
 
-function StatusBadge({ status }: { status: GuideSubscriptionRecord["status"] }) {
+function StatusBadge({
+  status,
+}: {
+  status: GuideSubscriptionRecord["status"];
+}) {
   return (
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${STATUS_STYLES[status]}`}
@@ -69,9 +76,12 @@ function StatusBadge({ status }: { status: GuideSubscriptionRecord["status"] }) 
 async function downloadInvoice(record: GuideSubscriptionRecord) {
   if (!record.invoiceId) return;
   try {
-    const res = await fetch(`${API_BASE_URL}/invoice/${record.invoiceId}/download`, {
-      credentials: "include",
-    });
+    const res = await fetch(
+      `${API_BASE_URL}/invoice/${record.invoiceId}/download`,
+      {
+        credentials: "include",
+      },
+    );
     if (!res.ok) throw new Error("Download failed");
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -118,7 +128,9 @@ function SubscriptionHistorySection({
     <GuidePanel>
       <div className="flex items-center gap-2 border-b border-slate-200 px-5 py-4">
         <History className="h-4 w-4 text-slate-400" />
-        <h2 className="text-sm font-semibold text-slate-900">Subscription History</h2>
+        <h2 className="text-sm font-semibold text-slate-900">
+          Subscription History
+        </h2>
       </div>
 
       {loading ? (
@@ -152,14 +164,26 @@ function SubscriptionHistorySection({
                 {records.map((r) => (
                   <Fragment key={r.id}>
                     <tr className="border-b border-slate-100 last:border-b-0">
-                      <td className="px-5 py-3 font-medium text-slate-900">{r.plan}</td>
-                      <td className="px-5 py-3 text-slate-600">{formatDate(r.purchaseDate)}</td>
-                      <td className="px-5 py-3 text-slate-600">{rupees(r.amount)}</td>
+                      <td className="px-5 py-3 font-medium text-slate-900">
+                        {r.plan}
+                      </td>
+                      <td className="px-5 py-3 text-slate-600">
+                        {formatDate(r.purchaseDate)}
+                      </td>
+                      <td className="px-5 py-3 text-slate-600">
+                        {rupees(r.amount)}
+                      </td>
                       <td className="px-5 py-3 capitalize text-slate-600">
                         {r.paymentStatus}
                       </td>
                       <td className="px-5 py-3">
                         <StatusBadge status={r.status} />
+                        {r.status === "Failed" && (
+                          <p className="mt-1 max-w-[16rem] text-xs text-red-700">
+                            {r.failureReason ??
+                              "The payment did not complete. Please try again."}
+                          </p>
+                        )}
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex items-center justify-end gap-1">
@@ -167,7 +191,9 @@ function SubscriptionHistorySection({
                             type="button"
                             size="sm"
                             variant="ghost"
-                            onClick={() => setExpanded(expanded === r.id ? null : r.id)}
+                            onClick={() =>
+                              setExpanded(expanded === r.id ? null : r.id)
+                            }
                           >
                             <ChevronDown
                               className={`h-4 w-4 transition-transform ${
@@ -187,12 +213,13 @@ function SubscriptionHistorySection({
                               Invoice
                             </Button>
                           )}
-                          {r.status === "Expired" && canRenew && (
-                            <Button type="button" size="sm" onClick={onRenew}>
-                              <RefreshCw className="h-4 w-4" />
-                              Renew
-                            </Button>
-                          )}
+                          {(r.status === "Expired" || r.status === "Failed") &&
+                            canRenew && (
+                              <Button type="button" size="sm" onClick={onRenew}>
+                                <RefreshCw className="h-4 w-4" />
+                                {r.status === "Failed" ? "Try again" : "Renew"}
+                              </Button>
+                            )}
                         </div>
                       </td>
                     </tr>
@@ -200,19 +227,35 @@ function SubscriptionHistorySection({
                       <tr className="bg-slate-50/70">
                         <td colSpan={6} className="px-5 py-4">
                           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-xs sm:grid-cols-3 lg:grid-cols-4">
-                            <Detail label="Activation Date" value={formatDate(r.activationDate)} />
-                            <Detail label="Expiry Date" value={formatDate(r.expiryDate)} />
+                            <Detail
+                              label="Activation Date"
+                              value={formatDate(r.activationDate)}
+                            />
+                            <Detail
+                              label="Expiry Date"
+                              value={formatDate(r.expiryDate)}
+                            />
                             <Detail
                               label="Duration"
-                              value={r.durationDays ? `${r.durationDays} days` : "—"}
+                              value={
+                                r.durationDays ? `${r.durationDays} days` : "—"
+                              }
                             />
                             <Detail
                               label="Payment Method"
                               value={r.paymentMethod || "—"}
                               capitalize
                             />
-                            <Detail label="Transaction ID" value={r.transactionId} mono />
-                            <Detail label="Invoice No." value={r.invoiceNumber || "—"} mono />
+                            <Detail
+                              label="Transaction ID"
+                              value={r.transactionId}
+                              mono
+                            />
+                            <Detail
+                              label="Invoice No."
+                              value={r.invoiceNumber || "—"}
+                              mono
+                            />
                           </dl>
                         </td>
                       </tr>
@@ -229,8 +272,12 @@ function SubscriptionHistorySection({
               <div key={r.id} className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-slate-900">{r.plan}</p>
-                    <p className="text-xs text-slate-500">{formatDate(r.purchaseDate)}</p>
+                    <p className="text-sm font-medium text-slate-900">
+                      {r.plan}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {formatDate(r.purchaseDate)}
+                    </p>
                   </div>
                   <StatusBadge status={r.status} />
                 </div>
@@ -240,6 +287,12 @@ function SubscriptionHistorySection({
                   <span>Activated: {formatDate(r.activationDate)}</span>
                   <span>Expires: {formatDate(r.expiryDate)}</span>
                 </div>
+                {r.status === "Failed" && (
+                  <p className="mt-2 text-xs text-red-700">
+                    {r.failureReason ??
+                      "The payment did not complete. Please try again."}
+                  </p>
+                )}
                 <div className="mt-3 flex flex-wrap gap-2">
                   {r.invoiceId && (
                     <Button
@@ -252,12 +305,13 @@ function SubscriptionHistorySection({
                       Invoice
                     </Button>
                   )}
-                  {r.status === "Expired" && canRenew && (
-                    <Button type="button" size="sm" onClick={onRenew}>
-                      <RefreshCw className="h-4 w-4" />
-                      Renew
-                    </Button>
-                  )}
+                  {(r.status === "Expired" || r.status === "Failed") &&
+                    canRenew && (
+                      <Button type="button" size="sm" onClick={onRenew}>
+                        <RefreshCw className="h-4 w-4" />
+                        {r.status === "Failed" ? "Try again" : "Renew"}
+                      </Button>
+                    )}
                 </div>
               </div>
             ))}
@@ -304,7 +358,9 @@ const RAZORPAY_THEME_COLOR = "#22C55E";
 
 export default function GuideMembershipPage() {
   const dispatch = useDispatch<AppDispatch>();
-  const { myProfile: profile, loading } = useSelector((state: RootState) => state.guide);
+  const { myProfile: profile, loading } = useSelector(
+    (state: RootState) => state.guide,
+  );
   const [processing, setProcessing] = useState(false);
   // Bumped after a successful payment so the history section refetches.
   const [historyReload, setHistoryReload] = useState(0);
@@ -314,7 +370,9 @@ export default function GuideMembershipPage() {
   }, [dispatch]);
 
   const isActive =
-    profile?.isVisible && !profile?.membershipExpired && !!profile?.membershipExpiryDate;
+    profile?.isVisible &&
+    !profile?.membershipExpired &&
+    !!profile?.membershipExpiryDate;
   /**
    * Paid, but the 30-day clock has not started: the guide is waiting on the
    * admin's verification, and their subscription begins the moment it lands.
@@ -341,14 +399,18 @@ export default function GuideMembershipPage() {
 
   const handlePay = async () => {
     if (!profile?.registrationCompleted) {
-      toast.error("Please complete your guide profile before paying for membership.");
+      toast.error(
+        "Please complete your guide profile before paying for membership.",
+      );
       return;
     }
 
     setProcessing(true);
     const orderResult = await dispatch(createGuideMembershipOrder());
     if (createGuideMembershipOrder.rejected.match(orderResult)) {
-      toast.error((orderResult.payload as string) || "Failed to start payment.");
+      toast.error(
+        (orderResult.payload as string) || "Failed to start payment.",
+      );
       setProcessing(false);
       return;
     }
@@ -398,7 +460,9 @@ export default function GuideMembershipPage() {
 
     const rzp = new window.Razorpay(options);
     rzp.on("payment.failed", (response: any) => {
-      toast.error(`Payment failed: ${response.error?.description || "please try again"}`);
+      toast.error(
+        `Payment failed: ${response.error?.description || "please try again"}`,
+      );
       setProcessing(false);
     });
     rzp.open();
@@ -416,7 +480,10 @@ export default function GuideMembershipPage() {
 
   return (
     <>
-      <Script id="razorpay-checkout-js" src="https://checkout.razorpay.com/v1/checkout.js" />
+      <Script
+        id="razorpay-checkout-js"
+        src="https://checkout.razorpay.com/v1/checkout.js"
+      />
 
       <div className="space-y-6">
         <GuidePageHeader
@@ -436,14 +503,20 @@ export default function GuideMembershipPage() {
               <GuideStat
                 icon={CalendarClock}
                 label={
-                  isActive ? "Expires On" : awaitingApproval ? "Fee Paid On" : "Expired On"
+                  isActive
+                    ? "Expires On"
+                    : awaitingApproval
+                      ? "Fee Paid On"
+                      : "Expired On"
                 }
                 value={(awaitingApproval ? paidOn : expiryDate) ?? "—"}
               />
               <GuideStat
                 icon={ShieldCheck}
                 label="Profile"
-                value={profile?.registrationCompleted ? "Complete" : "Incomplete"}
+                value={
+                  profile?.registrationCompleted ? "Complete" : "Incomplete"
+                }
               />
             </GuideStatStrip>
           </div>
@@ -505,10 +578,13 @@ export default function GuideMembershipPage() {
 
             {profile?.membershipRefund?.status === "processed" && (
               <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                <span className="font-semibold">Membership fee refunded.</span> We refunded ₹
+                <span className="font-semibold">Membership fee refunded.</span>{" "}
+                We refunded ₹
                 {profile.membershipRefund.amount.toLocaleString("en-IN")} on{" "}
-                {new Date(profile.membershipRefund.refundedAt).toLocaleDateString("en-IN")}. It
-                usually reaches your account within 5–7 working days.
+                {new Date(
+                  profile.membershipRefund.refundedAt,
+                ).toLocaleDateString("en-IN")}
+                . It usually reaches your account within 5–7 working days.
               </div>
             )}
 
@@ -517,7 +593,10 @@ export default function GuideMembershipPage() {
               // An awaiting-verification guide has already paid: taking their money
               // again is the one thing this page must never do.
               disabled={
-                processing || loading || !profile?.registrationCompleted || awaitingApproval
+                processing ||
+                loading ||
+                !profile?.registrationCompleted ||
+                awaitingApproval
               }
               className="mt-5 w-full"
               size="lg"
@@ -532,7 +611,8 @@ export default function GuideMembershipPage() {
             )}
             {awaitingApproval && (
               <p className="mt-2 text-center text-xs text-slate-500">
-                No further payment is needed. We&apos;ll email you when your profile is verified.
+                No further payment is needed. We&apos;ll email you when your
+                profile is verified.
               </p>
             )}
           </div>
@@ -543,7 +623,9 @@ export default function GuideMembershipPage() {
           onRenew={handlePay}
           // Renewing is only meaningful for a registered guide who is not mid-payment
           // and is not already parked awaiting verification (they've paid already).
-          canRenew={!!profile?.registrationCompleted && !awaitingApproval && !processing}
+          canRenew={
+            !!profile?.registrationCompleted && !awaitingApproval && !processing
+          }
         />
       </div>
     </>
