@@ -1,12 +1,13 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Image from "next/image";
+import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Calendar, User, MapPin, Users, Loader2 } from "lucide-react";
+import { Calendar, User, MapPin, Users, Loader2, ShieldCheck } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState, AppDispatch } from "@/lib/store";
 import { useToast } from "@/components/ui/use-toast";
@@ -16,6 +17,32 @@ import { createRazorpayOrder } from "@/lib/redux/thunks/booking/bookingThunks";
 import { fetchPackageById } from "@/lib/redux/thunks/admin/packageThunks";
 import { getGuideById } from "@/lib/redux/thunks/guide/guideThunk";
 import { resolvePackageImageUrl } from "@/lib/utils/utils";
+
+import PaymentProcessing from "@/components/animations/PaymentProcessing";
+import PaymentFailure from "@/components/animations/PaymentFailure";
+import { Shimmer } from "@/components/animations/Skeletons";
+import { JourneyProgress } from "@/components/animations/travel";
+import { EASE_OUT, staggerParent } from "@/lib/motion";
+
+/** Placeholder that mirrors the two-column checkout while data loads. */
+function CheckoutSkeleton() {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+      {[0, 1].map((col) => (
+        <div key={col} className="space-y-6">
+          <Shimmer className="h-8 w-64" />
+          <div className="rounded-2xl border border-slate-100 bg-white p-6 space-y-4">
+            {col === 0 && <Shimmer className="h-48 w-full rounded-xl" />}
+            <Shimmer className="h-6 w-2/3" />
+            <Shimmer className="h-4 w-1/2" />
+            <Shimmer className="h-4 w-1/3" />
+            <Shimmer className="h-12 w-full rounded-lg" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 declare global {
   interface Window {
@@ -54,6 +81,18 @@ function CheckoutContent() {
   const tour = packages.find((t) => t._id === tourId);
   const guide = guides.find((g) => g._id === guideId);
 
+  // Presentation-only state for the animated payment experience. `attemptRef`
+  // is the duplicate-submit guard: it flips synchronously on click, so a double
+  // tap can't open two Razorpay sheets before React re-renders.
+  const attemptRef = useRef(false);
+  const [verifying, setVerifying] = useState(false);
+  // Errors raised before Razorpay is even reached (no slice error to read).
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  // The slice error is the source of truth for a failed payment, so the failure
+  // screen is derived from it rather than mirrored into state.
+  const failureReason = error ?? localError;
+
   useEffect(() => {
     if (tourId && !tour && packagesLoading !== "pending") {
       dispatch(fetchPackageById(tourId));
@@ -66,16 +105,22 @@ function CheckoutContent() {
     }
   }, [dispatch, guideId, guide, guidesLoading]);
 
+  // A booking error used to be toasted and cleared immediately; it now drives
+  // the failure screen and is cleared when the user acts on it. Clearing on
+  // unmount keeps a stale error from re-opening the screen on a later visit.
   useEffect(() => {
-    if (error) {
-      toast({
-        variant: "destructive",
-        title: "Booking Failed",
-        description: error,
-      });
+    return () => {
       dispatch(clearBookingError());
-    }
-  }, [error, dispatch, toast]);
+    };
+  }, [dispatch]);
+
+  /** Dismisses the failure screen and re-arms the payment button. */
+  const resetAfterFailure = () => {
+    attemptRef.current = false;
+    setVerifying(false);
+    setLocalError(null);
+    dispatch(clearBookingError());
+  };
 
   useEffect(() => {
     if (currentBooking?._id) {
@@ -84,6 +129,10 @@ function CheckoutContent() {
   }, [currentBooking, router]);
 
   const handlePayment = async () => {
+    // Duplicate-attempt guard — a second click while a sheet is already open
+    // would create a second Razorpay order for the same booking.
+    if (attemptRef.current) return;
+
     if (!tour || !guide || !authUser || !numberOfTourists) {
       toast({
         variant: "destructive",
@@ -92,6 +141,9 @@ function CheckoutContent() {
       });
       return;
     }
+
+    attemptRef.current = true;
+    setLocalError(null);
 
     const touristsCount = parseInt(numberOfTourists);
 
@@ -112,11 +164,8 @@ function CheckoutContent() {
       const bookingData = orderResult?.booking_data;
 
       if (!rzp || !rzp.order_id || !bookingData) {
-        toast({
-          variant: "destructive",
-          title: "Payment Error",
-          description: "Could not create payment order.",
-        });
+        attemptRef.current = false;
+        setLocalError("Could not create payment order.");
         return;
       }
 
@@ -128,6 +177,9 @@ function CheckoutContent() {
         description: rzp.description || `Advance for ${tour.title}`,
         order_id: rzp.order_id,
         handler: function (response: any) {
+          // Razorpay has taken the money; server-side verification is next —
+          // this is the window the processing overlay covers.
+          setVerifying(true);
           dispatch(
             verifyPaymentAndCreateBooking({
               razorpay_order_id: response.razorpay_order_id,
@@ -136,6 +188,13 @@ function CheckoutContent() {
               booking_data: bookingData,
             }),
           );
+        },
+        // Without this, dismissing the Razorpay sheet would leave the
+        // duplicate-attempt guard latched and block any retry.
+        modal: {
+          ondismiss: function () {
+            attemptRef.current = false;
+          },
         },
         prefill: rzp.prefill || {
           name: authUser.name,
@@ -148,20 +207,13 @@ function CheckoutContent() {
       const paymentObject = new window.Razorpay(options);
       paymentObject.open();
     } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Payment Error",
-        description: err.message || "Could not initiate payment.",
-      });
+      attemptRef.current = false;
+      setLocalError(err.message || "Could not initiate payment.");
     }
   };
 
   if ((!tour && packagesLoading === "pending") || (!guide && guidesLoading)) {
-    return (
-      <div className="flex justify-center items-center py-40">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      </div>
-    );
+    return <CheckoutSkeleton />;
   }
 
   if (
@@ -174,7 +226,12 @@ function CheckoutContent() {
     !guide
   ) {
     return (
-      <div className="text-center py-20">
+      <motion.div
+        className="text-center py-20"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: EASE_OUT }}
+      >
         <h1 className="text-2xl font-bold text-destructive">
           Invalid Booking Information
         </h1>
@@ -184,7 +241,7 @@ function CheckoutContent() {
         <Button onClick={() => router.push("/services")} className="mt-4">
           Browse Tours
         </Button>
-      </div>
+      </motion.div>
     );
   }
 
@@ -202,89 +259,151 @@ function CheckoutContent() {
     day: "numeric",
   });
 
+  const summaryRows = [
+    { icon: MapPin, content: tour.locations.join(", ") },
+    {
+      icon: User,
+      content: (
+        <>
+          Guide: <span className="font-bold">{guide.name}</span>
+        </>
+      ),
+    },
+    { icon: Users, content: `${touristsCount} Guest${touristsCount > 1 ? "s" : ""}` },
+    { icon: Calendar, content: `${formattedStartDate} to ${formattedEndDate}` },
+  ];
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-      <div>
-        <h2 className="text-3xl font-bold mb-6">Your Booking Summary</h2>
-        <Card>
-          <CardHeader>
-            <div className="relative h-48 w-full rounded-t-lg overflow-hidden">
-              <Image
-                src={resolvePackageImageUrl(tour.images?.[0])}
-                alt={tour.title}
-                fill
-                className="object-cover"
-              />
-            </div>
-            <CardTitle className="pt-4 text-2xl">{tour.title}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-3">
-              <MapPin className="w-5 h-5" />
-              <span>{tour.locations.join(", ")}</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <User className="w-5 h-5" />
-              <span>
-                Guide: <span className="font-bold">{guide.name}</span>
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <Users className="w-5 h-5" />
-              <span>
-                {touristsCount} Guest{touristsCount > 1 ? "s" : ""}
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <Calendar className="w-5 h-5" />
-              <span>{`${formattedStartDate} to ${formattedEndDate}`}</span>
-            </div>
-            <Separator />
-            <div className="flex justify-between items-center text-lg">
-              <span className="font-medium">Total Price:</span>
-              <span className="font-bold">₹{totalCost.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between items-center text-2xl">
-              <span className="font-bold text-primary">
-                Advance Payable (20%):
-              </span>
-              <span className="font-extrabold text-primary">
-                ₹{advanceAmount.toLocaleString()}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      <div>
-        <h2 className="text-3xl font-bold mb-6">Confirm Your Booking</h2>
-        <Card>
-          <CardHeader>
-            <CardTitle>Pay Advance to Book</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground mb-6">
-              Pay 20% now to confirm your booking. The remaining balance can be
-              paid later.
-            </p>
-            <Button
-              size="lg"
-              className="w-full text-lg h-14 mt-4 font-bold"
-              onClick={handlePayment}
-              disabled={bookingLoading}
-            >
-              {bookingLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />{" "}
-                  Processing...
-                </>
-              ) : (
-                `Pay ₹${advanceAmount.toLocaleString()} Securely`
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+    <>
+      <PaymentProcessing open={verifying && !failureReason} />
+      <PaymentFailure
+        open={!!failureReason}
+        reason={failureReason}
+        onRetry={() => {
+          resetAfterFailure();
+          handlePayment();
+        }}
+        onBack={resetAfterFailure}
+      />
+
+      {/* Journey rail — checkout is the final step before confirmation. */}
+      <JourneyProgress
+        steps={["Choose Tour", "Pick Guide", "Checkout", "Confirmed"]}
+        current={2}
+        className="mb-12"
+      />
+
+      <motion.div
+        className="grid grid-cols-1 lg:grid-cols-2 gap-12"
+        variants={staggerParent(0.12)}
+        initial="hidden"
+        animate="visible"
+      >
+        <motion.div
+          variants={{
+            hidden: { opacity: 0, y: 24 },
+            visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE_OUT } },
+          }}
+        >
+          <h2 className="text-3xl font-bold mb-6">Your Booking Summary</h2>
+          <Card className="overflow-hidden">
+            <CardHeader>
+              <div className="relative h-48 w-full rounded-t-lg overflow-hidden group">
+                <Image
+                  src={resolvePackageImageUrl(tour.images?.[0])}
+                  alt={tour.title}
+                  fill
+                  className="object-cover transition-transform duration-700 group-hover:scale-105"
+                />
+              </div>
+              <CardTitle className="pt-4 text-2xl">{tour.title}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {summaryRows.map((row, i) => (
+                <motion.div
+                  key={i}
+                  className="flex items-center gap-3"
+                  initial={{ opacity: 0, x: -12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.4, delay: 0.25 + i * 0.07, ease: EASE_OUT }}
+                >
+                  <row.icon className="w-5 h-5 text-primary shrink-0" />
+                  <span>{row.content}</span>
+                </motion.div>
+              ))}
+              <Separator />
+              <div className="flex justify-between items-center text-lg">
+                <span className="font-medium">Total Price:</span>
+                {/* Keyed so the number cross-fades if the total changes. */}
+                <motion.span
+                  key={totalCost}
+                  className="font-bold"
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, ease: EASE_OUT }}
+                >
+                  ₹{totalCost.toLocaleString()}
+                </motion.span>
+              </div>
+              <div className="flex justify-between items-center text-2xl">
+                <span className="font-bold text-primary">
+                  Advance Payable (20%):
+                </span>
+                <motion.span
+                  key={advanceAmount}
+                  className="font-extrabold text-primary"
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, ease: EASE_OUT }}
+                >
+                  ₹{advanceAmount.toLocaleString()}
+                </motion.span>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div
+          variants={{
+            hidden: { opacity: 0, y: 24 },
+            visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE_OUT } },
+          }}
+        >
+          <h2 className="text-3xl font-bold mb-6">Confirm Your Booking</h2>
+          <Card className="lg:sticky lg:top-24">
+            <CardHeader>
+              <CardTitle>Pay Advance to Book</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground mb-6">
+                Pay 20% now to confirm your booking. The remaining balance can be
+                paid later.
+              </p>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Button
+                  size="lg"
+                  className="w-full text-lg h-14 mt-4 font-bold"
+                  onClick={handlePayment}
+                  disabled={bookingLoading || verifying}
+                >
+                  {bookingLoading || verifying ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />{" "}
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="mr-2 h-5 w-5" />
+                      {`Pay ₹${advanceAmount.toLocaleString()} Securely`}
+                    </>
+                  )}
+                </Button>
+              </motion.div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </motion.div>
+    </>
   );
 }
 
@@ -292,13 +411,7 @@ export default function CheckoutPage() {
   return (
     <div className="min-h-screen bg-background pt-20">
       <div className="container max-w-5xl mx-auto px-4 py-12">
-        <Suspense
-          fallback={
-            <div className="flex justify-center items-center py-40">
-              <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            </div>
-          }
-        >
+        <Suspense fallback={<CheckoutSkeleton />}>
           <CheckoutContent />
         </Suspense>
       </div>

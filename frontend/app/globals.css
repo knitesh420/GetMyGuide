@@ -419,3 +419,52 @@ html {
 .swal-app-cancel:focus {
   box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.35) !important;
 }
+
+/* --- Skeleton shimmer -------------------------------------------------------
+   A CSS animation rather than a Framer Motion one: skeleton screens render
+   dozens of these at once, and keeping them off the JS animation loop avoids
+   the main-thread cost of driving that many motion values. */
+@keyframes gmg-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.gmg-shimmer {
+  position: relative;
+  overflow: hidden;
+  background-color: rgb(226 232 240); /* slate-200 */
+}
+
+.gmg-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0,
+    rgba(255, 255, 255, 0.65) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: gmg-shimmer 1.6s infinite;
+}
+
+/* --- Accessibility ----------------------------------------------------------
+   Framer Motion handles `prefers-reduced-motion` app-wide via <MotionConfig
+   reducedMotion="user">, but that has no reach over plain CSS animations like
+   the ones declared above, so they're disabled here too. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .gmg-shimmer::after {
+    display: none;
+  }
+}

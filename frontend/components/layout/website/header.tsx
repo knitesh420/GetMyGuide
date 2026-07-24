@@ -97,17 +97,29 @@ export function Header() {
     setIsMobileLoginOpen(false);
   }, [pathname]);
 
-  // Escape closes any open login/profile dropdown.
+  // Escape closes any open login/profile dropdown, and the mobile drawer.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setIsProfileOpen(false);
         setIsMobileLoginOpen(false);
+        setIsMenuOpen(false);
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, []);
+
+  // The mobile menu is an overlay drawer now, so the page behind it must not
+  // scroll while it is open.
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [isMenuOpen]);
 
   // When the signed-out login menu opens, move focus to its first option so
   // keyboard users land inside the menu.
@@ -174,14 +186,24 @@ export function Header() {
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       >
         <div className="max-w-7xl mx-auto px-4 lg:px-6">
-          <div className="flex items-center justify-between h-14 lg:h-16">
+          {/* Shrinks on scroll — the bar tightens up to give the page back some
+              vertical room once the user is past the hero. Done with Tailwind
+              classes rather than a Framer `animate` height because the resting
+              height is responsive (h-14 / lg:h-16) and has to keep matching the
+              layout's pt-14 lg:pt-16 offset. */}
+          <div
+            className={`flex items-center justify-between transition-[height] duration-300 ease-out ${
+              scrolled ? "h-12 lg:h-14" : "h-14 lg:h-16"
+            }`}
+          >
 
             {/* ── Logo ── */}
             <Link href="/" className="flex items-center gap-2 shrink-0 group">
               <motion.div
-                className="relative w-12 h-12 lg:w-14 lg:h-14 shrink-0"
+                className={`relative shrink-0 transition-[width,height] duration-300 ease-out ${
+                  scrolled ? "w-9 h-9 lg:w-11 lg:h-11" : "w-12 h-12 lg:w-14 lg:h-14"
+                }`}
                 whileHover={{ scale: 1.08, rotate: [0, -3, 3, 0] }}
-                transition={{ duration: 0.4 }}
               >
                 <Image
                   src={IMAGES.logo}
@@ -226,13 +248,23 @@ export function Header() {
                   >
                     <Link
                       href={item.href}
-                      className={`relative flex items-center px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 whitespace-nowrap group ${
+                      className={`relative flex items-center px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-200 whitespace-nowrap group ${
                         active
-                          ? "text-primary bg-primary/8"
+                          ? "text-primary"
                           : "text-gray-600 hover:text-primary hover:bg-primary/5"
                       }`}
                     >
-                      {t(item.labelKey)}
+                      {/* The active pill is a single shared element: `layoutId`
+                          makes Framer Motion slide it between links instead of
+                          cross-fading two separate backgrounds. */}
+                      {active && (
+                        <motion.span
+                          layoutId="nav-active-pill"
+                          className="absolute inset-0 rounded-lg bg-primary/8"
+                          transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                        />
+                      )}
+                      <span className="relative z-10">{t(item.labelKey)}</span>
                       {/* animated underline */}
                       <span
                         className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 h-0.5 bg-primary rounded-full transition-all duration-300 ${
@@ -423,23 +455,52 @@ export function Header() {
           </div>
         </div>
 
-        {/* ── Mobile menu ── */}
+        {/* ── Mobile menu — slides in from the right, over a dimmed page ── */}
         <AnimatePresence>
           {isMenuOpen && (
-            <motion.div
-              className="lg:hidden border-t border-gray-100 bg-white/98 backdrop-blur-xl"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <div className="px-4 py-4 space-y-1 max-h-[70vh] overflow-y-auto">
+            <>
+              <motion.div
+                className="lg:hidden fixed inset-0 top-0 bg-slate-900/40 backdrop-blur-[2px] z-40"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                onClick={() => setIsMenuOpen(false)}
+                aria-hidden="true"
+              />
+              <motion.div
+                className="lg:hidden fixed top-0 right-0 bottom-0 w-[82%] max-w-sm bg-white shadow-2xl z-50 flex flex-col"
+                initial={{ x: "100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "100%" }}
+                transition={{ type: "spring", stiffness: 320, damping: 34 }}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Navigation menu"
+              >
+                <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3.5">
+                  <p
+                    className="text-sm font-extrabold text-primary"
+                    style={{ fontFamily: "'Outfit', sans-serif" }}
+                  >
+                    GetMyGuide
+                  </p>
+                  <motion.button
+                    onClick={() => setIsMenuOpen(false)}
+                    className="p-2 rounded-lg border border-gray-200 text-gray-700"
+                    whileTap={{ scale: 0.92 }}
+                    aria-label="Close menu"
+                  >
+                    <X className="w-4 h-4" />
+                  </motion.button>
+                </div>
+              <div className="px-4 py-4 space-y-1 flex-1 overflow-y-auto">
                 {navigationItems.map((item, i) => (
                   <motion.div
                     key={item.href}
-                    initial={{ opacity: 0, x: -16 }}
+                    initial={{ opacity: 0, x: 24 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.04 }}
+                    transition={{ delay: 0.08 + i * 0.04, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
                   >
                     <Link
                       href={item.href}
@@ -547,6 +608,7 @@ export function Header() {
                 )}
               </div>
             </motion.div>
+            </>
           )}
         </AnimatePresence>
 

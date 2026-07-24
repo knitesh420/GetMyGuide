@@ -35,6 +35,7 @@ import {
   GuideTableHead,
   GuideTableRow,
 } from "@/components/guide";
+import CountUp from "@/components/animations/CountUp";
 
 const currency = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -319,34 +320,39 @@ export default function GuideDashboardPage() {
         <GuideStatCard
           icon={Ticket}
           label="Total Bookings"
-          value={stats.total}
+          value={<CountUp to={stats.total} />}
           hint="All time"
           tone="slate"
+          index={0}
         />
         <GuideStatCard
           icon={CalendarClock}
           label="Upcoming Tours"
-          value={stats.upcoming}
+          value={<CountUp to={stats.upcoming} />}
           hint="Today onwards"
           tone="blue"
+          index={1}
         />
         <GuideStatCard
           icon={Wallet}
           label="Earnings to Date"
-          value={currency.format(stats.earnings)}
+          value={<CountUp to={stats.earnings} format={currency.format} />}
           hint="From completed tours"
           tone="green"
+          index={2}
         />
         <GuideStatCard
           icon={Star}
           label="Average Rating"
-          value={reviewCount > 0 ? averageRating.toFixed(1) : "—"}
+          // Guides with no reviews get an em dash, not a counter ticking to 0.
+          value={reviewCount > 0 ? <CountUp to={averageRating} decimals={1} /> : "—"}
           hint={
             reviewCount > 0
               ? `Across ${reviewCount} review${reviewCount === 1 ? "" : "s"}`
               : "No reviews yet"
           }
           tone="amber"
+          index={3}
         />
       </div>
 

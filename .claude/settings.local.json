@@ -12,7 +12,8 @@
       "Bash(curl -s http://localhost:8000/advertisement)",
       "Bash(curl -s http://localhost:8000/advertisement/admin/all)",
       "Bash(npx jest *)",
-      "Bash(curl -s \"https://res.cloudinary.com/dmpz3k4mb/image/upload/fl_getinfo/getmyguide/public/how-it-work.jpg\")"
+      "Bash(curl -s \"https://res.cloudinary.com/dmpz3k4mb/image/upload/fl_getinfo/getmyguide/public/how-it-work.jpg\")",
+      "Bash(node \"C:/Users/nites/AppData/Local/Temp/claude/c--Users-nites-OneDrive-Desktop-Tour/9d9dce70-9942-48a8-85ae-d7c4f101c44c/scratchpad/verify-anim.mjs\")"
     ]
   }
 }

@@ -15,6 +15,13 @@ import {
 } from "@/components/ui/input-otp";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { RootState } from "@/lib/store";
+import { motion } from "framer-motion";
+import { AnimatedCheck } from "@/components/animations/StatusIcons";
+import { celebrateSmall } from "@/lib/confetti";
+import { EASE_OUT } from "@/lib/motion";
+
+/** How long the "Email Verified" mark stays up before the redirect fires. */
+const SUCCESS_DWELL_MS = 1400;
 
 function VerifyOtpContent() {
   const router = useRouter();
@@ -33,9 +40,15 @@ function VerifyOtpContent() {
     }
   }, [email, router]);
 
+  // Same destination and same trigger as before — the only change is a short
+  // beat so the success animation is actually seen before the route swaps.
   useEffect(() => {
     if (isAuthenticated && user) {
-      router.push(user.role === "guide" ? "/dashboard/guide" : "/dashboard/user");
+      celebrateSmall({ x: 0.5, y: 0.4 });
+      const timer = setTimeout(() => {
+        router.push(user.role === "guide" ? "/dashboard/guide" : "/dashboard/user");
+      }, SUCCESS_DWELL_MS);
+      return () => clearTimeout(timer);
     }
   }, [isAuthenticated, user, router]);
 
@@ -91,10 +104,29 @@ function VerifyOtpContent() {
     }
   };
 
-  if (isAuthenticated) return null;
+  // Verified — hold on the success mark, then the effect above redirects.
+  if (isAuthenticated) {
+    return (
+      <motion.div
+        className="bg-card rounded-xl shadow-lg p-8 border border-border flex flex-col items-center text-center"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.4, ease: EASE_OUT }}
+      >
+        <AnimatedCheck size={88} />
+        <h1 className="mt-5 text-2xl font-bold text-foreground">Email Verified</h1>
+        <p className="mt-1.5 text-muted-foreground">Taking you to your dashboard…</p>
+      </motion.div>
+    );
+  }
 
   return (
-    <div className="bg-card rounded-xl shadow-lg p-8 border border-border animate-scale-in">
+    <motion.div
+      className="bg-card rounded-xl shadow-lg p-8 border border-border"
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.4, ease: EASE_OUT }}
+    >
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold text-foreground mb-2">Verify Your Email</h1>
         <p className="text-muted-foreground">
@@ -148,7 +180,7 @@ function VerifyOtpContent() {
           </button>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 

@@ -6,11 +6,13 @@ import { toast } from "react-toastify";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSelector } from "react-redux";
 import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { FloatingLabelInput } from "@/components/animations/FloatingLabelInput";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { RootState } from "@/lib/store";
+import { EASE_OUT } from "@/lib/motion";
 
 function SigninContent() {
   const router = useRouter();
@@ -65,7 +67,12 @@ function SigninContent() {
   if (isAuthenticated) return null;
 
   return (
-    <div className="bg-card rounded-xl shadow-lg p-6 border border-border animate-scale-in">
+    <motion.div
+      className="bg-card rounded-xl shadow-lg p-6 border border-border"
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.4, ease: EASE_OUT }}
+    >
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold text-foreground mb-2">
           Welcome Back
@@ -74,22 +81,29 @@ function SigninContent() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="space-y-2">
-          <Label htmlFor="email">Email Address</Label>
-          <Input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
+        <FloatingLabelInput
+          id="email"
+          label="Email Address"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          disabled={loading}
+          autoComplete="email"
+          required
+        />
+
+        <div className="space-y-1.5">
+          <FloatingLabelInput
+            id="password"
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             disabled={loading}
+            autoComplete="current-password"
             required
           />
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
+          <div className="flex justify-end">
             <Link
               href="/forgot-password"
               className="text-xs text-primary hover:underline font-medium"
@@ -97,28 +111,27 @@ function SigninContent() {
               Forgot Password?
             </Link>
           </div>
-          <Input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Your password"
-            disabled={loading}
-            required
-          />
         </div>
 
-        {error && /verify/i.test(error) && (
-          <p className="text-xs text-muted-foreground">
-            Didn&apos;t verify your email?{" "}
-            <Link
-              href="/signup"
-              className="text-primary font-semibold hover:underline"
+        <AnimatePresence>
+          {error && /verify/i.test(error) && (
+            <motion.p
+              className="text-xs text-muted-foreground"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.25, ease: EASE_OUT }}
             >
-              Resend a code
-            </Link>
-          </p>
-        )}
+              Didn&apos;t verify your email?{" "}
+              <Link
+                href="/signup"
+                className="text-primary font-semibold hover:underline"
+              >
+                Resend a code
+              </Link>
+            </motion.p>
+          )}
+        </AnimatePresence>
 
         <Button
           type="submit"
@@ -126,7 +139,14 @@ function SigninContent() {
           className="w-full red-gradient"
           size="lg"
         >
-          {loading ? "Signing in..." : "Sign In"}
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Signing in...
+            </>
+          ) : (
+            "Sign In"
+          )}
         </Button>
 
         <p className="text-center text-sm text-muted-foreground">
@@ -139,7 +159,7 @@ function SigninContent() {
           </Link>
         </p>
       </form>
-    </div>
+    </motion.div>
   );
 }
 

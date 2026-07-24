@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { motion } from "framer-motion";
 import {
   BellDot,
   CalendarCheck,
@@ -12,6 +15,8 @@ import {
 import type { TouristDashboardStats } from "@/lib/data";
 import { formatCurrency } from "./format";
 import { cn } from "@/lib/utils";
+import CountUp from "@/components/animations/CountUp";
+import { EASE_OUT, staggerParent } from "@/lib/motion";
 
 /**
  * Tailwind can't see class names built at runtime, so each accent is spelled out
@@ -107,6 +112,21 @@ function StatCard({ stat, value }: { stat: StatDef; value: number }) {
     : value.toLocaleString("en-IN");
 
   return (
+    <motion.div
+      className={cn(
+        "h-full",
+        // The money tile is the one that overflows, so it takes the extra column
+        // — which also squares the grid off (6 tiles + 1 double = 8 cells = two
+        // clean rows of four) instead of leaving an orphan gap at the end.
+        stat.money && "col-span-2 lg:col-span-2 2xl:col-span-1",
+      )}
+      variants={{
+        hidden: { opacity: 0, y: 20 },
+        visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: EASE_OUT } },
+      }}
+      whileHover={{ y: -4 }}
+      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+    >
     <Link
       href={stat.href}
       // The whole tile is the control, so it gets one accessible name covering
@@ -115,12 +135,8 @@ function StatCard({ stat, value }: { stat: StatDef; value: number }) {
       aria-label={`${stat.label}: ${display}. ${stat.description}`}
       className={cn(
         "group flex h-full flex-col justify-between gap-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:p-6",
-        "transition-all duration-200 hover:border-teal-500/40 hover:shadow-md",
+        "transition-colors duration-200 hover:border-teal-500/40 hover:shadow-md",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2",
-        // The money tile is the one that overflows, so it takes the extra column
-        // — which also squares the grid off (6 tiles + 1 double = 8 cells = two
-        // clean rows of four) instead of leaving an orphan gap at the end.
-        stat.money && "col-span-2 lg:col-span-2 2xl:col-span-1",
       )}
     >
       <span
@@ -133,6 +149,8 @@ function StatCard({ stat, value }: { stat: StatDef; value: number }) {
         <Icon className="h-5 w-5" />
       </span>
 
+      {/* Already hidden from assistive tech (the Link carries the full label),
+          so counting up here never spams a screen reader. */}
       <div aria-hidden="true" className="space-y-1">
         <p
           className={cn(
@@ -141,7 +159,11 @@ function StatCard({ stat, value }: { stat: StatDef; value: number }) {
             stat.money ? "text-2xl lg:text-3xl" : "text-3xl",
           )}
         >
-          {display}
+          {stat.money ? (
+            <CountUp to={value} format={formatCurrency} />
+          ) : (
+            <CountUp to={value} locale="en-IN" />
+          )}
         </p>
         <p className="text-sm font-medium leading-tight text-gray-700">
           {stat.label}
@@ -151,6 +173,7 @@ function StatCard({ stat, value }: { stat: StatDef; value: number }) {
         </p>
       </div>
     </Link>
+    </motion.div>
   );
 }
 
@@ -160,11 +183,16 @@ export function StatsGrid({ stats }: { stats: TouristDashboardStats }) {
       <h2 id="stats-heading" className="sr-only">
         Your travel statistics
       </h2>
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-6 2xl:grid-cols-7">
+      <motion.div
+        className="grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-6 2xl:grid-cols-7"
+        variants={staggerParent(0.06)}
+        initial="hidden"
+        animate="visible"
+      >
         {STATS.map((stat) => (
           <StatCard key={stat.key} stat={stat} value={stats[stat.key]} />
         ))}
-      </div>
+      </motion.div>
     </section>
   );
 }

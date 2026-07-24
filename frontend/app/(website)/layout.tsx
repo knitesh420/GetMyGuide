@@ -7,6 +7,7 @@ import Script from "next/script";
 import { WhatsAppFloatingButton } from "@/components/WhatsAppFloatingButton";
 import FloatingVideoAd from "@/components/FloatingVideoAd";
 import { JsonLd } from "@/components/seo/JsonLd";
+import PageTransition from "@/components/animations/PageTransition";
 import { organizationSchema, websiteSchema } from "@/lib/seo/jsonld";
 import { DEFAULT_OG_IMAGE, SITE_NAME, SITE_URL } from "@/lib/seo/config";
 // import { CartProvider } from "@/contexts/CardContext";
@@ -56,7 +57,9 @@ export default function RootLayout({
       <JsonLd data={websiteSchema()} />
       <Header />
       <div className="pt-14 lg:pt-16">
-        <Suspense fallback={null}>{children}</Suspense>
+        <Suspense fallback={null}>
+          <PageTransition>{children}</PageTransition>
+        </Suspense>
       </div>
       <ConditionalFooter />
       <FloatingVideoAd />

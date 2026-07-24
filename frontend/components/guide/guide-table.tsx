@@ -1,8 +1,10 @@
 "use client";
 
 import React from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { EASE_BACK, EASE_OUT } from "@/lib/motion";
 
 /**
  * Table language for the guide dashboard: hairline rules on both axes, a grey
@@ -52,20 +54,27 @@ export function GuideTableHead({ columns }: { columns: string[] }) {
 export function GuideTableRow({
   children,
   onClick,
+  index = 0,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
+  /** Row position — staggers the entrance down the table. */
+  index?: number;
 }) {
   return (
-    <tr
+    <motion.tr
       onClick={onClick}
       className={cn(
         "border-b border-slate-100 last:border-b-0",
         onClick && "cursor-pointer transition-colors hover:bg-slate-50",
       )}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      // Capped so a long page doesn't leave the last rows waiting seconds.
+      transition={{ duration: 0.3, delay: Math.min(index * 0.03, 0.35), ease: EASE_OUT }}
     >
       {children}
-    </tr>
+    </motion.tr>
   );
 }
 
@@ -148,14 +157,23 @@ export function GuideStatusBadge({ status }: { status: string }) {
     : "Unknown";
 
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap ring-1 ring-inset",
-        TONE_CLASSES[tone],
-      )}
-    >
-      {label}
-    </span>
+    // Keyed on the status so a lifecycle change (pending → confirmed) swaps the
+    // badge with a pop instead of silently recolouring it.
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.span
+        key={label}
+        className={cn(
+          "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap ring-1 ring-inset",
+          TONE_CLASSES[tone],
+        )}
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.8 }}
+        transition={{ duration: 0.22, ease: EASE_BACK }}
+      >
+        {label}
+      </motion.span>
+    </AnimatePresence>
   );
 }
 
@@ -202,20 +220,28 @@ export function GuidePagination({
       </button>
 
       {pages.map((p) => (
-        <button
+        <motion.button
           key={p}
           type="button"
           onClick={() => onPageChange(p)}
           aria-current={p === page ? "page" : undefined}
           className={cn(
-            "flex h-8 w-8 items-center justify-center rounded-md text-sm font-medium transition-colors",
-            p === page
-              ? "bg-green-500 text-white"
-              : "text-slate-600 hover:bg-slate-50",
+            "relative flex h-8 w-8 items-center justify-center rounded-md text-sm font-medium transition-colors",
+            p === page ? "text-white" : "text-slate-600 hover:bg-slate-50",
           )}
+          whileHover={{ scale: p === page ? 1 : 1.1 }}
+          whileTap={{ scale: 0.92 }}
         >
-          {p}
-        </button>
+          {/* One shared highlight slides across the page numbers. */}
+          {p === page && (
+            <motion.span
+              layoutId="guide-pagination-active"
+              className="absolute inset-0 rounded-md bg-green-500"
+              transition={{ type: "spring", stiffness: 400, damping: 32 }}
+            />
+          )}
+          <span className="relative z-10">{p}</span>
+        </motion.button>
       ))}
 
       <button

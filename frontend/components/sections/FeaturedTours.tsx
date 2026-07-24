@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Heart, Star, MapPin, Clock, Users } from "lucide-react";
 import Link from "next/link";
 import { FadeUp } from "@/components/animations/motion-wrappers";
+import { AnimatedCompass } from "@/components/animations/travel";
 
 const CATEGORIES = [
   "All",
@@ -356,20 +357,32 @@ export default function FeaturedTours() {
         {/* Category filter pills */}
         <FadeUp delay={0.1} className="mb-10">
           <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-            {CATEGORIES.map((cat) => (
-              <motion.button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`shrink-0 px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
-                  activeCategory === cat
-                    ? "bg-gray-900 text-white shadow-lg"
-                    : "bg-white text-gray-600 border border-gray-200 hover:border-gray-400"
-                }`}
-                whileTap={{ scale: 0.96 }}
-              >
-                {cat}
-              </motion.button>
-            ))}
+            {CATEGORIES.map((cat) => {
+              const active = activeCategory === cat;
+              return (
+                <motion.button
+                  key={cat}
+                  onClick={() => setActiveCategory(cat)}
+                  className={`relative shrink-0 px-5 py-2 rounded-full text-sm font-medium transition-colors duration-300 ${
+                    active
+                      ? "text-white"
+                      : "bg-white text-gray-600 border border-gray-200 hover:border-gray-400"
+                  }`}
+                  whileHover={{ scale: active ? 1 : 1.04 }}
+                  whileTap={{ scale: 0.96 }}
+                >
+                  {/* One shared pill slides between categories. */}
+                  {active && (
+                    <motion.span
+                      layoutId="tour-category-pill"
+                      className="absolute inset-0 rounded-full bg-gray-900 shadow-lg"
+                      transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                    />
+                  )}
+                  <span className="relative z-10">{cat}</span>
+                </motion.button>
+              );
+            })}
           </div>
         </FadeUp>
 
@@ -378,12 +391,17 @@ export default function FeaturedTours() {
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
           layout
         >
+          {/* `popLayout` pulls exiting cards out of flow immediately, so the
+              survivors slide into their new positions instead of waiting. */}
+          <AnimatePresence mode="popLayout">
           {filtered.map((tour, i) => (
             <motion.div
               key={tour.id}
-              className="group bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-2xl hover:shadow-black/8 transition-all duration-500"
+              layout
+              className="group bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-2xl hover:shadow-black/8 transition-shadow duration-500"
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, transition: { duration: 0.2 } }}
               viewport={{ once: true, margin: "-40px" }}
               transition={{
                 duration: 0.6,
@@ -413,16 +431,32 @@ export default function FeaturedTours() {
                 <motion.button
                   className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-md"
                   onClick={() => toggleWishlist(tour.id)}
+                  whileHover={{ scale: 1.12 }}
                   whileTap={{ scale: 0.85 }}
+                  aria-label={
+                    wishlisted.includes(tour.id)
+                      ? `Remove ${tour.title} from favourites`
+                      : `Save ${tour.title} to favourites`
+                  }
+                  aria-pressed={wishlisted.includes(tour.id)}
                 >
-                  <Heart
-                    size={16}
-                    className={`transition-colors duration-200 ${
-                      wishlisted.includes(tour.id)
-                        ? "fill-red-500 text-red-500"
-                        : "text-gray-400"
-                    }`}
-                  />
+                  {/* The heart pops past full size on the way in — the classic
+                      "it registered" beat. */}
+                  <motion.span
+                    key={String(wishlisted.includes(tour.id))}
+                    initial={{ scale: 0.6 }}
+                    animate={{ scale: [0.6, 1.35, 1] }}
+                    transition={{ duration: 0.35, ease: [0.34, 1.56, 0.64, 1] }}
+                  >
+                    <Heart
+                      size={16}
+                      className={`transition-colors duration-200 ${
+                        wishlisted.includes(tour.id)
+                          ? "fill-red-500 text-red-500"
+                          : "text-gray-400"
+                      }`}
+                    />
+                  </motion.span>
                 </motion.button>
 
                 {/* Quick view on hover */}
@@ -503,7 +537,41 @@ export default function FeaturedTours() {
               </div>
             </motion.div>
           ))}
+          </AnimatePresence>
         </motion.div>
+
+        {/* Empty state — only reachable if a category has no tours. */}
+        <AnimatePresence>
+          {filtered.length === 0 && (
+            <motion.div
+              className="flex flex-col items-center justify-center py-20 text-center"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <AnimatedCompass size={88} className="mb-5" />
+              <h3
+                className="text-xl font-bold text-gray-900 mb-1.5"
+                style={{ fontFamily: "'Outfit', sans-serif" }}
+              >
+                No tours in {activeCategory} yet
+              </h3>
+              <p className="text-gray-500 text-sm mb-6 max-w-xs">
+                We&apos;re still charting this one. Try another category — there&apos;s
+                plenty more to explore.
+              </p>
+              <motion.button
+                onClick={() => setActiveCategory("All")}
+                className="px-6 py-2.5 rounded-full bg-gray-900 text-white text-sm font-semibold"
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
+              >
+                Show all tours
+              </motion.button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* CTA */}
         <FadeUp delay={0.2} className="mt-14 text-center">

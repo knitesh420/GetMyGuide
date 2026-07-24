@@ -5,12 +5,38 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
+import { motion } from 'framer-motion';
 import { RootState, AppDispatch } from '@/lib/store';
 import { fetchBookingById } from '@/lib/redux/thunks/booking/bookingThunks';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { CheckCircle, Calendar, User, ArrowRight, Loader2, AlertTriangle } from 'lucide-react';
+import { Calendar, User, ArrowRight, AlertTriangle, Compass, Ticket } from 'lucide-react';
+
+import { AnimatedCheck } from '@/components/animations/StatusIcons';
+import BookingTicket from '@/components/animations/BookingTicket';
+import { Shimmer } from '@/components/animations/Skeletons';
+import { RotatingGlobe } from '@/components/animations/travel';
+import { celebrate } from '@/lib/confetti';
+import { EASE_OUT, staggerParent } from '@/lib/motion';
+
+/** Placeholder shown while the booking is being fetched — mirrors the ticket. */
+function SuccessSkeleton() {
+    return (
+        <div className="max-w-md mx-auto flex flex-col items-center gap-6">
+            <RotatingGlobe size={72} />
+            <p className="text-sm font-medium text-muted-foreground">Confirming your booking details…</p>
+            <div className="w-full rounded-3xl border border-slate-100 bg-white p-6 space-y-4">
+                <Shimmer className="h-5 w-2/3" />
+                <Shimmer className="h-3 w-1/2" />
+                <div className="space-y-3 pt-2">
+                    <Shimmer className="h-3 w-full" />
+                    <Shimmer className="h-3 w-full" />
+                    <Shimmer className="h-3 w-3/4" />
+                </div>
+            </div>
+        </div>
+    );
+}
 
 function SuccessContent() {
     const searchParams = useSearchParams();
@@ -26,27 +52,36 @@ function SuccessContent() {
         }
     }, [bookingId, dispatch]);
 
+    // Celebrate once, only after the booking has actually come back confirmed —
+    // firing on mount would congratulate people whose fetch then fails.
+    useEffect(() => {
+        if (currentBooking?._id) {
+            const timer = setTimeout(() => celebrate(), 400);
+            return () => clearTimeout(timer);
+        }
+    }, [currentBooking?._id]);
+
     // 1. Loading State
     if (loading) {
-        return (
-            <div className="text-center">
-                <Loader2 className="w-16 h-16 mx-auto animate-spin text-primary mb-4" />
-                <p className="text-lg text-muted-foreground">Confirming your booking details...</p>
-            </div>
-        );
+        return <SuccessSkeleton />;
     }
-    
+
     // 2. Error State
     if (error) {
         return (
-            <div className="text-center text-destructive-foreground bg-destructive p-6 rounded-lg">
+            <motion.div
+                className="text-center text-destructive-foreground bg-destructive p-6 rounded-lg"
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.4, ease: EASE_OUT }}
+            >
                 <AlertTriangle className="w-16 h-16 mx-auto mb-4" />
                 <h2 className="text-2xl font-bold">Error Fetching Booking</h2>
                 <p>{error}</p>
                 <Button asChild variant="secondary" className="mt-4">
                     <Link href="/dashboard/user/my-bookings">Go to My Bookings</Link>
                 </Button>
-            </div>
+            </motion.div>
         );
     }
 
@@ -69,63 +104,135 @@ function SuccessContent() {
     const balanceDue = currentBooking.balance_due;
     const currency = "₹";
 
+    const formattedDate = startDate
+        ? new Date(startDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+        : 'To be confirmed';
+
+    const ticketRows = [
+        {
+            label: 'Start Date',
+            value: (
+                <span className="inline-flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-primary" />
+                    {formattedDate}
+                </span>
+            ),
+        },
+        {
+            label: 'Your Guide',
+            value: (
+                <span className="inline-flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-primary" />
+                    {guideName}
+                </span>
+            ),
+        },
+        ...(advancePaid != null || balanceDue != null
+            ? [{
+                label: 'Payment',
+                value: (
+                    <span>
+                        {currency}{(advancePaid ?? 0).toLocaleString()} advance paid
+                        {balanceDue != null && balanceDue > 0 && (
+                            <span className="block text-xs font-medium text-muted-foreground">
+                                {currency}{balanceDue.toLocaleString()} balance due
+                            </span>
+                        )}
+                    </span>
+                ),
+            }]
+            : []),
+    ];
+
     return (
         <div className="max-w-3xl mx-auto">
-            <div className="text-center mb-8">
-                <CheckCircle className="w-24 h-24 mx-auto text-green-500 mb-4" />
-                <h1 className="text-4xl font-extrabold text-foreground">Booking Confirmed!</h1>
-                <p className="mt-2 text-lg text-muted-foreground">Your adventure is booked. Get ready for an unforgettable experience!</p>
-            </div>
+            <motion.div
+                className="text-center mb-8"
+                variants={staggerParent(0.12)}
+                initial="hidden"
+                animate="visible"
+            >
+                <motion.div
+                    className="flex justify-center mb-4"
+                    variants={{ hidden: { opacity: 0 }, visible: { opacity: 1 } }}
+                >
+                    <AnimatedCheck size={96} />
+                </motion.div>
+                <motion.h1
+                    className="text-4xl font-extrabold text-foreground"
+                    variants={{
+                        hidden: { opacity: 0, y: 16 },
+                        visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE_OUT } },
+                    }}
+                >
+                    Booking Confirmed!
+                </motion.h1>
+                <motion.p
+                    className="mt-2 text-lg text-muted-foreground"
+                    variants={{
+                        hidden: { opacity: 0, y: 16 },
+                        visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE_OUT } },
+                    }}
+                >
+                    Your adventure is booked. Get ready for an unforgettable experience!
+                </motion.p>
+            </motion.div>
 
-            <Card className="overflow-hidden shadow-lg">
-                <CardContent className="p-6 space-y-4">
-                    <h3 className="text-2xl font-bold">{tourTitle}</h3>
-                    <div className="flex flex-col sm:flex-row items-start gap-6">
-                        <div className="flex-1 space-y-3">
-                            <div className="flex items-center gap-3">
-                                <Calendar className="w-5 h-5 text-primary" />
-                                <div>
-                                    <p className="font-semibold">Start Date</p>
-                                    <p className="text-muted-foreground">{startDate ? new Date(startDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'To be confirmed'}</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <User className="w-5 h-5 text-primary" />
-                                <div>
-                                    <p className="font-semibold">Your Assigned Guide</p>
-                                    <p className="text-muted-foreground">{guideName}</p>
-                                </div>
-                            </div>
-                            {(advancePaid != null || balanceDue != null) && (
-                                <div className="flex items-center gap-3">
-                                    <CheckCircle className="w-5 h-5 text-primary" />
-                                    <div>
-                                        <p className="font-semibold">Payment</p>
-                                        <p className="text-muted-foreground">
-                                            {currency}{(advancePaid ?? 0).toLocaleString()} advance paid
-                                            {balanceDue != null && balanceDue > 0 && ` · ${currency}${balanceDue.toLocaleString()} balance due`}
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                        <div className="flex-shrink-0 text-center">
-                            <Image src={guidePhoto} alt={guideName} width={80} height={80} className="rounded-full mx-auto shadow-md" />
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+            <BookingTicket
+                title={tourTitle}
+                subtitle={`with ${guideName}`}
+                bookingId={currentBooking._id}
+                rows={ticketRows}
+                footer={
+                    <Image
+                        src={guidePhoto}
+                        alt={guideName}
+                        width={48}
+                        height={48}
+                        className="rounded-full shadow-md shrink-0"
+                    />
+                }
+            />
 
-            <div className="mt-8 flex flex-col sm:flex-row justify-center gap-4">
-                <Button asChild size="lg" className="red-gradient">
-                    <Link href={`/dashboard/user`}>
-                        Go to Dashboard <ArrowRight className="ml-2 w-5 h-5" />
-                    </Link>
-                </Button>
-                <Button asChild variant="outline" size="lg">
-                    <Link href="/dashboard/user/my-bookings">Go to My Bookings</Link>
-                </Button>
-            </div>
+            <motion.div
+                className="mt-8 flex flex-col sm:flex-row justify-center gap-3"
+                variants={staggerParent(0.08, 1.1)}
+                initial="hidden"
+                animate="visible"
+            >
+                {[
+                    {
+                        href: `/dashboard/user/my-bookings/${currentBooking._id}`,
+                        label: 'View Booking',
+                        icon: Ticket,
+                        primary: true,
+                    },
+                    { href: '/dashboard/user', label: 'Go to Dashboard', icon: ArrowRight, primary: false },
+                    { href: '/services', label: 'Continue Exploring', icon: Compass, primary: false },
+                ].map(({ href, label, icon: Icon, primary }) => (
+                    <motion.div
+                        key={href}
+                        variants={{
+                            hidden: { opacity: 0, y: 14 },
+                            visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE_OUT } },
+                        }}
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
+                    >
+                        <Button
+                            asChild
+                            size="lg"
+                            variant={primary ? 'default' : 'outline'}
+                            className={`w-full ${primary ? 'red-gradient' : ''}`}
+                        >
+                            <Link href={href}>
+                                <Icon className="mr-2 w-4 h-4" />
+                                {label}
+                            </Link>
+                        </Button>
+                    </motion.div>
+                ))}
+            </motion.div>
         </div>
     );
 }
@@ -133,8 +240,8 @@ function SuccessContent() {
 export default function BookingSuccessPage() {
     return (
         <div className="min-h-screen bg-background pt-20 flex items-center justify-center">
-            <div className="container mx-auto px-4 py-12 animate-fade-in-up">
-                <Suspense fallback={<div className="text-center">Loading confirmation...</div>}>
+            <div className="container mx-auto px-4 py-12">
+                <Suspense fallback={<SuccessSkeleton />}>
                     <SuccessContent />
                 </Suspense>
             </div>

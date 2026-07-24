@@ -7,6 +7,7 @@ import {
   StaggerItem,
   FadeUp,
 } from "@/components/animations/motion-wrappers";
+import CountUp from "@/components/animations/CountUp";
 import Link from "next/link";
 
 const features = [
@@ -40,11 +41,12 @@ const features = [
   },
 ];
 
+// Split into number + suffix so each tile can count up to its value on scroll.
 const stats = [
-  { value: "100+", label: "Destinations" },
-  { value: "2000+", label: "Expert Guides" },
-  { value: "4.9★", label: "Avg Rating" },
-  { value: "50K+", label: "Happy Travellers" },
+  { value: 100, suffix: "+", label: "Destinations" },
+  { value: 2000, suffix: "+", label: "Expert Guides" },
+  { value: 4.9, suffix: "★", decimals: 1, label: "Avg Rating" },
+  { value: 50, suffix: "K+", label: "Happy Travellers" },
 ];
 
 export default function WhyChooseUs() {
@@ -91,17 +93,25 @@ export default function WhyChooseUs() {
           >
             {stats.map((stat) => (
               <StaggerItem key={stat.label}>
-                <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100 hover:border-red-200 hover:shadow-lg hover:shadow-red-500/5 transition-all duration-300 group">
+                <motion.div
+                  className="bg-gray-50 rounded-2xl p-6 border border-gray-100 hover:border-red-200 hover:shadow-lg hover:shadow-red-500/5 transition-colors duration-300 group"
+                  whileHover={{ y: -4 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                >
                   <p
                     className="text-4xl font-extrabold text-gray-900 mb-1 group-hover:text-red-600 transition-colors"
                     style={{ fontFamily: "'Outfit', sans-serif" }}
                   >
-                    {stat.value}
+                    <CountUp
+                      to={stat.value}
+                      decimals={stat.decimals ?? 0}
+                      suffix={stat.suffix}
+                    />
                   </p>
                   <p className="text-gray-500 text-sm font-medium">
                     {stat.label}
                   </p>
-                </div>
+                </motion.div>
               </StaggerItem>
             ))}
           </StaggerContainer>

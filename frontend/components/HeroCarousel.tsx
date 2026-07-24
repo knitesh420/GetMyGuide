@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Image from "next/image";
 import { IMAGES } from "@/lib/images";
+import { FloatingClouds, FlyingPlane } from "@/components/animations/travel";
 
 const images = IMAGES.heroCarousel;
 
@@ -24,6 +25,7 @@ const slideVariants = {
 export default function HeroCarousel() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [direction, setDirection] = useState(1);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -57,16 +59,35 @@ export default function HeroCarousel() {
             transition={{ duration: 0.6, ease: "easeInOut" }}
             className="absolute inset-0"
           >
-            <Image
-              src={images[currentSlide]}
-              alt={`Certified GetMyGuide local guide leading an authentic tour experience — photo ${currentSlide + 1}`}
-              fill
-              priority={currentSlide === 0}
-              sizes="100vw"
-              className="object-cover object-center"
-            />
+            {/* Slow Ken Burns push-in keeps the frame alive between slides. */}
+            <motion.div
+              className="absolute inset-0"
+              initial={{ scale: 1 }}
+              animate={{ scale: reduceMotion ? 1 : 1.08 }}
+              transition={{ duration: 6, ease: "linear" }}
+            >
+              <Image
+                src={images[currentSlide]}
+                alt={`Certified GetMyGuide local guide leading an authentic tour experience — photo ${currentSlide + 1}`}
+                fill
+                priority={currentSlide === 0}
+                sizes="100vw"
+                className="object-cover object-center"
+              />
+            </motion.div>
           </motion.div>
         </AnimatePresence>
+
+        {/* ── Ambient travel layer ──
+            Decorative only: a scrim so the white artwork reads against any
+            photo, then drifting clouds and a plane crossing the frame. */}
+        <div
+          className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-b from-black/25 via-transparent to-black/20"
+          aria-hidden="true"
+        />
+        <FloatingClouds className="z-10" />
+        <FlyingPlane className="top-[18%] z-10" duration={22} />
+        <FlyingPlane className="top-[62%] z-10" duration={30} delay={9} />
 
         {/* Prev button */}
         <motion.button

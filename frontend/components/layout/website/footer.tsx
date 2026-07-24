@@ -89,7 +89,7 @@ export function Footer() {
                 <li key={link.key}>
                   <Link
                     href={link.href}
-                    className="opacity-80 hover:opacity-100 hover:text-secondary transition-colors"
+                    className="opacity-80 hover:opacity-100 hover:text-primary transition-colors duration-200"
                   >
                     {t(link.key)}
                   </Link>
@@ -108,7 +108,7 @@ export function Footer() {
                 <li key={key}>
                   <Link
                     href="#"
-                    className="opacity-80 hover:opacity-100 hover:text-secondary transition-colors"
+                    className="opacity-80 hover:opacity-100 hover:text-primary transition-colors duration-200"
                   >
                     {t(key)}
                   </Link>
@@ -129,7 +129,7 @@ export function Footer() {
                 <li key={link.key}>
                   <Link
                     href={link.href}
-                    className="opacity-80 hover:opacity-100 hover:text-secondary transition-colors"
+                    className="opacity-80 hover:opacity-100 hover:text-primary transition-colors duration-200"
                   >
                     {t(link.key)}
                   </Link>
@@ -208,13 +208,13 @@ export function Footer() {
             <div className="flex space-x-4">
               <a
                 href="https://www.instagram.com/getmyguide.in?igsh=NzFzMTQ0MGRnZmRn&utm_source=ig_contact_invite"
-                className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center hover:bg-secondary transition-colors"
+                className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center hover:bg-primary transition-colors duration-200"
               >
                 <Instagram className="w-5 h-5" />
               </a>
               <a
                 href="https://www.youtube.com/@GETMYGUIDE"
-                className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center hover:bg-secondary transition-colors"
+                className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center hover:bg-primary transition-colors duration-200"
               >
                 <Youtube className="w-5 h-5" />
               </a>

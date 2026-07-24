@@ -9,6 +9,7 @@ import { ReduxProvider } from "@/lib/provider";
 import ToastProvider from "@/lib/ToastProvider";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import AuthInitializer from "@/components/AuthInitializer";
+import MotionProvider from "@/components/animations/MotionProvider";
 import {
   API_URL,
   DEFAULT_DESCRIPTION,
@@ -102,7 +103,9 @@ export default function RootLayout({
           <ReduxProvider>
             <AuthInitializer />
             <ToastProvider>
-              <Suspense fallback={null}>{children}</Suspense>
+              <MotionProvider>
+                <Suspense fallback={null}>{children}</Suspense>
+              </MotionProvider>
               <Analytics />
             </ToastProvider>
           </ReduxProvider>
