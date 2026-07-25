@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
 import RoleGuard from "@/components/auth/RoleGuard";
-import { showError } from "@/lib/swal";
+import PaymentStatusOverlay from "@/components/animations/PaymentStatusOverlay";
+import { usePaymentStatus } from "@/lib/hooks/usePaymentStatus";
 
 declare global {
   interface Window {
@@ -255,8 +256,6 @@ function CombinedGuideBookingForm() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState(0);
   const [isConfirmed, setIsConfirmed] = useState(true); // Set to true since payment is verified before showing success
   const [transactionId, setTransactionId] = useState("");
   const [orderId, setOrderId] = useState("");
@@ -266,6 +265,12 @@ function CombinedGuideBookingForm() {
   // Set when the traveller returns from signing in mid-booking: once the session
   // is confirmed, the stashed form has been restored and payment auto-resumes.
   const [shouldResume, setShouldResume] = useState(false);
+
+  // The full-screen payment animation. Reports what the flow below already
+  // decided — the payment itself is unchanged, and no result is ever shown
+  // before the backend has confirmed it.
+  const payment = usePaymentStatus();
+  const { start, succeed, fail, failFrom, cancel, reset } = payment;
 
   // Ensure the session is resolved so we can prefill the signed-in user's
   // details and know whether payment is allowed. Only fetch while the auth
@@ -714,6 +719,7 @@ function CombinedGuideBookingForm() {
   // traveller is sent to sign in instead of paying.
   const startPayment = async () => {
     setIsSubmitting(true);
+    start();
 
     const totalAmount = calculateFees.total;
     const payload = {
@@ -793,6 +799,9 @@ function CombinedGuideBookingForm() {
 
       if (res.status === 401) {
         setIsSubmitting(false);
+        // Not a payment failure — the traveller just needs to sign in first, so
+        // the overlay comes down instead of announcing a result.
+        reset();
         persistDraftAndSignIn();
         return;
       }
@@ -833,7 +842,11 @@ function CombinedGuideBookingForm() {
           color: "#ff6b00",
         },
         modal: {
-          ondismiss: () => setIsSubmitting(false),
+          ondismiss: () => {
+            setIsSubmitting(false);
+            // Closing the sheet is deliberate, not an error.
+            cancel();
+          },
         },
 
         handler: async (response: any) => {
@@ -881,18 +894,28 @@ function CombinedGuideBookingForm() {
             }
 
             // Store order and payment IDs — use backend-calculated amount
+            const paidAmount = data.razorpay_options.amount / 100;
             setOrderId(response.razorpay_order_id);
-            setPaymentAmount(data.razorpay_options.amount / 100);
             setTransactionId(data.transaction_id || "");
 
-            setShowSuccess(true);
+            // Verified and persisted by the backend — only now is this a success.
+            // Keyed on the payment id, so a repeated callback is a no-op.
+            succeed({
+              amount: paidAmount,
+              reference: response.razorpay_payment_id,
+            });
           } catch (error) {
             console.error("Payment verification error:", error);
-            showError(
-              "Booking could not be completed",
-              "Your payment went through but the booking failed. Please contact support with your payment ID: " +
-                response.razorpay_payment_id,
-            );
+            // The money is already captured at this point, so this is never
+            // reported as "payment failed": the overlay says the payment was
+            // received, withholds the retry button, and surfaces the payment id.
+            fail("verification-failed", {
+              reason:
+                (error as Error)?.message ||
+                "We received your payment but could not confirm the booking automatically.",
+              reference: response.razorpay_payment_id,
+              amount: data.razorpay_options.amount / 100,
+            });
           } finally {
             setIsSubmitting(false);
           }
@@ -901,19 +924,21 @@ function CombinedGuideBookingForm() {
 
       const rzp = new window.Razorpay(options);
       rzp.on("payment.failed", (response: any) => {
-        showError(
-          "Payment failed",
-          response?.error?.description ||
+        // The gateway declined the charge, so nothing was taken — retryable.
+        fail("failed", {
+          reason:
+            response?.error?.description ||
             "Please try again or use a different method.",
-        );
+        });
         setIsSubmitting(false);
       });
 
       rzp.open();
     } catch (error) {
-      const message =
-        (error as Error)?.message || "An error occurred. Please try again.";
-      showError("Something went wrong", message);
+      // Everything above runs before the gateway has any money: a failure here
+      // is safe to retry, and `failFrom` tells a dropped connection apart from a
+      // refused order.
+      failFrom(error ?? new Error("An error occurred. Please try again."));
       setIsSubmitting(false);
     }
   };
@@ -958,85 +983,30 @@ function CombinedGuideBookingForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shouldResume, isAuthenticated]);
 
-  // Success Page Component
-  if (showSuccess) {
-    return (
-      <div className="w-full min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex items-center justify-center py-10 px-4">
-        <div className="w-full max-w-sm sm:max-w-md md:max-w-lg">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8 md:p-9 border-4 border-green-500">
-            {/* Success Icon */}
-            <div className="flex justify-center mb-4">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center animate-bounce">
-                <svg
-                  className="w-12 h-12 sm:w-16 sm:h-16 text-white"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={3}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-              </div>
-            </div>
-
-            {/* Success Message */}
-            <h1 className="text-xl sm:text-2xl font-bold text-center text-gray-900 mb-3">
-              Payment Received!
-            </h1>
-            <p className="text-base sm:text-lg text-center text-gray-600 mb-6 sm:mb-8">
-              Your tour guide booking has been confirmed
-            </p>
-
-            {/* Amount Card */}
-            <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl p-5 sm:p-6 border-2 border-orange-300 mb-6 sm:mb-8">
-              <div className="text-center">
-                <p className="text-xs sm:text-sm font-semibold text-gray-600 mb-2">
-                  Total Amount Paid
-                </p>
-                <p className="text-lg sm:text-xl font-extrabold text-green-600 mb-2">
-                  ₹{paymentAmount.toLocaleString()}
-                </p>
-                <p className="text-xs sm:text-sm text-gray-500 mb-4">
-                  Payment processed successfully
-                </p>
-
-                {/* Transaction Details */}
-                <div className="mt-4 pt-4 border-t border-orange-200 space-y-2">
-                  {transactionId && (
-                    <div className="text-left">
-                      <p className="text-xs font-medium text-gray-600">
-                        Transaction ID
-                      </p>
-                      <p className="text-xs sm:text-sm font-mono text-gray-800 break-all">
-                        {transactionId}
-                      </p>
-                    </div>
-                  )}
-                  {orderId && (
-                    <div className="text-left">
-                      <p className="text-xs font-medium text-gray-600">
-                        Order ID
-                      </p>
-                      <p className="text-xs sm:text-sm font-mono text-gray-800 break-all">
-                        {orderId}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-white py-12 px-4 sm:px-6 lg:px-8 mt-20">
+      {/* Replaces the old static success card: the same figures, but shown as a
+          confirmed result the traveller can act on, then handed off to their
+          bookings. */}
+      <PaymentStatusOverlay
+        status={payment.status}
+        viewHref="/dashboard/user/my-bookings"
+        dashboardHref="/dashboard/user"
+        onRetry={() => {
+          reset();
+          void startPayment();
+        }}
+        onDismiss={reset}
+        detail={
+          orderId ? (
+            <p className="truncate text-xs text-slate-400">
+              Order {orderId}
+              {transactionId ? ` · Txn ${transactionId}` : ""}
+            </p>
+          ) : null
+        }
+      />
+
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
@@ -2049,8 +2019,11 @@ function CombinedGuideBookingForm() {
               </div>
             </div>
 
-            {/* Right Column - Fee Breakdown (Sticky) */}
-            <div className="lg:sticky lg:top-8 lg:self-start">
+            {/* Right Column - Fee Breakdown (Sticky).
+                lg:top-20 = the 4rem website header plus a 1rem gap. At lg:top-8
+                (2rem) this card pinned half-way inside the header's strip and
+                its heading scrolled away behind it. */}
+            <div className="lg:sticky lg:top-20 lg:self-start">
               <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl p-6 border-4 border-orange-600 shadow-2xl">
                 <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
                   <svg

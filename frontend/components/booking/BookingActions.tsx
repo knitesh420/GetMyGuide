@@ -8,6 +8,8 @@ import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import { requestCancellation } from "@/lib/redux/thunks/refund/refundThunks";
 import { apiService } from "@/lib/service/api";
 import { Button } from "@/components/ui/button";
+import PaymentStatusOverlay from "@/components/animations/PaymentStatusOverlay";
+import { usePaymentStatus } from "@/lib/hooks/usePaymentStatus";
 
 declare global {
   interface Window {
@@ -62,6 +64,10 @@ export function BookingActions({
   const { deciding } = useAppSelector((state) => state.refunds);
 
   const [paying, setPaying] = useState(false);
+  // Full-screen animation for the balance payment. Reporting only — the calls
+  // below are unchanged.
+  const balancePayment = usePaymentStatus();
+  const { start, succeed, fail, failFrom, cancel, reset } = balancePayment;
   const [showCancel, setShowCancel] = useState(false);
   const [reason, setReason] = useState("");
   const [pendingRequest, setPendingRequest] = useState(false);
@@ -98,6 +104,7 @@ export function BookingActions({
 
   const handlePayBalance = async () => {
     setPaying(true);
+    start();
     try {
       const response = await apiService.post<BalanceOrder>(
         `/booking/${bookingId}/balance/create-order`,
@@ -117,31 +124,45 @@ export function BookingActions({
         prefill: order.razorpay_options.prefill,
         theme: { color: "#0d9488" },
         handler: async (rzp: any) => {
+          // Money is captured from here on, so a verification failure is never
+          // reported as "payment failed" — that is what makes people pay twice.
+          start();
           try {
             await apiService.post(`/booking/${bookingId}/balance/verify`, {
               razorpay_order_id: rzp.razorpay_order_id,
               razorpay_payment_id: rzp.razorpay_payment_id,
               razorpay_signature: rzp.razorpay_signature,
             });
-            toast.success("Balance paid. Your booking is now paid in full.");
+            // Refresh underneath, so the booking is already up to date when the
+            // overlay closes.
             onChanged?.();
+            succeed({
+              amount: order.amount_due ?? balanceDue ?? null,
+              reference: rzp.razorpay_payment_id,
+            });
           } catch (error: any) {
-            toast.error(
-              error.response?.data?.message ||
+            fail("verification-failed", {
+              reason:
+                error.response?.data?.message ||
                 "We could not confirm the payment. Do not pay again — contact support.",
-            );
+              reference: rzp.razorpay_payment_id,
+            });
           } finally {
             setPaying(false);
           }
         },
         modal: {
-          ondismiss: () => setPaying(false),
+          ondismiss: () => {
+            setPaying(false);
+            cancel();
+          },
         },
       };
 
       new window.Razorpay(options).open();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || "Could not start the payment.");
+      // Pre-capture — nothing was charged, so the overlay offers a retry.
+      failFrom(error);
       setPaying(false);
     }
   };
@@ -165,12 +186,28 @@ export function BookingActions({
     }
   };
 
+  // Rendered outside the section below because a successful balance payment can
+  // remove that section (the balance is gone) while the animation is still on
+  // screen — it has to outlive what it belongs to.
+  const statusOverlay = (
+    <PaymentStatusOverlay
+      status={balancePayment.status}
+      // Already on the booking, so "View Booking" just closes the overlay onto
+      // the refreshed page rather than navigating somewhere identical.
+      viewHref={null}
+      dashboardHref="/dashboard/user"
+      onRetry={handlePayBalance}
+      onDismiss={reset}
+    />
+  );
+
   if (UNCANCELLABLE.includes(status) && !hasBalance) {
-    return null;
+    return statusOverlay;
   }
 
   return (
     <>
+      {statusOverlay}
       <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
 
       <section className="rounded-xl border bg-white p-5 shadow-sm">

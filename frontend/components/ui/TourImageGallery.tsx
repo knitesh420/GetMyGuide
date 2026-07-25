@@ -42,8 +42,12 @@ export function TourImageGallery({
   }, [uniqueImages]);
 
   // --- MODAL FOR FULL-SCREEN GALLERY ---
+  // z-100 is the inline-modal band (see the z-index scale in globals.css). At
+  // z-50 this full-screen gallery merely tied with the navbar and the floating
+  // buttons, and lost the tie to anything the layout renders after the page —
+  // the WhatsApp bubble and the video ad sat on top of it.
   const renderModal = () => (
-    <div className="fixed inset-0 bg-black/90 z-50 flex flex-col p-4 animate-fade-in-up">
+    <div className="fixed inset-0 bg-black/90 z-100 flex flex-col p-4 animate-fade-in-up">
       <div className="flex justify-end">
         <Button
           variant="ghost"

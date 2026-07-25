@@ -316,10 +316,44 @@
 
 /* Google Fonts — Outfit for headings */
 
-/* Smooth scroll */
+/* Smooth scroll.
+ *
+ * `scroll-padding-top` must track the website header's resting height (h-14 /
+ * lg:h-16, the same values the layout offsets content by with pt-14 lg:pt-16).
+ * The header is `position: fixed`, so it is outside the scroll flow and the
+ * browser knows nothing about it: without this, every in-page anchor and every
+ * `scrollIntoView()` parks its target at y=0 — underneath the header — and the
+ * heading the user was sent to is the one thing they cannot see. */
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: 3.5rem;
 }
+
+@media (min-width: 1024px) {
+  html {
+    scroll-padding-top: 4rem;
+  }
+}
+
+/* ─── z-index scale ───────────────────────────────────────────────────────
+ *
+ * Every fixed/sticky layer on the site, in paint order. Anything new must pick
+ * a band here rather than inventing a number — the 9999 the floating video ad
+ * used to carry put a draggable advert on top of the navbar, the mobile menu,
+ * the search overlay and the payment spinner.
+ *
+ *   0–20   in-page content (cards, section overlays, the tourist welcome bar)
+ *   30     dashboard header and its desktop sidebar column
+ *   40     floating page furniture — WhatsApp button, back-to-top, video ad,
+ *          the admin accent rule. Above content, below the navbar and modals.
+ *   50     website navbar, and Radix dialog/sheet/drawer portals
+ *   55–70  mobile nav drawers and their backdrops (website menu 55/60,
+ *          dashboard sidebar 60/70)
+ *   100    modals and lightboxes rendered inline rather than through a portal
+ *          (search overlay, tour gallery, service image modal)
+ *   9998   blocking payment overlays — nothing may cover a payment in flight
+ *   9999   scroll progress hairline (3px, top edge, purely decorative)
+ */
 
 /* Hide scrollbar utility */
 .scrollbar-hide::-webkit-scrollbar {
@@ -466,5 +500,97 @@ html {
 
   .gmg-shimmer::after {
     display: none;
+  }
+}
+
+/* ─── Responsive dashboard polish · mobile · tablet · small laptop ───────────
+ *
+ * A spacing / touch / typography safety net for the Guide, Tourist and Admin
+ * dashboards, layered on top of each page's own Tailwind classes and scoped to
+ * the dashboard shell through the `.dashboard-main` hook the layout puts on its
+ * <main> (app/(website)/dashboard/layout.tsx).
+ *
+ * DESKTOP IS UNTOUCHED BY CONSTRUCTION: every rule here lives inside a
+ * `max-width: 1023.98px` (or tighter) query, i.e. strictly below Tailwind's
+ * `lg` breakpoint of 1024px. Nothing in this section can reach a viewport that
+ * is 1024px or wider, so the desktop dashboards render exactly as before.
+ *
+ * Selectors lean on the stable `data-slot` attributes of the shadcn primitives
+ * (Button, Input, Card) rather than utility classes that may be re-ordered.
+ */
+
+/* Below lg: phones, tablets and small laptops in a narrow window. */
+@media (max-width: 1023.98px) {
+  /* Comfortable, consistent tap targets for the primary controls. shadcn's
+     sm/default buttons are 32–36px tall; 40px clears the practical touch
+     minimum without looking oversized. min-width only ever grows an icon-only
+     button to a square target — text buttons already exceed it. */
+  .dashboard-main [data-slot="button"] {
+    min-height: 2.5rem;
+    min-width: 2.5rem;
+  }
+
+  /* Form fields share the same 40px rhythm so labels, inputs and buttons align
+     and are easy to hit. Covers shadcn inputs and any bare field. */
+  .dashboard-main [data-slot="input"],
+  .dashboard-main select,
+  .dashboard-main textarea {
+    min-height: 2.5rem;
+  }
+
+  /* Momentum scrolling for the tables, which are wrapped in `overflow-x-auto`
+     throughout the dashboards, so they swipe smoothly instead of clipping. */
+  .dashboard-main .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Media never forces the page wider than the viewport. max-width only, so a
+     fixed-size avatar keeps its dimensions until its column is genuinely
+     narrower than it. */
+  .dashboard-main img,
+  .dashboard-main video {
+    max-width: 100%;
+  }
+}
+
+/* Phones and small tablets. */
+@media (max-width: 767px) {
+  /* 16px on focus stops iOS Safari from zooming the page when a field is
+     tapped. shadcn's <Input> already uses `text-base` below md; this catches
+     the bare inputs and native selects that don't. */
+  .dashboard-main
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  .dashboard-main select,
+  .dashboard-main textarea {
+    font-size: 16px;
+  }
+
+  /* Long unbreakable strings — emails, guide codes, ids — wrap instead of
+     pushing the layout sideways. `break-word` only acts when a token genuinely
+     cannot fit, so ordinary text is unaffected. Not applied to table cells,
+     which scroll horizontally by design. */
+  .dashboard-main h1,
+  .dashboard-main h2,
+  .dashboard-main h3,
+  .dashboard-main p,
+  .dashboard-main li {
+    overflow-wrap: break-word;
+  }
+}
+
+/* Phones only. */
+@media (max-width: 639px) {
+  /* The admin list pages put a title and a search box in one flex-row card
+     header; on a phone they crush together. Stack them and let the field span
+     the width. Only the flex-row variant is touched — the default grid card
+     headers keep their layout. */
+  .dashboard-main [data-slot="card-header"].flex-row {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+  .dashboard-main [data-slot="card-header"].flex-row [data-slot="input"] {
+    max-width: 100%;
   }
 }

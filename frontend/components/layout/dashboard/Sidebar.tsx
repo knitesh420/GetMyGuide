@@ -217,18 +217,28 @@ export default function Sidebar({
 
   return (
     <>
+      {/* z-60 clears the website's own fixed navbar (z-50); at z-40 the dim
+          layer stopped at the navbar's bottom edge, leaving a live, undimmed
+          strip across the top of the phone screen while the drawer was open. */}
       <div
-        className={`fixed inset-0 bg-black/60 lg:hidden z-40 transition-opacity ${
+        className={`fixed inset-0 bg-black/60 lg:hidden z-60 transition-opacity ${
           isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
         onClick={onClose}
       />
 
+      {/* `flex` must be unconditional, not `lg:flex`. Below lg this panel is a
+          fixed, full-height drawer whose middle section scrolls (`flex-1
+          overflow-y-auto` below) — without display:flex that `flex-1` does
+          nothing, the nav grows to its content height, and everything past the
+          bottom of the screen is simply unreachable. The admin nav is ~1200px
+          tall, so on a phone half of it vanished. z-70 keeps the drawer above
+          its own overlay and the site navbar. */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-[270px] flex-col border-r bg-white 
+        className={`fixed inset-y-0 left-0 z-70 flex w-[270px] flex-col border-r bg-white
         transform transition-transform duration-300 ease-in-out
         ${isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"}
-        lg:sticky lg:z-30 lg:h-full lg:translate-x-0 lg:flex lg:shadow-none`}
+        lg:sticky lg:z-30 lg:h-full lg:translate-x-0 lg:shadow-none`}
       >
         <button
           onClick={onClose}
@@ -238,10 +248,11 @@ export default function Sidebar({
         </button>
 
         {/* h-18 (72px) and px-6 match the dashboard Header, so the brand sits on
-            the same line as the page title and the accent rule the layout draws
-            across both columns lands on this block's bottom edge. The border is
-            only needed below lg, where this panel floats above the rule (z-50)
-            rather than sitting flush under it. */}
+            the same line as the page title — and, on the admin panel, the accent
+            rule the layout draws across both columns lands on this block's
+            bottom edge. The border is only needed below lg, where this panel is
+            an overlay drawer (z-70) floating above the shell rather than a
+            column sitting flush under that rule. */}
         <div className="flex h-18 shrink-0 items-center border-b px-6 lg:border-b-0">
           <Link
             href="/"
@@ -251,7 +262,9 @@ export default function Sidebar({
           </Link>
         </div>
 
-        <div className="flex-1 overflow-y-auto py-6">
+        {/* `overscroll-contain` keeps a flick at the end of the nav from
+            scrolling the page underneath the open drawer. */}
+        <div className="flex-1 overflow-y-auto overscroll-contain py-6">
           <nav className="px-4 text-sm font-medium">
             {sections.map((section, sectionIndex) => (
               <div

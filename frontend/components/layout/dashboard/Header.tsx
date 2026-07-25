@@ -50,25 +50,31 @@ export default function Header({
   const showLanguageSelector = !isGuide;
 
   // h-18 (72px) and px-6 are shared with the Sidebar's brand block, so the logo,
-  // this title and the user controls all centre on the same line. The rule below
-  // the row is drawn once, by the dashboard layout, spanning both columns — this
-  // header deliberately has no `border-b` of its own, or the two would stack.
+  // this title and the user controls all centre on the same line. No `border-b`
+  // here: on the admin panel the dashboard layout draws an accent rule across
+  // both columns on this row's bottom edge and the two would stack; on the guide
+  // and tourist panels there is no rule and `shadow-sm` does the separating.
   return (
-    <header className="sticky top-0 z-30 flex h-18 items-center justify-between bg-white dark:bg-slate-900 px-6 shadow-sm">
-      <div className="flex items-center gap-4">
+    <header className="sticky top-0 z-30 flex h-18 items-center justify-between bg-white dark:bg-slate-900 px-4 sm:px-6 shadow-sm">
+      <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+        {/* Full 44px touch target for the primary mobile nav toggle. Only ever
+            shown below lg, so the enlarged hit area never reaches desktop. */}
         <Button
           variant="outline"
           size="icon"
-          className="lg:hidden"
+          className="h-11 w-11 shrink-0 lg:hidden"
           onClick={onMenuClick}
         >
           <Menu className="h-5 w-5" />
         </Button>
-        <h1 className="text-xl font-extrabold text-slate-800 dark:text-slate-100">
+        {/* Truncates rather than shoving the user controls off-screen when a
+            deep-route title is long on a narrow phone. Desktop keeps text-xl and
+            has room to spare, so it never actually clips there. */}
+        <h1 className="truncate text-lg font-extrabold text-slate-800 sm:text-xl dark:text-slate-100">
           {title}
         </h1>
       </div>
-      <div className="flex items-center gap-2 sm:gap-4">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-4">
         {/* Language Selector */}
         {showLanguageSelector && (
           <div className="flex items-center gap-2">

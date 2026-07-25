@@ -18,8 +18,8 @@ import { fetchPackageById } from "@/lib/redux/thunks/admin/packageThunks";
 import { getGuideById } from "@/lib/redux/thunks/guide/guideThunk";
 import { resolvePackageImageUrl } from "@/lib/utils/utils";
 
-import PaymentProcessing from "@/components/animations/PaymentProcessing";
-import PaymentFailure from "@/components/animations/PaymentFailure";
+import PaymentStatusOverlay from "@/components/animations/PaymentStatusOverlay";
+import { usePaymentStatus } from "@/lib/hooks/usePaymentStatus";
 import { Shimmer } from "@/components/animations/Skeletons";
 import { JourneyProgress } from "@/components/animations/travel";
 import { EASE_OUT, staggerParent } from "@/lib/motion";
@@ -86,12 +86,25 @@ function CheckoutContent() {
   // tap can't open two Razorpay sheets before React re-renders.
   const attemptRef = useRef(false);
   const [verifying, setVerifying] = useState(false);
-  // Errors raised before Razorpay is even reached (no slice error to read).
-  const [localError, setLocalError] = useState<string | null>(null);
 
-  // The slice error is the source of truth for a failed payment, so the failure
-  // screen is derived from it rather than mirrored into state.
-  const failureReason = error ?? localError;
+  // Drives the full-screen processing/success/failure animation. Nothing here
+  // touches the payment itself — it only narrates what the flow below already
+  // decided, and only once the backend has answered.
+  const payment = usePaymentStatus();
+  const { start, succeed, fail, failFrom, cancel, reset } = payment;
+
+  // True once this visit has actually tried to pay. Both effects below read the
+  // Redux slice, which can still hold a booking or an error from an earlier
+  // visit — neither may put a result on screen for a payment that hasn't
+  // happened yet.
+  const attemptedRef = useRef(false);
+  // Set the instant Razorpay hands back a signature: from then on the money is
+  // captured, so a failure means "we owe you a booking", not "nothing was
+  // charged". Getting this wrong is what makes customers pay twice.
+  const capturedRef = useRef(false);
+  // Server-derived figures, kept for the success/failure panel.
+  const paidAmountRef = useRef<number | null>(null);
+  const paymentIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (tourId && !tour && packagesLoading !== "pending") {
@@ -117,16 +130,38 @@ function CheckoutContent() {
   /** Dismisses the failure screen and re-arms the payment button. */
   const resetAfterFailure = () => {
     attemptRef.current = false;
+    capturedRef.current = false;
     setVerifying(false);
-    setLocalError(null);
+    reset();
     dispatch(clearBookingError());
   };
 
+  // Success is announced only once the backend has returned a persisted booking
+  // — never on the Razorpay callback alone. The overlay then handles the
+  // redirect to the confirmation page, so this no longer navigates directly.
+  //
+  // `capturedRef` is what keeps this honest across visits: the slice can still
+  // hold the booking from an earlier purchase, and without the guard simply
+  // opening checkout again would congratulate the user for a payment they
+  // haven't made yet.
   useEffect(() => {
-    if (currentBooking?._id) {
-      router.push(`/booking-success?bookingId=${currentBooking._id}`);
-    }
-  }, [currentBooking, router]);
+    if (!currentBooking?._id || !capturedRef.current) return;
+    succeed({
+      amount: paidAmountRef.current,
+      reference: paymentIdRef.current,
+    });
+  }, [currentBooking?._id, succeed]);
+
+  // The slice error is the source of truth for a failed verification; mirror it
+  // into the overlay, which owns the recovery UI from there.
+  useEffect(() => {
+    if (!error || !attemptedRef.current) return;
+    failFrom(error, {
+      afterCapture: capturedRef.current,
+      reference: paymentIdRef.current,
+      amount: paidAmountRef.current,
+    });
+  }, [error, failFrom]);
 
   const handlePayment = async () => {
     // Duplicate-attempt guard — a second click while a sheet is already open
@@ -143,7 +178,11 @@ function CheckoutContent() {
     }
 
     attemptRef.current = true;
-    setLocalError(null);
+    attemptedRef.current = true;
+    capturedRef.current = false;
+    // The overlay covers everything from here: order creation, the gateway sheet
+    // (which renders above it and stays interactive), then verification.
+    start();
 
     const touristsCount = parseInt(numberOfTourists);
 
@@ -165,9 +204,12 @@ function CheckoutContent() {
 
       if (!rzp || !rzp.order_id || !bookingData) {
         attemptRef.current = false;
-        setLocalError("Could not create payment order.");
+        // Nothing was charged — this is a plain, safely retryable failure.
+        fail("failed", { reason: "Could not create payment order." });
         return;
       }
+
+      paidAmountRef.current = rzp.amount != null ? rzp.amount / 100 : null;
 
       const options = {
         key: rzp.key || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
@@ -179,7 +221,10 @@ function CheckoutContent() {
         handler: function (response: any) {
           // Razorpay has taken the money; server-side verification is next —
           // this is the window the processing overlay covers.
+          capturedRef.current = true;
+          paymentIdRef.current = response.razorpay_payment_id ?? null;
           setVerifying(true);
+          start();
           dispatch(
             verifyPaymentAndCreateBooking({
               razorpay_order_id: response.razorpay_order_id,
@@ -194,6 +239,9 @@ function CheckoutContent() {
         modal: {
           ondismiss: function () {
             attemptRef.current = false;
+            // Closing the sheet is a deliberate act, not an error — the overlay
+            // says so and offers the way back in.
+            cancel();
           },
         },
         prefill: rzp.prefill || {
@@ -208,7 +256,9 @@ function CheckoutContent() {
       paymentObject.open();
     } catch (err: any) {
       attemptRef.current = false;
-      setLocalError(err.message || "Could not initiate payment.");
+      // Pre-capture: no money has moved, so a retry is safe. `failFrom` still
+      // separates a dropped connection from a refused order.
+      failFrom(err ?? new Error("Could not initiate payment."));
     }
   };
 
@@ -275,15 +325,21 @@ function CheckoutContent() {
 
   return (
     <>
-      <PaymentProcessing open={verifying && !failureReason} />
-      <PaymentFailure
-        open={!!failureReason}
-        reason={failureReason}
+      <PaymentStatusOverlay
+        status={payment.status}
+        viewHref={
+          currentBooking?._id ? `/booking-success?bookingId=${currentBooking._id}` : null
+        }
         onRetry={() => {
           resetAfterFailure();
           handlePayment();
         }}
-        onBack={resetAfterFailure}
+        onDismiss={resetAfterFailure}
+        detail={
+          <p className="text-xs text-slate-400">
+            {tour.title} · {touristsCount} guest{touristsCount > 1 ? "s" : ""}
+          </p>
+        }
       />
 
       {/* Journey rail — checkout is the final step before confirmation. */}

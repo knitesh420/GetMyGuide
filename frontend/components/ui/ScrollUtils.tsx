@@ -31,7 +31,9 @@ export function BackToTop() {
       {visible && (
         <motion.button
           onClick={scrollToTop}
-          className="fixed bottom-20 right-5 z-50 w-12 h-12 rounded-full bg-gradient-to-br from-red-600 to-orange-500 text-white flex items-center justify-center shadow-xl shadow-red-600/30 hover:shadow-red-600/50 transition-shadow"
+          // z-40: floating furniture, same band as the WhatsApp bubble it
+          // stacks above. See the z-index scale in globals.css.
+          className="fixed bottom-20 right-5 z-40 w-12 h-12 rounded-full bg-gradient-to-br from-red-600 to-orange-500 text-white flex items-center justify-center shadow-xl shadow-red-600/30 hover:shadow-red-600/50 transition-shadow"
           initial={{ opacity: 0, scale: 0.5 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.5 }}

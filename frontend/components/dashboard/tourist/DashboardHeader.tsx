@@ -18,12 +18,25 @@ const QUICK_ACTIONS = [
  * Sticky top bar of Dashboard Home: who the tourist is, their business code, the
  * date, how complete their profile is, and the four actions they take most.
  *
- * It sticks to the top of the scrolling <main>. The layout's own header sits at
- * z-30, so this stays below it (z-20) and slides underneath rather than over it.
+ * It pins to the top of the scrolling <main> and stays there for the whole page.
+ * `top-18` is the height of the dashboard layout's own sticky header (h-18 /
+ * 72px) and must track it: at `top-0` this bar parked in the same 72px the
+ * header occupies and — being z-20 to the header's z-30 — simply slid underneath
+ * and vanished on scroll. Parked below it instead, the two stack cleanly and
+ * z-20 only has to beat the page content, which it does.
  *
- * The negative margins cancel the <main> gutter (p-4 md:p-6 lg:p-8) so the blur
- * band and its bottom rule run edge to edge; they must track that gutter exactly
- * or the band will sit inset from the content it covers.
+ * The negative margins cancel the <main> gutter (p-4 md:p-6 lg:p-8) so the band
+ * and its bottom rule run edge to edge and sit flush against the layout header;
+ * they must track that gutter exactly on all three axes or the band floats inset
+ * from the content it covers, with a strip of page background above it.
+ *
+ * Cancelling the top gutter has a second effect worth keeping: the band's resting
+ * position becomes 72px — exactly where `top-18` pins it — so it does not shift
+ * by even a pixel when sticky engages.
+ *
+ * The teal tint is the tourist palette's own accent (see the avatar gradient
+ * below). It stays translucent because page content scrolls underneath: the
+ * `backdrop-blur-md` is what keeps that content from reading through as text.
  */
 export function DashboardHeader({
   profile,
@@ -41,7 +54,7 @@ export function DashboardHeader({
   const isComplete = completion >= 100;
 
   return (
-    <header className="sticky top-0 z-20 -mx-4 border-b border-gray-200 bg-white/85 px-4 py-5 backdrop-blur-md supports-[backdrop-filter]:bg-white/70 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
+    <header className="sticky top-18 z-20 -mx-4 -mt-4 border-b border-teal-100 bg-teal-50/85 px-4 py-5 backdrop-blur-md supports-[backdrop-filter]:bg-teal-50/70 md:-mx-6 md:-mt-6 md:px-6 lg:-mx-8 lg:-mt-8 lg:px-8">
       <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex items-start gap-4">
           <Avatar className="h-14 w-14 shrink-0 ring-2 ring-teal-500/30 ring-offset-2 ring-offset-white">

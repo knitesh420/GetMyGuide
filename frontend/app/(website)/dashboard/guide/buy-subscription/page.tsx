@@ -15,6 +15,8 @@ import {
 import type { GuideSubscriptionRecord } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import PaymentStatusOverlay from "@/components/animations/PaymentStatusOverlay";
+import { usePaymentStatus } from "@/lib/hooks/usePaymentStatus";
 import {
   CalendarClock,
   ShieldCheck,
@@ -364,6 +366,10 @@ export default function GuideMembershipPage() {
   const [processing, setProcessing] = useState(false);
   // Bumped after a successful payment so the history section refetches.
   const [historyReload, setHistoryReload] = useState(0);
+  // Full-screen membership payment animation. Reporting only — the order and
+  // confirmation calls below are unchanged.
+  const membershipPayment = usePaymentStatus();
+  const { start, succeed, fail, cancel, reset } = membershipPayment;
 
   useEffect(() => {
     dispatch(getMyGuideProfile());
@@ -406,11 +412,13 @@ export default function GuideMembershipPage() {
     }
 
     setProcessing(true);
+    start();
     const orderResult = await dispatch(createGuideMembershipOrder());
     if (createGuideMembershipOrder.rejected.match(orderResult)) {
-      toast.error(
-        (orderResult.payload as string) || "Failed to start payment.",
-      );
+      // Nothing charged yet — safely retryable.
+      fail("failed", {
+        reason: (orderResult.payload as string) || "Failed to start payment.",
+      });
       setProcessing(false);
       return;
     }
@@ -427,6 +435,8 @@ export default function GuideMembershipPage() {
       prefill: razorpay_options.prefill,
       theme: { color: RAZORPAY_THEME_COLOR },
       handler: async (response: any) => {
+        // Captured — from here a failure means "paid, not confirmed".
+        start();
         const confirmResult = await dispatch(
           confirmGuideMembershipPayment({
             transaction_id,
@@ -437,32 +447,38 @@ export default function GuideMembershipPage() {
         );
 
         if (confirmGuideMembershipPayment.fulfilled.match(confirmResult)) {
-          // Paying does not necessarily list them any more: an unverified guide's
-          // 30 days start when an admin approves, not now. Promising visibility
-          // here would be a lie for exactly the guides who most need the truth.
-          toast.success(
-            profile?.approvalStatus === "approved"
-              ? "Membership payment confirmed! You're now visible to travellers."
-              : "Payment received. Your 30-day subscription will start as soon as our team verifies your documents.",
-          );
           dispatch(getMyGuideProfile());
           // Surface the new payment in the history table below.
           setHistoryReload((n) => n + 1);
+          succeed({
+            amount: razorpay_options.amount / 100,
+            reference: response.razorpay_payment_id,
+          });
         } else {
-          toast.error(
-            (confirmResult.payload as string) ||
+          fail("verification-failed", {
+            reason:
+              (confirmResult.payload as string) ||
               "Payment succeeded but confirmation failed — please contact support.",
-          );
+            reference: response.razorpay_payment_id,
+          });
         }
         setProcessing(false);
+      },
+      // Without this a dismissed sheet left the button latched on "Processing…"
+      // with no way back.
+      modal: {
+        ondismiss: () => {
+          setProcessing(false);
+          cancel();
+        },
       },
     };
 
     const rzp = new window.Razorpay(options);
     rzp.on("payment.failed", (response: any) => {
-      toast.error(
-        `Payment failed: ${response.error?.description || "please try again"}`,
-      );
+      fail("failed", {
+        reason: response.error?.description || "Please try again.",
+      });
       setProcessing(false);
     });
     rzp.open();
@@ -483,6 +499,25 @@ export default function GuideMembershipPage() {
       <Script
         id="razorpay-checkout-js"
         src="https://checkout.razorpay.com/v1/checkout.js"
+      />
+
+      <PaymentStatusOverlay
+        status={membershipPayment.status}
+        // The guide stays on this page — the panel behind has already refreshed
+        // with the new membership state by the time the overlay closes.
+        viewHref={null}
+        viewLabel="View Membership"
+        dashboardHref="/dashboard/guide"
+        // Paying does not necessarily list them any more: an unverified guide's
+        // 30 days start when an admin approves, not now. Promising visibility
+        // here would be a lie for exactly the guides who most need the truth.
+        successMessage={
+          profile?.approvalStatus === "approved"
+            ? "Your membership is confirmed — you're now visible to travellers."
+            : "Payment received. Your 30-day subscription starts as soon as our team verifies your documents."
+        }
+        onRetry={handlePay}
+        onDismiss={reset}
       />
 
       <div className="space-y-6">

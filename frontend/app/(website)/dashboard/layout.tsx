@@ -98,24 +98,28 @@ export default function DashboardLayout({
         {/* `relative z-0` traps page content in its own stacking context, so a
             child that raises its z-index can never paint over the sticky
             header. The header stays at z-30 — below the mobile sidebar overlay
-            at z-40, which still needs to cover it. */}
-        <main className="relative z-0 flex-1 p-4 md:p-6 lg:p-8">{children}</main>
+            at z-40, which still needs to cover it.
+
+            `dashboard-main` is the scope hook for the responsive polish layer in
+            globals.css (touch targets, form rhythm, overflow guards); every rule
+            keyed off it is gated below lg, so the desktop layout is untouched. */}
+        <main className="dashboard-main relative z-0 flex-1 p-4 md:p-6 lg:p-8">
+          {children}
+        </main>
       </div>
 
-      {/* One accent rule spanning both columns, sitting on the shared h-18
+      {/* Admin only — the guide and tourist panels are deliberately plain here,
+          and rely on the header's own `shadow-sm` to separate it from the page.
+          One accent rule spanning both columns, sitting on the shared h-18
           (72px) baseline of the sidebar's brand block and the header — `top-18`
           must track that height, or the rule cuts across the row instead of
           underlining it. Drawn here as a single element rather than once per
-          column, so the two halves cannot drift out of alignment. It doubles as
-          the header's bottom border (which is why the header has none of its
-          own). z-40 clears the sidebar (lg:z-30) and the header (z-30). */}
-      <div
-        className={`pointer-events-none absolute inset-x-0 top-18 z-40 h-[3px] ${
-          user.role === "guide"
-            ? "bg-gradient-to-r from-green-400 to-emerald-500"
-            : "bg-gradient-to-r from-teal-400 to-cyan-500"
-        }`}
-      />
+          column, so the two halves cannot drift out of alignment. z-40 clears
+          the sidebar (lg:z-30) and the header (z-30), and stays under the
+          mobile nav drawer (z-70) and its overlay (z-60). */}
+      {user.role === "admin" && (
+        <div className="pointer-events-none absolute inset-x-0 top-18 z-40 h-[3px] bg-gradient-to-r from-teal-400 to-cyan-500" />
+      )}
     </div>
   );
 }

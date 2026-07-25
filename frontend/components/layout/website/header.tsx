@@ -176,15 +176,23 @@ export function Header() {
   return (
     <>
       <motion.header
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-400 ${
+        className={`fixed top-0 left-0 right-0 z-50 transition-[background-color,box-shadow,border-color,backdrop-filter] duration-300 ease-out ${
           scrolled
-            ? "bg-white/97 backdrop-blur-xl shadow-md border-b border-gray-100"
-            : "bg-white/95 backdrop-blur-md border-b border-gray-200/60 shadow-sm"
+            ? "bg-white/80 backdrop-blur-xl shadow-[0_10px_30px_-12px_rgba(15,23,42,0.18)] border-b border-gray-900/[0.06]"
+            : "bg-white/90 backdrop-blur-md border-b border-gray-200/60 shadow-[0_1px_0_0_rgba(15,23,42,0.04)]"
         }`}
-        initial={{ y: -80, opacity: 0 }}
+        initial={{ y: -90, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
       >
+        {/* Hairline brand accent that fades in once the bar detaches from the
+            top of the page — a subtle premium cue that you've started scrolling. */}
+        <span
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent transition-opacity duration-300 ${
+            scrolled ? "opacity-100" : "opacity-0"
+          }`}
+        />
         <div className="max-w-7xl mx-auto px-4 lg:px-6">
           {/* Shrinks on scroll — the bar tightens up to give the page back some
               vertical room once the user is past the hero. Done with Tailwind
@@ -198,25 +206,33 @@ export function Header() {
           >
 
             {/* ── Logo ── */}
-            <Link href="/" className="flex items-center gap-2 shrink-0 group">
+            <Link href="/" className="flex items-center gap-2.5 shrink-0 group rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
               <motion.div
                 className={`relative shrink-0 transition-[width,height] duration-300 ease-out ${
                   scrolled ? "w-9 h-9 lg:w-11 lg:h-11" : "w-12 h-12 lg:w-14 lg:h-14"
                 }`}
-                whileHover={{ scale: 1.08, rotate: [0, -3, 3, 0] }}
+                whileHover={{ scale: 1.06, rotate: -3 }}
+                whileTap={{ scale: 0.94 }}
+                transition={{ type: "spring", stiffness: 400, damping: 16 }}
               >
+                {/* Soft brand halo, revealed only on hover — gives the mark a
+                    quiet glow without any resting glow that would look busy. */}
+                <span
+                  aria-hidden="true"
+                  className="absolute -inset-1.5 rounded-2xl bg-primary/25 opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-100"
+                />
                 <Image
                   src={IMAGES.logo}
                   alt="GetMyGuide"
                   fill
                   sizes="(min-width: 1024px) 56px, 48px"
-                  className="object-contain rounded-lg"
+                  className="relative object-contain rounded-lg"
                   priority
                 />
               </motion.div>
               <div className="hidden sm:block leading-tight">
                 <motion.p
-                  className="text-sm font-extrabold text-primary leading-none"
+                  className="text-sm font-extrabold text-primary leading-none tracking-tight"
                   style={{ fontFamily: "'Outfit', sans-serif" }}
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -225,7 +241,7 @@ export function Header() {
                   GetMyGuide
                 </motion.p>
                 <motion.p
-                  className="text-[10px] text-gray-400 font-medium"
+                  className="text-[10px] text-gray-400 font-medium tracking-wide"
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.28 }}
@@ -244,14 +260,15 @@ export function Header() {
                     key={item.href}
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.06 * i + 0.15 }}
+                    transition={{ delay: 0.06 * i + 0.15, ease: [0.22, 1, 0.36, 1] }}
+                    whileHover={{ y: -1 }}
                   >
                     <Link
                       href={item.href}
-                      className={`relative flex items-center px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-200 whitespace-nowrap group ${
+                      className={`relative flex items-center px-3 py-1.5 rounded-full text-xs font-semibold tracking-tight transition-colors duration-200 whitespace-nowrap group outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
                         active
                           ? "text-primary"
-                          : "text-gray-600 hover:text-primary hover:bg-primary/5"
+                          : "text-gray-600 hover:text-primary"
                       }`}
                     >
                       {/* The active pill is a single shared element: `layoutId`
@@ -260,14 +277,20 @@ export function Header() {
                       {active && (
                         <motion.span
                           layoutId="nav-active-pill"
-                          className="absolute inset-0 rounded-lg bg-primary/8"
+                          className="absolute inset-0 rounded-full bg-primary/10 ring-1 ring-inset ring-primary/15"
                           transition={{ type: "spring", stiffness: 380, damping: 30 }}
                         />
                       )}
+                      {/* Soft pill that echoes the active state on hover, so the
+                          highlight feels like it follows the pointer. */}
+                      {!active && (
+                        <span className="absolute inset-0 rounded-full bg-primary/0 transition-colors duration-200 group-hover:bg-primary/[0.06]" />
+                      )}
                       <span className="relative z-10">{t(item.labelKey)}</span>
-                      {/* animated underline */}
+                      {/* Animated underline — grows from the centre on hover,
+                          rests short and centred when the link is active. */}
                       <span
-                        className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 h-0.5 bg-primary rounded-full transition-all duration-300 ${
+                        className={`absolute bottom-1 left-1/2 -translate-x-1/2 h-0.5 rounded-full bg-primary transition-all duration-300 ${
                           active ? "w-4" : "w-0 group-hover:w-4"
                         }`}
                       />
@@ -282,9 +305,10 @@ export function Header() {
               {/* Search */}
               <motion.button
                 onClick={() => setIsSearchOpen(true)}
-                className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600 hover:text-primary border border-gray-200"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+                className="p-2 rounded-xl border border-gray-200 bg-white/60 text-gray-600 hover:text-primary hover:bg-primary/5 hover:border-primary/30 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                whileHover={{ scale: 1.06 }}
+                whileTap={{ scale: 0.94 }}
+                transition={{ type: "spring", stiffness: 400, damping: 22 }}
                 aria-label="Search"
               >
                 <Search className="w-4 h-4" />
@@ -295,7 +319,7 @@ export function Header() {
                 <select
                   value={language}
                   onChange={(e) => setLanguage(e.target.value as LanguageCode)}
-                  className="appearance-none bg-gray-50 border border-gray-200 rounded-lg pl-3 pr-7 py-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer min-w-[64px]"
+                  className="appearance-none bg-gray-50 border border-gray-200 rounded-xl pl-3 pr-7 py-1.5 text-xs font-semibold text-gray-700 hover:border-primary/30 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer min-w-[64px]"
                 >
                   {supportedLanguages.map((lang) => (
                     <option key={lang} value={lang}>{lang.toUpperCase()}</option>
@@ -309,15 +333,17 @@ export function Header() {
                 {signedIn ? (
                   <motion.button
                     onClick={() => setIsProfileOpen(!isProfileOpen)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all"
+                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border border-gray-200 bg-white/60 hover:bg-gray-50 hover:border-gray-300 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                     disabled={busy}
+                    whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.97 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 22 }}
                     aria-haspopup="menu"
                     aria-expanded={isProfileOpen}
                     aria-label="Account menu"
                   >
                     <div className="relative">
-                      <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-primary">
+                      <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-primary shadow-sm shadow-primary/30">
                         <User className="w-3.5 h-3.5 text-white" />
                       </div>
                       <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-white" />
@@ -328,9 +354,11 @@ export function Header() {
                   <motion.button
                     ref={loginTriggerRef}
                     onClick={() => setIsProfileOpen(!isProfileOpen)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all"
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-gray-200 bg-white/60 hover:bg-primary/5 hover:border-primary/30 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                     disabled={busy}
+                    whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.97 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 22 }}
                     aria-haspopup="menu"
                     aria-expanded={isProfileOpen}
                     aria-label={t("profile_login")}
@@ -346,14 +374,14 @@ export function Header() {
                 <AnimatePresence>
                   {isProfileOpen && (
                     <motion.div
-                      className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 overflow-hidden"
+                      className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-[0_20px_50px_-12px_rgba(15,23,42,0.28)] ring-1 ring-gray-900/[0.06] border border-gray-100 py-2 z-50 overflow-hidden origin-top-right"
                       role="menu"
                       aria-label={signedIn ? "Account menu" : t("profile_login")}
                       onKeyDown={handleMenuKeyDown}
-                      initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                      initial={{ opacity: 0, y: 8, scale: 0.96 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                      transition={{ duration: 0.18 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                      transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                     >
                       {!signedIn ? (
                         <>
@@ -361,10 +389,13 @@ export function Header() {
                             <p className="text-xs font-semibold text-gray-900">{t("profile_welcome")}</p>
                             <p className="text-[11px] text-gray-500">{t("profile_signin_prompt")}</p>
                           </div>
-                          <button
+                          <motion.button
                             role="menuitem"
                             onClick={() => handleLoginNav("/signin")}
                             className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-primary/5 transition-colors group focus:outline-none focus:bg-primary/5"
+                            whileHover={{ x: 3 }}
+                            whileTap={{ scale: 0.98 }}
+                            transition={{ type: "spring", stiffness: 500, damping: 30 }}
                           >
                             <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
                               <Users className="w-4 h-4 text-primary" />
@@ -373,11 +404,14 @@ export function Header() {
                               <p className="text-xs font-semibold text-gray-900 group-hover:text-primary">Tourist &amp; Guide</p>
                               <p className="text-[11px] text-gray-500">Sign In / Sign Up</p>
                             </div>
-                          </button>
-                          <button
+                          </motion.button>
+                          <motion.button
                             role="menuitem"
                             onClick={() => handleLoginNav("/login")}
                             className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 transition-colors group focus:outline-none focus:bg-gray-50"
+                            whileHover={{ x: 3 }}
+                            whileTap={{ scale: 0.98 }}
+                            transition={{ type: "spring", stiffness: 500, damping: 30 }}
                           >
                             <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
                               <Shield className="w-4 h-4 text-slate-600" />
@@ -386,13 +420,13 @@ export function Header() {
                               <p className="text-xs font-semibold text-gray-900 group-hover:text-slate-700">Admin</p>
                               <p className="text-[11px] text-gray-500">Admin Login</p>
                             </div>
-                          </button>
+                          </motion.button>
                         </>
                       ) : (
                         <>
                           <div className="px-4 py-2.5 border-b border-gray-100">
                             <div className="flex items-center gap-2.5">
-                              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shrink-0">
+                              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shrink-0 shadow-sm shadow-primary/30">
                                 <User className="w-4 h-4 text-white" />
                               </div>
                               <div className="min-w-0">
@@ -402,19 +436,32 @@ export function Header() {
                               </div>
                             </div>
                           </div>
-                          <button onClick={handleProfileClick} className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-gray-700 hover:bg-gray-50 transition-colors">
+                          <motion.button
+                            onClick={handleProfileClick}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                            whileHover={{ x: 3 }}
+                            whileTap={{ scale: 0.98 }}
+                            transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                          >
                             <div className="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center">
                               <Settings className="w-3.5 h-3.5 text-gray-600" />
                             </div>
                             <span className="font-semibold">{t("profile_dashboard")}</span>
-                          </button>
+                          </motion.button>
                           <div className="mx-4 my-1 h-px bg-gray-100" />
-                          <button onClick={handleLogout} disabled={busy} className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
+                          <motion.button
+                            onClick={handleLogout}
+                            disabled={busy}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                            whileHover={{ x: 3 }}
+                            whileTap={{ scale: 0.98 }}
+                            transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                          >
                             <div className="w-7 h-7 bg-red-50 rounded-lg flex items-center justify-center">
                               <LogOut className="w-3.5 h-3.5 text-red-500" />
                             </div>
                             <span className="font-semibold">{busy ? t("profile_logging_out") : t("profile_logout")}</span>
-                          </button>
+                          </motion.button>
                         </>
                       )}
                     </motion.div>
@@ -427,25 +474,26 @@ export function Header() {
             <div className="flex lg:hidden items-center gap-1.5">
               <motion.button
                 onClick={() => setIsSearchOpen(true)}
-                className="p-2 rounded-lg border border-gray-200 text-gray-600"
-                whileTap={{ scale: 0.92 }}
+                className="p-2 rounded-xl border border-gray-200 bg-white/60 text-gray-600 transition-colors focus-visible:ring-2 focus-visible:ring-primary/40 outline-none"
+                whileTap={{ scale: 0.9 }}
                 aria-label="Search"
               >
                 <Search className="w-4 h-4" />
               </motion.button>
               <motion.button
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="p-2 rounded-lg border border-gray-200 text-gray-700"
-                whileTap={{ scale: 0.92 }}
+                className="p-2 rounded-xl border border-gray-200 bg-white/60 text-gray-700 transition-colors focus-visible:ring-2 focus-visible:ring-primary/40 outline-none"
+                whileTap={{ scale: 0.9 }}
                 aria-label="Toggle menu"
+                aria-expanded={isMenuOpen}
               >
-                <AnimatePresence mode="wait">
+                <AnimatePresence mode="wait" initial={false}>
                   {isMenuOpen ? (
-                    <motion.span key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.15 }}>
+                    <motion.span key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.2 }} className="block">
                       <X className="w-4 h-4" />
                     </motion.span>
                   ) : (
-                    <motion.span key="menu" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.15 }}>
+                    <motion.span key="menu" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.2 }} className="block">
                       <Menu className="w-4 h-4" />
                     </motion.span>
                   )}
@@ -485,16 +533,27 @@ export function Header() {
               aria-label="Navigation menu"
             >
               <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3.5">
-                <p
-                  className="text-sm font-extrabold text-primary"
-                  style={{ fontFamily: "'Outfit', sans-serif" }}
-                >
-                  GetMyGuide
-                </p>
+                <div className="flex items-center gap-2.5">
+                  <span className="relative w-9 h-9 shrink-0">
+                    <Image
+                      src={IMAGES.logo}
+                      alt="GetMyGuide"
+                      fill
+                      sizes="36px"
+                      className="object-contain rounded-lg"
+                    />
+                  </span>
+                  <p
+                    className="text-sm font-extrabold text-primary tracking-tight"
+                    style={{ fontFamily: "'Outfit', sans-serif" }}
+                  >
+                    GetMyGuide
+                  </p>
+                </div>
                 <motion.button
                   onClick={() => setIsMenuOpen(false)}
-                  className="p-2 rounded-lg border border-gray-200 text-gray-700"
-                  whileTap={{ scale: 0.92 }}
+                  className="p-2 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  whileTap={{ scale: 0.9 }}
                   aria-label="Close menu"
                 >
                   <X className="w-4 h-4" />
@@ -510,12 +569,15 @@ export function Header() {
                   >
                     <Link
                       href={item.href}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                      className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                         isActive(item.href)
                           ? "text-primary bg-primary/8 font-semibold"
                           : "text-gray-700 hover:bg-gray-50 hover:text-primary"
                       }`}
                     >
+                      {isActive(item.href) && (
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-primary" />
+                      )}
                       <item.icon className={`w-4 h-4 shrink-0 ${isActive(item.href) ? "text-primary" : "text-gray-400"}`} />
                       {t(item.labelKey)}
                     </Link>
@@ -529,7 +591,7 @@ export function Header() {
                   <select
                     value={language}
                     onChange={(e) => setLanguage(e.target.value as LanguageCode)}
-                    className="w-full appearance-none bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 pr-10 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                    className="w-full appearance-none bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 pr-10 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
                   >
                     {supportedLanguages.map((lang) => (
                       <option key={lang} value={lang}>{lang.toUpperCase()}</option>
@@ -545,7 +607,7 @@ export function Header() {
                       onClick={() => setIsMobileLoginOpen(!isMobileLoginOpen)}
                       aria-haspopup="menu"
                       aria-expanded={isMobileLoginOpen}
-                      className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-sm font-semibold text-primary bg-primary/8 rounded-xl hover:bg-primary/12 transition-colors"
+                      className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-sm font-semibold text-primary bg-primary/8 rounded-xl hover:bg-primary/12 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                     >
                       <span className="flex items-center gap-3">
                         <LogIn className="w-4 h-4" />

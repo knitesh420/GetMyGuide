@@ -129,7 +129,11 @@ function GuideSelectionContent() {
                 backgroundImage={IMAGES.scene3}
             />
 
-            <section className="py-6 bg-background/80 backdrop-blur-sm border-b sticky top-0 z-10">
+            {/* top-14 lg:top-16 is the website header's height — at top-0 this
+                bar pinned into the same strip the fixed header occupies and,
+                at z-10 against the header's z-50, disappeared behind it, so the
+                language filter vanished the moment the user scrolled. */}
+            <section className="py-6 bg-background/80 backdrop-blur-sm border-b sticky top-14 lg:top-16 z-10">
                 <div className="container max-w-7xl mx-auto px-4 flex justify-center">
                     <div className="w-full md:w-72">
                         <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>

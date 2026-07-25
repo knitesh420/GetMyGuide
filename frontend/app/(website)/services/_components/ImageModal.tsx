@@ -50,7 +50,9 @@ export default function ImageModal({
 
   return (
     <div
-      className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+      // z-100 is the inline-modal band (see the z-index scale in globals.css);
+      // at z-50 the floating WhatsApp bubble and video ad painted over it.
+      className="fixed inset-0 bg-black/90 flex items-center justify-center z-100 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div

@@ -188,11 +188,16 @@ const FloatingVideoAd: React.FC = () => {
   const videoUrl = `${baseUrl}/media/advertisements/${currentAd.videoFilename}`;
 
   // Minimized state — small pill icon
+  // z-40 is the "floating page furniture" band (see the z-index scale in
+  // globals.css). This was z-[9999], which made a draggable advert the topmost
+  // element on the site: parked near the top it covered the navbar, and it sat
+  // over the mobile menu, the search overlay, image lightboxes and even the
+  // payment-in-flight spinner. It floats above page content and nothing else.
   if (minimized) {
     return (
       <div
         ref={containerRef}
-        className="fixed z-[9999] cursor-grab active:cursor-grabbing select-none"
+        className="fixed z-40 cursor-grab active:cursor-grabbing select-none"
         style={{
           left: position.x,
           top: position.y,
@@ -225,7 +230,7 @@ const FloatingVideoAd: React.FC = () => {
   return (
     <div
       ref={containerRef}
-      className="fixed z-[9999] select-none"
+      className="fixed z-40 select-none"
       style={{
         left: position.x,
         top: position.y,

@@ -16,10 +16,15 @@ export function WhatsAppFloatingButton({
     window.open(whatsappUrl, "_blank")
   }
 
+  // z-40 is the floating-furniture band (see the z-index scale in globals.css).
+  // At z-50 this tied with the navbar and with every inline modal — and because
+  // the layout renders it *after* the page, DOM order broke the tie in its
+  // favour: the green bubble floated on top of the full-screen image lightbox
+  // and the service image modal.
   return (
     <button
       onClick={handleClick}
-      className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-lg transition-all duration-300 hover:scale-110 hover:bg-green-600 hover:shadow-xl"
+      className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-lg transition-all duration-300 hover:scale-110 hover:bg-green-600 hover:shadow-xl"
       aria-label="Chat on WhatsApp"
     >
       <MessageCircle className="h-7 w-7" />

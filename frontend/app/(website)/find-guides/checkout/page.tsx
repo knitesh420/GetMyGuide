@@ -1,7 +1,7 @@
 "use client";
 
 import { FC, useState, useEffect, useMemo } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/lib/store';
 import {
@@ -22,14 +22,13 @@ import { Loader2, ShieldCheck, AlertCircle } from 'lucide-react';
 import { showWarning } from '@/lib/swal';
 import { format } from 'date-fns';
 
-import PaymentProcessing from '@/components/animations/PaymentProcessing';
-import PaymentFailure from '@/components/animations/PaymentFailure';
+import PaymentStatusOverlay from '@/components/animations/PaymentStatusOverlay';
+import { usePaymentStatus } from '@/lib/hooks/usePaymentStatus';
 import { Shimmer } from '@/components/animations/Skeletons';
 import { JourneyProgress } from '@/components/animations/travel';
 import { EASE_OUT, staggerParent } from '@/lib/motion';
 
 const CheckoutPage: FC = () => {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const dispatch: AppDispatch = useDispatch();
 
@@ -46,9 +45,10 @@ const CheckoutPage: FC = () => {
   const [quote, setQuote] = useState<BookingQuote | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
 
-  // Presentation-only: lets the failure panel be dismissed without clearing the
-  // slice error that the inline message below still reads from.
-  const [failureDismissed, setFailureDismissed] = useState(false);
+  // Drives the full-screen processing/success/failure animation. It reports the
+  // thunk's outcome and nothing more — the payment logic is untouched.
+  const payment = usePaymentStatus();
+  const { start, succeed, failFrom, reset } = payment;
 
   // --- Extract data from URL ---
   const bookingDetails = useMemo(() => ({
@@ -104,8 +104,8 @@ const CheckoutPage: FC = () => {
       return;
     }
 
-    // A fresh attempt re-arms the failure panel for whatever comes back.
-    setFailureDismissed(false);
+    // A fresh attempt re-arms the overlay for whatever comes back.
+    start();
 
     const bookingData: BookingCreationData = {
       guideId: bookingDetails.guideId,
@@ -120,12 +120,18 @@ const CheckoutPage: FC = () => {
     try {
       // The thunk will handle everything. We just need to wait for its result.
       await dispatch(createAndVerifyBooking(bookingData)).unwrap();
-      // On success, the thunk will resolve. We can then navigate.
-      router.push('/find-guides/booking-success');
+      // The thunk only resolves once the backend has verified the signature and
+      // persisted the booking, so this is a confirmed success. The overlay shows
+      // it, then handles the redirect that used to happen here.
+      succeed({ amount: advanceAmount });
     } catch (rejectedValueOrSerializedError) {
       // unwrap() throws an error if the thunk is rejected.
       // The error state is already set in the slice, so we just log it.
       console.error('Booking failed:', rejectedValueOrSerializedError);
+      // The thunk rejects with prose for every branch — a dismissed sheet, a
+      // refused order, or a captured payment it could not confirm. Classifying
+      // it keeps "nothing was charged" off a screen where money did move.
+      failFrom(rejectedValueOrSerializedError, { amount: advanceAmount });
     }
   };
 
@@ -136,14 +142,19 @@ const CheckoutPage: FC = () => {
 
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-black py-16 md:py-24">
-      <PaymentProcessing open={loading} />
-      <PaymentFailure
-        open={!!error && !loading && !failureDismissed}
-        reason={error}
+      <PaymentStatusOverlay
+        status={payment.status}
+        viewHref="/find-guides/booking-success"
         onRetry={() => {
+          reset();
           handlePlaceOrder();
         }}
-        onBack={() => setFailureDismissed(true)}
+        onDismiss={reset}
+        detail={
+          <p className="text-xs text-slate-400">
+            {bookingDetails.guideName} · {bookingDetails.location}
+          </p>
+        }
       />
 
       <div className="container max-w-4xl mx-auto px-4">
