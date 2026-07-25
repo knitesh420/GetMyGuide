@@ -4,24 +4,27 @@ import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Users } from "lucide-react";
 import { AppDispatch, RootState } from "@/lib/store";
 import { fetchAdminGuides } from "@/lib/redux/thunks/guide/adminGuideThunks";
 import { deleteGuide, reactivateGuide } from "@/lib/redux/thunks/guide/guideThunk";
 import { Button } from "@/components/ui/button";
 import { showToast } from "@/lib/utils/toastHelper";
 import { confirmDialog } from "@/lib/swal";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
+  AdminCellStack,
+  AdminPanel,
+  AdminSearchInput,
+  AdminStatusBadge,
+  AdminTable,
+  AdminTableCell,
+  AdminTableHead,
+  AdminTableRow,
+  AdminToolbar,
+  EmptyState,
+  PageHeader,
+} from "@/components/admin/ui";
+import { SkeletonTable } from "@/components/animations/Skeletons";
 import { useAuth } from "@/lib/hooks/useAuth";
 
 export default function AdminGuidesPage() {
@@ -95,122 +98,141 @@ export default function AdminGuidesPage() {
   };
 
   return (
-    <div className="flex-1 space-y-8 p-4 sm:p-6 md:p-8 bg-muted/40">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Guides</h2>
-        <p className="text-muted-foreground">
-          Every guide account with its ID, contact details, and membership status.
-        </p>
-      </div>
+    <div className="space-y-6 lg:space-y-8">
+      <PageHeader
+        title="Guides"
+        description="Every guide account with its ID, contact details, and membership status."
+      />
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-4">
-          <CardTitle>All Guides ({guides.length})</CardTitle>
-          <Input
-            placeholder="Search name, ID, email, city…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-xs"
-          />
-        </CardHeader>
-        <CardContent>
-          {loading && guides.length === 0 ? (
-            <Skeleton className="h-60" />
-          ) : filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No guides found.</p>
+      {loading && guides.length === 0 ? (
+        <SkeletonTable rows={6} columns={7} />
+      ) : (
+        <AdminPanel>
+          <AdminToolbar
+            stats={
+              <span className="text-sm font-medium text-slate-500">
+                {filtered.length} guide{filtered.length === 1 ? "" : "s"}
+              </span>
+            }
+          >
+            <AdminSearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Search name, ID, email, city…"
+            />
+          </AdminToolbar>
+
+          {filtered.length === 0 ? (
+            <EmptyState
+              bare
+              icon={Users}
+              title={search ? "No matching guides" : "No guides yet"}
+              description={
+                search
+                  ? "No guide matches your search. Try a different name, ID, email, or city."
+                  : "Guide accounts will appear here as people register."
+              }
+            />
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Guide ID</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Contact</TableHead>
-                    <TableHead>City</TableHead>
-                    <TableHead>Languages</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Membership</TableHead>
-                    <TableHead>Account</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((g) => (
-                    <TableRow key={g.accountId}>
-                      <TableCell className="font-mono text-xs">{g.guideCode ?? "—"}</TableCell>
-                      <TableCell className="font-medium">
-                        {/* The detail page is where documents, notes, payment info
-                            and cash payments live for this guide. */}
-                        <Link
-                          href={`/dashboard/admin/guides/${g.accountId}`}
-                          className="hover:text-teal-700 hover:underline"
-                        >
-                          {g.name}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        <div>{g.email}</div>
-                        <div className="text-muted-foreground">{g.phone ?? "—"}</div>
-                      </TableCell>
-                      <TableCell>{g.city || "—"}</TableCell>
-                      <TableCell className="max-w-[200px] truncate">
-                        {g.languages.length ? g.languages.join(", ") : "—"}
-                      </TableCell>
-                      <TableCell className="capitalize">{g.type}</TableCell>
-                      <TableCell>
-                        {g.membershipActive ? (
-                          <Badge variant="success">Active</Badge>
-                        ) : g.membershipPendingActivation ? (
-                          // Paid, but the 30-day clock only starts when an admin
-                          // approves them — so this is a queue to work, not a lapse.
-                          <Badge variant="pending">Awaiting approval</Badge>
-                        ) : g.registrationCompleted ? (
-                          <Badge variant="pending">Lapsed</Badge>
-                        ) : (
-                          <Badge variant="outline">Unregistered</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
+            <AdminTable>
+              <AdminTableHead
+                columns={[
+                  "Guide ID",
+                  "Name",
+                  "Contact",
+                  "City",
+                  "Languages",
+                  "Type",
+                  "Membership",
+                  "Account",
+                  "Actions",
+                ]}
+              />
+              <tbody>
+                {filtered.map((g, i) => (
+                  <AdminTableRow key={g.accountId} index={i}>
+                    <AdminTableCell className="font-mono text-xs">
+                      {g.guideCode ?? "—"}
+                    </AdminTableCell>
+                    <AdminTableCell>
+                      {/* The detail page is where documents, notes, payment info
+                          and cash payments live for this guide. */}
+                      <Link
+                        href={`/dashboard/admin/guides/${g.accountId}`}
+                        className="font-semibold text-slate-900 hover:text-teal-700 hover:underline"
+                      >
+                        {g.name}
+                      </Link>
+                    </AdminTableCell>
+                    <AdminTableCell>
+                      <AdminCellStack primary={g.email} secondary={g.phone ?? "—"} />
+                    </AdminTableCell>
+                    <AdminTableCell>{g.city || "—"}</AdminTableCell>
+                    <AdminTableCell className="max-w-[200px] truncate">
+                      {g.languages.length ? g.languages.join(", ") : "—"}
+                    </AdminTableCell>
+                    <AdminTableCell className="capitalize">{g.type}</AdminTableCell>
+                    <AdminTableCell>
+                      {g.membershipActive ? (
+                        <AdminStatusBadge status="active" label="Active" tone="success" />
+                      ) : g.membershipPendingActivation ? (
+                        // Paid, but the 30-day clock only starts when an admin
+                        // approves them — a queue to work, not a lapse.
+                        <AdminStatusBadge
+                          status="pending"
+                          label="Awaiting approval"
+                          tone="warning"
+                        />
+                      ) : g.registrationCompleted ? (
+                        <AdminStatusBadge status="lapsed" label="Lapsed" tone="warning" />
+                      ) : (
+                        <AdminStatusBadge
+                          status="unregistered"
+                          label="Unregistered"
+                          tone="neutral"
+                        />
+                      )}
+                    </AdminTableCell>
+                    <AdminTableCell>
+                      {g.isActive ? (
+                        <AdminStatusBadge status="active" label="Active" tone="success" />
+                      ) : (
+                        <AdminStatusBadge status="disabled" label="Disabled" tone="danger" />
+                      )}
+                    </AdminTableCell>
+                    <AdminTableCell last>
+                      <div className="flex justify-end gap-1">
+                        <Button size="sm" variant="ghost" asChild>
+                          <Link href={`/dashboard/admin/guides/${g.accountId}`}>View</Link>
+                        </Button>
                         {g.isActive ? (
-                          <Badge variant="secondary">Active</Badge>
-                        ) : (
-                          <Badge variant="destructive">Disabled</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button size="sm" variant="ghost" asChild>
-                            <Link href={`/dashboard/admin/guides/${g.accountId}`}>View</Link>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                            onClick={() => handleSuspend(g.accountId, g.name)}
+                          >
+                            Suspend
                           </Button>
-                          {g.isActive ? (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                              onClick={() => handleSuspend(g.accountId, g.name)}
-                            >
-                              Suspend
-                            </Button>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
-                              onClick={() => handleReactivate(g.accountId, g.name)}
-                            >
-                              Reactivate
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                            onClick={() => handleReactivate(g.accountId, g.name)}
+                          >
+                            Reactivate
+                          </Button>
+                        )}
+                      </div>
+                    </AdminTableCell>
+                  </AdminTableRow>
+                ))}
+              </tbody>
+            </AdminTable>
           )}
-        </CardContent>
-      </Card>
+        </AdminPanel>
+      )}
     </div>
   );
 }

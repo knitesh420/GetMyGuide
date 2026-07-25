@@ -12,13 +12,13 @@ import {
 } from "@/lib/redux/thunks/admin/packageThunks";
 import { AdminPackage } from "@/types/admin";
 import { resolvePackageImageUrl } from "@/lib/utils";
-import { PageHeader, EmptyState } from "@/components/admin/PageHeader";
+import { PageHeader, EmptyState, AdminStatusBadge } from "@/components/admin/ui";
+import { SkeletonTable } from "@/components/animations/Skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -489,7 +489,7 @@ export default function AdminServicesPage() {
       )}
 
       {isFetching && items.length === 0 ? (
-        <Skeleton className="h-96" />
+        <SkeletonTable rows={6} columns={5} />
       ) : items.length === 0 ? (
         <EmptyState
           icon={PackageIcon}
@@ -555,15 +555,11 @@ export default function AdminServicesPage() {
                       {currency.format(pkg.price ?? 0)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${
-                          isActive
-                            ? "bg-green-50 text-green-700 ring-green-200"
-                            : "bg-slate-100 text-slate-600 ring-slate-200"
-                        }`}
-                      >
-                        {isActive ? "Live" : "Hidden"}
-                      </span>
+                      <AdminStatusBadge
+                        status={isActive ? "live" : "hidden"}
+                        tone={isActive ? "success" : "neutral"}
+                        label={isActive ? "Live" : "Hidden"}
+                      />
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">

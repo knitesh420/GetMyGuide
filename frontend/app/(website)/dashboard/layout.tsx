@@ -107,19 +107,6 @@ export default function DashboardLayout({
           {children}
         </main>
       </div>
-
-      {/* Admin only — the guide and tourist panels are deliberately plain here,
-          and rely on the header's own `shadow-sm` to separate it from the page.
-          One accent rule spanning both columns, sitting on the shared h-18
-          (72px) baseline of the sidebar's brand block and the header — `top-18`
-          must track that height, or the rule cuts across the row instead of
-          underlining it. Drawn here as a single element rather than once per
-          column, so the two halves cannot drift out of alignment. z-40 clears
-          the sidebar (lg:z-30) and the header (z-30), and stays under the
-          mobile nav drawer (z-70) and its overlay (z-60). */}
-      {user.role === "admin" && (
-        <div className="pointer-events-none absolute inset-x-0 top-18 z-40 h-[3px] bg-gradient-to-r from-teal-400 to-cyan-500" />
-      )}
     </div>
   );
 }

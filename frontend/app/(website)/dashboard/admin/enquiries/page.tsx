@@ -10,9 +10,9 @@ import {
   fetchLeads,
   updateLeadStatus,
 } from "@/lib/redux/contactSlice";
-import { PageHeader, EmptyState } from "@/components/admin/PageHeader";
+import { PageHeader, EmptyState, AdminStatusBadge } from "@/components/admin/ui";
+import { SkeletonList } from "@/components/animations/Skeletons";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,10 +26,10 @@ import {
 
 const STATUSES = ["pending", "reviewed", "resolved"] as const;
 
-const STATUS_BADGE: Record<string, string> = {
-  pending: "bg-amber-50 text-amber-700 ring-amber-200",
-  reviewed: "bg-blue-50 text-blue-700 ring-blue-200",
-  resolved: "bg-green-50 text-green-700 ring-green-200",
+const STATUS_TONE: Record<string, "warning" | "info" | "success"> = {
+  pending: "warning",
+  reviewed: "info",
+  resolved: "success",
 };
 
 const TABS: { label: string; status?: string }[] = [
@@ -72,19 +72,16 @@ function EnquiryCard({ lead }: { lead: Lead }) {
   };
 
   return (
-    <article className="rounded-xl border bg-white p-5 shadow-sm">
+    <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="font-semibold text-slate-900">{lead.fullName}</h2>
-            <span
-              className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ring-1 ring-inset ${
-                STATUS_BADGE[lead.status] ?? STATUS_BADGE.pending
-              }`}
-            >
-              {lead.status}
-            </span>
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs capitalize text-slate-600">
+            <AdminStatusBadge
+              status={lead.status}
+              tone={STATUS_TONE[lead.status] ?? "warning"}
+            />
+            <span className="rounded-md bg-slate-100 px-2 py-1 text-xs capitalize text-slate-600 ring-1 ring-inset ring-slate-500/20">
               {lead.category}
             </span>
           </div>
@@ -214,7 +211,7 @@ export default function AdminEnquiriesPage() {
         </Button>
       </PageHeader>
 
-      <div className="flex flex-wrap gap-2 border-b">
+      <div className="flex flex-wrap gap-2 border-b border-slate-200">
         {TABS.map((entry, index) => (
           <button
             key={entry.label}
@@ -237,11 +234,7 @@ export default function AdminEnquiriesPage() {
       )}
 
       {loading && leads.length === 0 ? (
-        <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-40" />
-          ))}
-        </div>
+        <SkeletonList rows={3} />
       ) : visible.length === 0 ? (
         <EmptyState
           icon={MessageSquare}

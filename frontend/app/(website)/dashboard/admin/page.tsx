@@ -9,6 +9,7 @@ import { AppDispatch, RootState } from "@/lib/store";
 import { fetchBookingsTrend, fetchReportOverview } from "@/lib/redux/thunks/report/reportThunks";
 import { StatTile } from "@/components/reports/StatTile";
 import { BookingsTrendChart } from "@/components/reports/BookingsTrendChart";
+import { PageHeader } from "@/components/admin/PageHeader";
 import { SkeletonStatRow } from "@/components/animations/Skeletons";
 import CountUp from "@/components/animations/CountUp";
 import { EASE_OUT } from "@/lib/motion";
@@ -47,23 +48,24 @@ export default function AdminOverviewPage() {
   if (user && user.role !== "admin") return null;
 
   return (
-    <div className="flex-1 space-y-8 p-4 sm:p-6 md:p-8 bg-muted/40">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Travel Operations Dashboard</h2>
-          <p className="text-muted-foreground">
-            An overview of bookings, guides, trips, and revenue.
-          </p>
-        </div>
-        <div className="flex gap-4 text-sm">
-          <Link href="/dashboard/admin/reports" className="text-primary hover:underline">
-            Full Reports
-          </Link>
-          <Link href="/dashboard/admin/activity-log" className="text-primary hover:underline">
-            Activity Log
-          </Link>
-        </div>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        title="Travel Operations Dashboard"
+        description="An overview of bookings, guides, trips, and revenue."
+      >
+        <Link
+          href="/dashboard/admin/reports"
+          className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700"
+        >
+          Full Reports
+        </Link>
+        <Link
+          href="/dashboard/admin/activity-log"
+          className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700"
+        >
+          Activity Log
+        </Link>
+      </PageHeader>
 
       {loading && !overview ? (
         <SkeletonStatRow count={8} />
@@ -86,7 +88,7 @@ export default function AdminOverviewPage() {
 
       {overview && (
         <motion.div
-          className="flex items-center gap-2 text-sm text-muted-foreground"
+          className="flex items-center gap-2 text-sm text-slate-500"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.5, ease: EASE_OUT }}

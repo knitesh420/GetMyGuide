@@ -1,8 +1,17 @@
 import { BookingDB, GuideDB, TransactionDB } from '@mongo';
 import { error as logError, info } from 'node-be-utilities';
 import BalancePaymentService from './balancePayment';
+import BookingService from './booking';
 import EarningService from './earning';
 import NotificationService from './notification';
+import TourGuideService from './tourguide';
+
+/** Booking orders whose payment has cleared but that have not become a Booking. */
+const PENDING_BOOKING_REFERENCE_TYPES = [
+	'pending_booking',
+	'pending_package_booking',
+	'pending_direct_booking',
+] as const;
 
 const MEMBERSHIP_EXPIRY_REMINDER_BUCKETS = [7, 3, 1] as const;
 const PAYMENT_SCAN_LOOKBACK_MULTIPLIER = 3;
@@ -56,6 +65,57 @@ async function scanPaymentSuccesses(intervalMs: number) {
 			// types have no linked Account yet — nothing to notify in-app.
 		} catch (err) {
 			logError('notificationWatcher: failed processing transaction', err);
+		}
+	}
+}
+
+/**
+ * Backstop for the payment-fulfilment gap. A captured booking payment normally
+ * becomes a Booking on the webhook; this catches the residue — deliveries where
+ * that fulfilment threw transiently, or (before the webhook did this) payments
+ * that were only ever going to be fulfilled by a browser that never came back.
+ *
+ * It reconstructs the booking from the terms snapshotted on the transaction and
+ * calls the same idempotent fulfil methods the webhook uses, so re-running it is
+ * always safe: once a booking exists, the transaction's reference_type is no
+ * longer 'pending_*' and it drops out of this scan.
+ */
+async function reconcileOrphanedBookingPayments() {
+	const orphans = await TransactionDB.find({
+		reference_type: { $in: [...PENDING_BOOKING_REFERENCE_TYPES] },
+		status: { $in: ['success', 'paid'] },
+		metadata: { $exists: true, $ne: null },
+	})
+		.limit(100)
+		.exec();
+
+	for (const transaction of orphans) {
+		try {
+			const already = await BookingDB.findOne({ transaction_id: transaction.transaction_id })
+				.select('_id')
+				.lean();
+			if (already) continue;
+
+			const paymentId = transaction.razorpay_payment_id;
+			const meta = transaction.metadata as never;
+
+			if (transaction.reference_type === 'pending_booking') {
+				await BookingService.fulfillCustomisedBooking(transaction, meta, { paymentId });
+			} else if (transaction.reference_type === 'pending_package_booking') {
+				await BookingService.fulfillPackageBooking(transaction, meta, { paymentId });
+			} else if (transaction.reference_type === 'pending_direct_booking') {
+				await TourGuideService.fulfillDirectBooking(transaction, meta, { paymentId });
+			}
+
+			info('notificationWatcher: reconciled an orphaned booking payment', {
+				transactionId: transaction.transaction_id,
+				referenceType: transaction.reference_type,
+			});
+		} catch (err) {
+			logError('notificationWatcher: could not reconcile orphaned booking payment', {
+				transactionId: transaction.transaction_id,
+				error: err,
+			});
 		}
 	}
 }
@@ -126,6 +186,7 @@ export function startNotificationWatcher(
 ) {
 	const tick = async () => {
 		try {
+			await reconcileOrphanedBookingPayments();
 			await scanPaymentSuccesses(intervalMs);
 			await scanMembershipExpiring();
 			await promoteMaturedEarnings();

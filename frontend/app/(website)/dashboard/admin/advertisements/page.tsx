@@ -11,12 +11,12 @@ import {
   toggleAdvertisement,
 } from "@/lib/redux/advertisementSlice";
 import { Advertisement } from "@/lib/service/advertisementService";
-import { PageHeader, EmptyState } from "@/components/admin/PageHeader";
+import { PageHeader, EmptyState, AdminStatusBadge } from "@/components/admin/ui";
+import { SkeletonCardGrid } from "@/components/animations/Skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -176,7 +176,7 @@ function AdCard({ ad }: { ad: Advertisement }) {
   };
 
   return (
-    <article className="overflow-hidden rounded-xl border bg-white shadow-sm">
+    <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <video
         src={videoUrl(ad.videoFilename)}
         controls
@@ -187,14 +187,12 @@ function AdCard({ ad }: { ad: Advertisement }) {
       <div className="space-y-3 p-4">
         <div className="flex items-start justify-between gap-3">
           <h2 className="min-w-0 font-semibold text-slate-900">{ad.title}</h2>
-          <span
-            className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${
-              ad.isActive
-                ? "bg-green-50 text-green-700 ring-green-200"
-                : "bg-slate-100 text-slate-600 ring-slate-200"
-            }`}
-          >
-            {ad.isActive ? "Live" : "Hidden"}
+          <span className="shrink-0">
+            <AdminStatusBadge
+              status={ad.isActive ? "live" : "hidden"}
+              tone={ad.isActive ? "success" : "neutral"}
+              label={ad.isActive ? "Live" : "Hidden"}
+            />
           </span>
         </div>
 
@@ -203,7 +201,7 @@ function AdCard({ ad }: { ad: Advertisement }) {
           {ad.views.toLocaleString()} view{ad.views === 1 ? "" : "s"}
         </p>
 
-        <div className="flex items-center justify-between border-t pt-3">
+        <div className="flex items-center justify-between border-t border-slate-200 pt-3">
           <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
             <Switch checked={ad.isActive} onCheckedChange={handleToggle} />
             Show on site
@@ -275,11 +273,7 @@ export default function AdminAdvertisementsPage() {
       )}
 
       {loading && allAdvertisements.length === 0 ? (
-        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-72" />
-          ))}
-        </div>
+        <SkeletonCardGrid count={3} />
       ) : allAdvertisements.length === 0 ? (
         <EmptyState
           icon={Film}

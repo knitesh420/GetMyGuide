@@ -12,8 +12,15 @@ import {
   rejectRefund,
   retryRefund,
 } from "@/lib/redux/thunks/refund/refundThunks";
+import { Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AdminPanel,
+  AdminStatusBadge,
+  EmptyState,
+  PageHeader,
+} from "@/components/admin/ui";
+import { SkeletonList } from "@/components/animations/Skeletons";
 
 const currency = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -32,11 +39,11 @@ const TABS: { label: string; status?: RefundStatus }[] = [
   { label: "All" },
 ];
 
-const STATUS_BADGE: Record<RefundStatus, string> = {
-  pending: "bg-amber-50 text-amber-700 ring-amber-200",
-  processed: "bg-green-50 text-green-700 ring-green-200",
-  rejected: "bg-slate-100 text-slate-600 ring-slate-200",
-  failed: "bg-red-50 text-red-700 ring-red-200",
+const REFUND_TONE: Record<RefundStatus, "success" | "warning" | "danger" | "neutral"> = {
+  pending: "warning",
+  processed: "success",
+  rejected: "neutral",
+  failed: "danger",
 };
 
 /**
@@ -176,15 +183,13 @@ export default function AdminRefundsPage() {
   };
 
   return (
-    <div className="space-y-6 p-4 sm:p-6 md:p-8">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight">Cancellations & Refunds</h1>
-        <p className="text-muted-foreground">
-          Every cancellation lands here. Nothing is cancelled and no money moves until you decide.
-        </p>
-      </header>
+    <div className="space-y-6 lg:space-y-8">
+      <PageHeader
+        title="Cancellations & Refunds"
+        description="Every cancellation lands here. Nothing is cancelled and no money moves until you decide."
+      />
 
-      <div className="flex flex-wrap gap-2 border-b">
+      <div className="flex flex-wrap gap-2 border-b border-slate-200">
         {TABS.map((entry, index) => (
           <button
             key={entry.label}
@@ -203,30 +208,27 @@ export default function AdminRefundsPage() {
       {error && <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
       {loading && requests.length === 0 ? (
-        <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-32" />
-          ))}
-        </div>
+        <SkeletonList rows={3} />
       ) : requests.length === 0 ? (
-        <p className="rounded-xl border bg-white px-6 py-16 text-center text-sm text-slate-500">
-          Nothing here.
-        </p>
+        <EmptyState
+          icon={Inbox}
+          title="Nothing here"
+          description="Cancellation and refund requests will appear here as tourists submit them."
+        />
       ) : (
         <div className="space-y-4">
           {requests.map((request) => (
-            <article key={request._id} className="rounded-xl border bg-white p-5 shadow-sm">
+            <AdminPanel key={request._id} className="p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="font-semibold text-slate-900">
                       {request.booking?.bookingCode ?? "Booking"}
                     </h2>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${STATUS_BADGE[request.status]}`}
-                    >
-                      {request.status}
-                    </span>
+                    <AdminStatusBadge
+                      status={request.status}
+                      tone={REFUND_TONE[request.status]}
+                    />
                     <span className="text-xs text-slate-400">
                       {request.refundCode} · {shortDate(request.createdAt)}
                     </span>
@@ -290,7 +292,7 @@ export default function AdminRefundsPage() {
                   <DecisionRow request={request} />
                 </div>
               )}
-            </article>
+            </AdminPanel>
           ))}
         </div>
       )}

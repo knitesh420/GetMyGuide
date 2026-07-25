@@ -1,6 +1,7 @@
 import { BOOKING_ADVANCE_RATE } from '@config/const';
 import { AccountDB, AssignmentDB, BookingDB, GuideDB, TransactionDB } from '@mongo';
 import IBooking from '@mongo/types/booking';
+import ITransaction from '@mongo/types/transaction';
 import { JWTPayload } from '@services/jwt';
 import { getBookingOccupiedRange } from '@utils/bookingOccupiedRange';
 import { isMembershipActive } from '@utils/guideMembership';
@@ -38,6 +39,20 @@ interface DirectBookingInput {
 	language: string;
 	startDate: Date;
 	endDate: Date;
+	numberOfTravelers: number;
+}
+
+/**
+ * The terms of a direct booking as snapshotted onto the transaction at order
+ * creation. Dates arrive as `Date` from `transaction.metadata` and as ISO
+ * strings from the client's base64 copy, so both are accepted.
+ */
+interface DirectBookingTerms {
+	guideId: string;
+	location: string;
+	language: string;
+	startDate: string | Date;
+	endDate: string | Date;
 	numberOfTravelers: number;
 }
 
@@ -204,29 +219,39 @@ class TourGuideService {
 			throw new NotFoundError('Transaction not found');
 		}
 
-		// The handler can fire twice (double-click, retried network call). If this
-		// order already produced a booking, hand that one back rather than making
-		// a second booking against a single payment.
-		if (transaction.reference_type === 'booking') {
-			const existing = await BookingDB.findById(transaction.reference_id);
-			if (existing) return existing;
-		}
-
-		type BookingTerms = {
-			guideId: string;
-			location: string;
-			language: string;
-			startDate: string;
-			endDate: string;
-			numberOfTravelers: number;
-		};
-
 		// Prefer the terms recorded on the transaction when the order was opened.
 		// The client's copy is accepted only for orders created before those terms
 		// started being stored, so checkouts already in flight at deploy time
 		// still complete.
-		const decoded: BookingTerms = (transaction.metadata as BookingTerms | undefined) ??
-			(JSON.parse(Buffer.from(booking_data, 'base64').toString()) as BookingTerms);
+		const decoded: DirectBookingTerms =
+			(transaction.metadata as DirectBookingTerms | undefined) ??
+			(JSON.parse(Buffer.from(booking_data, 'base64').toString()) as DirectBookingTerms);
+
+		return this.fulfillDirectBooking(transaction, decoded, {
+			paymentId: razorpay_payment_id,
+			userId: user.userId,
+		});
+	}
+
+	/**
+	 * Idempotently turn a captured direct-booking advance into a Booking.
+	 *
+	 * Shared by the browser verify path and the Razorpay webhook, so the booking
+	 * exists whether or not the browser returns after paying. The unique
+	 * transaction_id on Booking means one payment yields exactly one booking even
+	 * if both callers race — the loser returns the winner's booking. Membership is
+	 * deliberately NOT re-checked here: once the tourist has paid, a window that
+	 * expired mid-checkout must not cost them their booking (see createOrder).
+	 */
+	async fulfillDirectBooking(
+		transaction: ITransaction,
+		decoded: DirectBookingTerms,
+		opts: { paymentId?: string; userId?: string } = {}
+	): Promise<IBooking> {
+		// Already fulfilled — by an earlier call, or by whichever of the webhook
+		// and the browser reached here first.
+		const already = await BookingDB.findOne({ transaction_id: transaction.transaction_id });
+		if (already) return already;
 
 		const startDate = new Date(decoded.startDate);
 		const endDate = new Date(decoded.endDate);
@@ -236,9 +261,16 @@ class TourGuideService {
 			throw new ServerError('Payment verification failed: booking amount mismatch');
 		}
 
+		// The owner is the account that opened the order (authoritative — the
+		// webhook has no session), falling back to an explicitly-passed id.
+		const ownerId = transaction.account?.toString() ?? opts.userId;
+		if (!ownerId) {
+			throw new ServerError('Cannot fulfil a direct booking without an owning account');
+		}
+
 		const [guide, account] = await Promise.all([
 			AccountDB.findById(decoded.guideId),
-			AccountDB.findById(user.userId),
+			AccountDB.findById(ownerId),
 		]);
 		if (!guide || guide.role !== 'guide') {
 			throw new NotFoundError('Guide not found');
@@ -249,61 +281,73 @@ class TourGuideService {
 
 		const nights = Math.max(0, pricing.days - 1);
 
-		const booking = await BookingDB.create({
-			booking_type: 'guide_direct',
-			tourist_info: {
-				name: account.name,
-				gender: 'other',
-				phone: account.phone || 'N/A',
-				email: account.email,
-				country: 'N/A',
-			},
-			travel_details: {
-				places: [decoded.location],
-				city: decoded.location,
-				date: startDate,
-				no_of_person: decoded.numberOfTravelers,
-				preferences: { hotel: false, taxi: false },
-			},
-			guide_preferences: {
-				guide_language: decoded.language ? [decoded.language] : [],
-				gender: 'none',
-			},
-			booking_configuration: {
-				duration: 'full-day',
-				foreign_language_required: false,
-				// A multi-day direct booking occupies the guide for the whole span.
-				// Encoding it as over-night stays is what makes the existing
-				// availability checker see the full range rather than just day one.
-				outstation: {
-					distance: 0,
-					over_night_stay: nights,
-					accomodation_meals: false,
-					special_excursion: [],
+		let booking: IBooking;
+		try {
+			booking = await BookingDB.create({
+				booking_type: 'guide_direct',
+				tourist_info: {
+					name: account.name,
+					gender: 'other',
+					phone: account.phone || 'N/A',
+					email: account.email,
+					country: 'N/A',
 				},
-				early_late_hours: false,
-				extra_city_allowances: false,
-				special_event_allowances: [],
-				price: pricing.totalPrice,
-			},
-			end_date: endDate,
-			advance_paid: pricing.advance,
-			balance_due: pricing.balance,
-			linked_to: new Types.ObjectId(user.userId),
-			transaction_id: transaction.transaction_id,
-			status: 'successful',
-		});
+				travel_details: {
+					places: [decoded.location],
+					city: decoded.location,
+					date: startDate,
+					no_of_person: decoded.numberOfTravelers,
+					preferences: { hotel: false, taxi: false },
+				},
+				guide_preferences: {
+					guide_language: decoded.language ? [decoded.language] : [],
+					gender: 'none',
+				},
+				booking_configuration: {
+					duration: 'full-day',
+					foreign_language_required: false,
+					// A multi-day direct booking occupies the guide for the whole span.
+					// Encoding it as over-night stays is what makes the existing
+					// availability checker see the full range rather than just day one.
+					outstation: {
+						distance: 0,
+						over_night_stay: nights,
+						accomodation_meals: false,
+						special_excursion: [],
+					},
+					early_late_hours: false,
+					extra_city_allowances: false,
+					special_event_allowances: [],
+					price: pricing.totalPrice,
+				},
+				end_date: endDate,
+				advance_paid: pricing.advance,
+				balance_due: pricing.balance,
+				linked_to: account._id,
+				transaction_id: transaction.transaction_id,
+				status: 'successful',
+			});
+		} catch (err: unknown) {
+			// Lost the create race to a concurrent fulfilment — return the winner.
+			if ((err as { code?: number })?.code === 11000) {
+				const raced = await BookingDB.findOne({ transaction_id: transaction.transaction_id });
+				if (raced) return raced;
+			}
+			throw err;
+		}
 
 		transaction.reference_id = booking._id.toString();
 		transaction.reference_type = 'booking';
-		transaction.razorpay_payment_id = razorpay_payment_id;
+		if (opts.paymentId && !transaction.razorpay_payment_id) {
+			transaction.razorpay_payment_id = opts.paymentId;
+		}
 		transaction.status = 'paid';
 		await transaction.save();
 
 		// Hand the guide an Assignment so they can accept or decline, exactly like
 		// an admin-allocated booking. Accepting is what creates the Trip, which is
 		// what eventually accrues their earning.
-		await this.assignChosenGuide(booking, decoded.guideId, user.userId);
+		await this.assignChosenGuide(booking, decoded.guideId, ownerId);
 
 		try {
 			await InvoiceService.createBookingInvoice(transaction, booking);

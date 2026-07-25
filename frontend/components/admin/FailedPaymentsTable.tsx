@@ -7,10 +7,10 @@ import {
   FailedPaymentStatus,
   fetchFailedPayments,
 } from "@/lib/redux/thunks/payment/failedPaymentThunks";
-import { EmptyState } from "@/components/admin/PageHeader";
+import { EmptyState, AdminStatusBadge } from "@/components/admin/ui";
+import { SkeletonTable } from "@/components/animations/Skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 
 const currency = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -44,14 +44,15 @@ const REFERENCE_LABEL: Record<string, string> = {
   pending_package_booking: "Package booking (never saved)",
 };
 
-const STATUS_BADGE: Record<string, string> = {
-  failed: "bg-red-50 text-red-700 ring-red-200",
-  pending_verification: "bg-amber-50 text-amber-700 ring-amber-200",
-};
-
 const STATUS_LABEL: Record<string, string> = {
   failed: "Declined",
   pending_verification: "Needs checking",
+};
+
+type BadgeTone = "success" | "warning" | "danger" | "neutral" | "info";
+const STATUS_TONE: Record<string, BadgeTone> = {
+  failed: "danger",
+  pending_verification: "warning",
 };
 
 const STATUS_FILTERS: { label: string; value?: FailedPaymentStatus }[] = [
@@ -130,7 +131,7 @@ export default function FailedPaymentsTable() {
       )}
 
       {loading && payments.length === 0 ? (
-        <Skeleton className="h-96" />
+        <SkeletonTable rows={8} columns={6} />
       ) : payments.length === 0 ? (
         <EmptyState
           icon={TriangleAlert}
@@ -195,14 +196,11 @@ export default function FailedPaymentsTable() {
                     {currency.format(payment.amount)}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${
-                        STATUS_BADGE[payment.status] ??
-                        "bg-slate-100 text-slate-600 ring-slate-200"
-                      }`}
-                    >
-                      {STATUS_LABEL[payment.status] ?? payment.status}
-                    </span>
+                    <AdminStatusBadge
+                      status={payment.status}
+                      tone={STATUS_TONE[payment.status] ?? "neutral"}
+                      label={STATUS_LABEL[payment.status] ?? payment.status}
+                    />
                   </td>
                   <td className="max-w-xs px-4 py-3">
                     {payment.failure ? (

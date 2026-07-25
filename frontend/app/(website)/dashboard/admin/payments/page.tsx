@@ -10,11 +10,11 @@ import {
   fetchInvoices,
   resendInvoice,
 } from "@/lib/redux/thunks/invoice/invoiceThunks";
-import { PageHeader, EmptyState } from "@/components/admin/PageHeader";
+import { PageHeader, EmptyState, AdminStatusBadge } from "@/components/admin/ui";
 import FailedPaymentsTable from "@/components/admin/FailedPaymentsTable";
+import { SkeletonTable } from "@/components/animations/Skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -37,12 +37,6 @@ const TYPE_LABEL: Record<string, string> = {
   booking: "Booking",
   guide_membership: "Membership",
   trip_completion: "Trip",
-};
-
-const STATUS_BADGE: Record<string, string> = {
-  paid: "bg-green-50 text-green-700 ring-green-200",
-  refunded: "bg-amber-50 text-amber-700 ring-amber-200",
-  cancelled: "bg-slate-100 text-slate-600 ring-slate-200",
 };
 
 const TYPE_FILTERS: { label: string; value?: InvoiceType }[] = [
@@ -230,7 +224,7 @@ export default function AdminPaymentsPage() {
           )}
 
           {loading && invoices.length === 0 ? (
-            <Skeleton className="h-96" />
+            <SkeletonTable rows={8} columns={7} />
           ) : invoices.length === 0 ? (
             <EmptyState
               icon={Receipt}
@@ -285,14 +279,16 @@ export default function AdminPaymentsPage() {
                         )}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ring-1 ring-inset ${
-                            STATUS_BADGE[invoice.status] ??
-                            STATUS_BADGE.cancelled
-                          }`}
-                        >
-                          {invoice.status}
-                        </span>
+                        <AdminStatusBadge
+                          status={invoice.status}
+                          tone={
+                            invoice.status === "paid"
+                              ? "success"
+                              : invoice.status === "refunded"
+                                ? "warning"
+                                : "neutral"
+                          }
+                        />
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                         {shortDate(invoice.paymentDate)}

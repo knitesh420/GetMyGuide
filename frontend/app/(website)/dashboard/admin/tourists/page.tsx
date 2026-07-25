@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useRouter } from "next/navigation";
+import { UserRound } from "lucide-react";
 import { AppDispatch, RootState } from "@/lib/store";
 import {
   activateTourist,
@@ -15,19 +16,22 @@ import {
   fetchBookingsAwaitingAssignment,
   fetchGuidesAvailability,
 } from "@/lib/redux/thunks/assignment/assignmentThunks";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AdminCellStack,
+  AdminPanel,
+  AdminSearchInput,
+  AdminSection,
+  AdminStatusBadge,
+  AdminTable,
+  AdminTableCell,
+  AdminTableHead,
+  AdminTableRow,
+  AdminToolbar,
+  EmptyState,
+  PageHeader,
+} from "@/components/admin/ui";
+import { SkeletonTable } from "@/components/animations/Skeletons";
 import { AssignGuideModal } from "@/components/assignment/AssignGuideModal";
 import { showToast } from "@/lib/utils/toastHelper";
 import { confirmDialog } from "@/lib/swal";
@@ -147,118 +151,130 @@ export default function AdminTouristsPage() {
   };
 
   return (
-    <div className="flex-1 space-y-8 p-4 sm:p-6 md:p-8 bg-muted/40">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Tourists</h2>
-        <p className="text-muted-foreground">
-          Every tourist with their ID, and a guide-assignment shortcut for their pending bookings.
-        </p>
-      </div>
+    <div className="space-y-6 lg:space-y-8">
+      <PageHeader
+        title="Tourists"
+        description="Every tourist with their ID, and a guide-assignment shortcut for their pending bookings."
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Assign a Guide by Tourist</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <AdminPanel>
+        <AdminSection title="Assign a Guide by Tourist">
           {bookingsAwaitingAssignment.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No bookings currently need a guide.</p>
+            <p className="text-sm text-slate-500">No bookings currently need a guide.</p>
           ) : (
             <div className="space-y-3">
               {bookingsAwaitingAssignment.map((booking) => (
                 <div
                   key={booking.id}
-                  className="flex items-center justify-between rounded-md border p-3"
+                  className="flex flex-col gap-3 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div>
-                    <p className="font-medium">
+                    <p className="font-medium text-slate-900">
                       {booking.tourist_info.name} — {booking.travel_details.city}
                     </p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-slate-500">
                       {new Date(booking.travel_details.date).toLocaleDateString()} ·{" "}
                       {booking.travel_details.no_of_person} traveler(s)
                     </p>
-                    <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-xs text-muted-foreground">
+                    <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-xs text-slate-400">
                       <span>Tourist: {booking.touristCode ?? "—"}</span>
                       <span>Booking: {booking.bookingCode ?? "—"}</span>
                     </p>
                   </div>
-                  <Button size="sm" onClick={() => openAssign(booking)}>
+                  <Button size="sm" onClick={() => openAssign(booking)} className="shrink-0">
                     Assign Guide
                   </Button>
                 </div>
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </AdminSection>
+      </AdminPanel>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-4">
-          <CardTitle>All Tourists ({tourists.length})</CardTitle>
-          <Input
-            placeholder="Search name, ID, email…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-xs"
-          />
-        </CardHeader>
-        <CardContent>
-          {loading && tourists.length === 0 ? (
-            <Skeleton className="h-60" />
-          ) : filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No tourists found.</p>
+      {loading && tourists.length === 0 ? (
+        <SkeletonTable rows={6} columns={7} />
+      ) : (
+        <AdminPanel>
+          <AdminToolbar
+            stats={
+              <span className="text-sm font-medium text-slate-500">
+                {filtered.length} tourist{filtered.length === 1 ? "" : "s"}
+              </span>
+            }
+          >
+            <AdminSearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Search name, ID, email…"
+            />
+          </AdminToolbar>
+
+          {filtered.length === 0 ? (
+            <EmptyState
+              bare
+              icon={UserRound}
+              title={search ? "No matching tourists" : "No tourists yet"}
+              description={
+                search
+                  ? "No tourist matches your search. Try a different name, ID, or email."
+                  : "Tourist accounts will appear here as people register."
+              }
+            />
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Tourist ID</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Contact</TableHead>
-                    <TableHead>Nationality</TableHead>
-                    <TableHead>Registration</TableHead>
-                    <TableHead>Account</TableHead>
-                    <TableHead>Pending</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((t) => {
-                    const awaiting = awaitingByTourist.get(t.accountId) ?? [];
-                    const isActive = t.isActive !== false;
-                    return (
-                      <TableRow key={t.accountId}>
-                        <TableCell className="font-mono text-xs">{t.touristCode ?? "—"}</TableCell>
-                        <TableCell className="font-medium">{t.name}</TableCell>
-                        <TableCell className="text-sm">
-                          <div>{t.email}</div>
-                          <div className="text-muted-foreground">{t.phone ?? "—"}</div>
-                        </TableCell>
-                        <TableCell>{t.nationality || "—"}</TableCell>
-                        <TableCell>
-                          {t.registrationCompleted ? (
-                            <Badge variant="success">Complete</Badge>
-                          ) : (
-                            <Badge variant="pending">Incomplete</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {isActive ? (
-                            <Badge variant="success">Active</Badge>
-                          ) : (
-                            <Badge variant="destructive">Suspended</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {awaiting.length > 0 ? (
-                            <Button size="sm" variant="outline" onClick={() => openAssign(awaiting[0])}>
-                              Assign ({awaiting.length})
-                            </Button>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
+            <AdminTable>
+              <AdminTableHead
+                columns={[
+                  "Tourist ID",
+                  "Name",
+                  "Contact",
+                  "Nationality",
+                  "Registration",
+                  "Account",
+                  "Pending",
+                  "Actions",
+                ]}
+              />
+              <tbody>
+                {filtered.map((t, i) => {
+                  const awaiting = awaitingByTourist.get(t.accountId) ?? [];
+                  const isActive = t.isActive !== false;
+                  return (
+                    <AdminTableRow key={t.accountId} index={i}>
+                      <AdminTableCell className="font-mono text-xs">
+                        {t.touristCode ?? "—"}
+                      </AdminTableCell>
+                      <AdminTableCell className="font-semibold text-slate-900">
+                        {t.name}
+                      </AdminTableCell>
+                      <AdminTableCell>
+                        <AdminCellStack primary={t.email} secondary={t.phone ?? "—"} />
+                      </AdminTableCell>
+                      <AdminTableCell>{t.nationality || "—"}</AdminTableCell>
+                      <AdminTableCell>
+                        {t.registrationCompleted ? (
+                          <AdminStatusBadge status="complete" label="Complete" tone="success" />
+                        ) : (
+                          <AdminStatusBadge status="incomplete" label="Incomplete" tone="warning" />
+                        )}
+                      </AdminTableCell>
+                      <AdminTableCell>
+                        {isActive ? (
+                          <AdminStatusBadge status="active" label="Active" tone="success" />
+                        ) : (
+                          <AdminStatusBadge status="suspended" label="Suspended" tone="danger" />
+                        )}
+                      </AdminTableCell>
+                      <AdminTableCell>
+                        {awaiting.length > 0 ? (
+                          <Button size="sm" variant="outline" onClick={() => openAssign(awaiting[0])}>
+                            Assign ({awaiting.length})
+                          </Button>
+                        ) : (
+                          <span className="text-sm text-slate-400">—</span>
+                        )}
+                      </AdminTableCell>
+                      <AdminTableCell last>
+                        <div className="flex justify-end">
                           <Button
                             size="sm"
                             variant="ghost"
@@ -271,16 +287,16 @@ export default function AdminTouristsPage() {
                           >
                             {isActive ? "Suspend" : "Restore"}
                           </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+                        </div>
+                      </AdminTableCell>
+                    </AdminTableRow>
+                  );
+                })}
+              </tbody>
+            </AdminTable>
           )}
-        </CardContent>
-      </Card>
+        </AdminPanel>
+      )}
 
       <AssignGuideModal
         isOpen={modalOpen}

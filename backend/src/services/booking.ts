@@ -1,6 +1,7 @@
 import { AccountDB, BookingDB, PackageDB, TouristDB, TransactionDB } from '@mongo';
 import IBooking from '@mongo/types/booking';
 import IPackage from '@mongo/types/package';
+import ITransaction from '@mongo/types/transaction';
 import {
 	sendBookingAllocatedGuideEmail,
 	sendBookingAllocatedTouristEmail,
@@ -10,7 +11,7 @@ import { verifyRazorpaySignature } from '@utils/paymentVerify';
 import { calculateBookingPrice } from '@utils/priceCalculator';
 import { randomBytes } from 'crypto';
 import { Types } from 'mongoose';
-import { ConflictError, NotFoundError, ServerError } from 'node-be-utilities';
+import { NotFoundError, ServerError } from 'node-be-utilities';
 import InvoiceService from './invoice';
 import TransactionService from './transaction';
 
@@ -163,36 +164,16 @@ function transformBooking(booking: IBooking): TransformedBooking {
 }
 
 /**
- * A verified Razorpay signature proves a payment happened — it does NOT prove
- * the payment hasn't already been spent. The verify handlers are reachable more
- * than once (double-click, retried network call, or a deliberate replay of a
- * captured `{order_id, payment_id, signature}` triple), so every one of them
- * must ask whether this transaction has already produced a booking before
- * creating another against the same money.
- *
- * Returns the booking this transaction already created, or null if it is
- * genuinely unspent.
+ * The parameters of a package-tour order, as snapshotted onto the transaction at
+ * creation. Dates round-trip as `Date` when read from `transaction.metadata` and
+ * as ISO strings when read from the client's base64 copy, so both are accepted.
  */
-async function findBookingForSpentTransaction(transaction: {
-	reference_type: string;
-	reference_id: string;
-	status: string;
-	transaction_id: string;
-}): Promise<IBooking | null> {
-	if (transaction.reference_type === 'booking') {
-		const existing = await BookingDB.findById(transaction.reference_id);
-		if (existing) return existing;
-	}
-
-	// Fallback for a transaction marked paid whose reference never got rewritten
-	// (a crash between the two writes). transaction_id is unique on Booking.
-	if (transaction.status === 'paid' || transaction.status === 'success') {
-		const existing = await BookingDB.findOne({ transaction_id: transaction.transaction_id });
-		if (existing) return existing;
-		throw new ConflictError('This payment has already been used');
-	}
-
-	return null;
+interface PackageBookingTerms {
+	tourId: string;
+	guideId: string;
+	startDate: string | Date;
+	endDate: string | Date;
+	tourists: number;
 }
 
 class BookingService {
@@ -250,6 +231,9 @@ class BookingService {
 				type: 'tourist',
 				account: userId,
 				description: 'Get My Guide Customised Booking Payment',
+				// Server-held snapshot of the order. The webhook reads this back to
+				// create the booking even if the browser never returns to verify.
+				metadata: data as unknown as Record<string, unknown>,
 			}
 		);
 
@@ -313,6 +297,8 @@ class BookingService {
 				reference_type: 'pending_booking',
 				type: 'tourist',
 				description: 'Get My Guide Customised Booking Payment',
+				// Server-held snapshot of the order (see createBooking).
+				metadata: data as unknown as Record<string, unknown>,
 			}
 		);
 
@@ -325,7 +311,14 @@ class BookingService {
 	}
 
 	/**
-	 * Verify Razorpay signature and create booking after successful payment.
+	 * Verify a customised-booking payment and hand back its booking.
+	 *
+	 * Creating the booking is delegated to fulfillCustomisedBooking, which the
+	 * Razorpay webhook calls too — so the booking is created exactly once whether
+	 * or not the browser makes it back here after paying. This path only
+	 * authenticates the signature and resolves the order terms, preferring the
+	 * server-held snapshot over the client's echoed copy.
+	 *
 	 * Works for both guest and authenticated bookings.
 	 */
 	async verifyAndCreateBooking(params: {
@@ -338,39 +331,69 @@ class BookingService {
 		const { razorpay_order_id, razorpay_payment_id, razorpay_signature, booking_data, user_id } =
 			params;
 
-		// Step 1: Verify Razorpay signature (HMAC SHA256)
 		const isValid = verifyRazorpaySignature(
 			razorpay_order_id,
 			razorpay_payment_id,
 			razorpay_signature
 		);
-
 		if (!isValid) {
 			throw new ServerError('Payment verification failed: invalid signature');
 		}
 
-		// Step 2: Verify transaction exists
 		const transaction = await TransactionDB.findOne({ razorpay_order_id });
-
 		if (!transaction) {
 			throw new NotFoundError('Transaction not found');
 		}
 
-		// Step 2.5: Refuse to spend the same payment twice. Without this, replaying
-		// one valid signature triple yields one booking per replay.
-		const alreadyCreated = await findBookingForSpentTransaction(transaction);
-		if (alreadyCreated) {
-			return transformBooking(alreadyCreated);
+		const data = this.resolveCustomisedTerms(transaction, booking_data);
+		const booking = await this.fulfillCustomisedBooking(transaction, data, {
+			paymentId: razorpay_payment_id,
+			userId: user_id,
+		});
+		return transformBooking(booking);
+	}
+
+	/**
+	 * Prefer the terms snapshotted on the transaction at order-creation; fall
+	 * back to the client's base64 copy only for orders opened before the snapshot
+	 * existed, so checkouts already in flight at deploy time still complete.
+	 */
+	private resolveCustomisedTerms(
+		transaction: ITransaction,
+		bookingData: string
+	): CreateBookingData {
+		const meta = transaction.metadata;
+		if (meta && Object.keys(meta).length > 0) {
+			return meta as unknown as CreateBookingData;
 		}
+		return JSON.parse(Buffer.from(bookingData, 'base64').toString()) as CreateBookingData;
+	}
 
-		// Step 3: Decode booking data
-		const data: CreateBookingData = JSON.parse(Buffer.from(booking_data, 'base64').toString());
+	/**
+	 * Idempotently turn a captured customised-booking payment into a Booking.
+	 *
+	 * Safe to call from BOTH the browser verify path and the Razorpay webhook.
+	 * The unique `transaction_id` index on Booking serialises concurrent callers,
+	 * so exactly one booking is ever created per payment and the loser of the
+	 * race returns the winner's booking rather than a duplicate. This is what
+	 * closes the gap where a captured payment left no booking when the browser
+	 * never finished verifying — and, by making the "already spent" case return
+	 * the booking instead of throwing, it also stops the webhook-wins race from
+	 * rejecting an otherwise-valid verify call.
+	 */
+	async fulfillCustomisedBooking(
+		transaction: ITransaction,
+		data: CreateBookingData,
+		opts: { paymentId?: string; userId?: string } = {}
+	): Promise<IBooking> {
+		// Already fulfilled — by an earlier call, or by whichever of the webhook
+		// and the browser reached here first.
+		const existing = await BookingDB.findOne({ transaction_id: transaction.transaction_id });
+		if (existing) return existing;
 
-		// Step 3.5: Re-derive the price on the server and refuse to create a booking
-		// whose configuration doesn't match the amount actually paid. This blocks a
-		// tampered booking_data (e.g. paying for a cheap order but submitting an
-		// expensive config at verify time). transaction.amount is stored in rupees,
-		// the same unit calculateBookingPrice returns.
+		// Re-derive the price on the server and refuse a booking whose config
+		// doesn't match the amount actually paid. Blocks a tampered terms blob
+		// (paying for a cheap order, redeeming an expensive one).
 		const priceBreakdown = calculateBookingPrice(
 			data.travel_details.no_of_person,
 			data.travel_details.city,
@@ -381,33 +404,45 @@ class BookingService {
 		}
 		data.booking_configuration.price = priceBreakdown.total;
 
-		// Step 4: Create booking now that payment is verified.
-		//
-		// The four fields below are the entire tourist-supplied surface of a
-		// booking. They are listed explicitly rather than spread from `data`,
-		// because `data` is an attacker-controlled base64 blob and spreading it
-		// hands over every other schema field too — `allocated_guide`,
-		// `balance_due`, `advance_paid`, `bookingCode`, `end_date`, `package`.
-		// The price check above only constrains `booking_configuration`, so a
-		// spread let someone pay the smallest valid advance and still submit
-		// `balance_due: 0` with a guide of their choosing already attached.
-		const booking = await BookingDB.create({
-			tourist_info: data.tourist_info,
-			travel_details: data.travel_details,
-			guide_preferences: data.guide_preferences,
-			booking_configuration: data.booking_configuration,
-			...(user_id ? { linked_to: new Types.ObjectId(user_id) } : {}),
-			transaction_id: transaction.transaction_id,
-			status: 'successful',
-		});
+		// The owner is the account that opened the order (authoritative — the
+		// webhook has no session to read), falling back to an explicitly-passed id
+		// on the browser path. Guest bookings have neither and stay unlinked.
+		const ownerId = transaction.account?.toString() ?? opts.userId;
 
-		// Step 5: Update transaction with booking reference and mark as paid
+		// The four fields below are the entire tourist-supplied surface of a
+		// booking. Listed explicitly, never spread from `data`, because `data` is
+		// an attacker-influenced blob and spreading it would hand over
+		// `allocated_guide`, `balance_due`, `advance_paid`, `bookingCode`,
+		// `status`, `package`, etc.
+		let booking: IBooking;
+		try {
+			booking = await BookingDB.create({
+				tourist_info: data.tourist_info,
+				travel_details: data.travel_details,
+				guide_preferences: data.guide_preferences,
+				booking_configuration: data.booking_configuration,
+				...(ownerId ? { linked_to: new Types.ObjectId(ownerId) } : {}),
+				transaction_id: transaction.transaction_id,
+				status: 'successful',
+			});
+		} catch (err: unknown) {
+			// Lost the create race to a concurrent fulfilment — return the winner.
+			if ((err as { code?: number })?.code === 11000) {
+				const raced = await BookingDB.findOne({ transaction_id: transaction.transaction_id });
+				if (raced) return raced;
+			}
+			throw err;
+		}
+
 		transaction.reference_id = booking._id.toString();
 		transaction.reference_type = 'booking';
+		if (opts.paymentId && !transaction.razorpay_payment_id) {
+			transaction.razorpay_payment_id = opts.paymentId;
+		}
 		transaction.status = 'paid';
 		await transaction.save();
 
-		// Step 6: Send payment confirmation email (non-blocking)
+		// Payment confirmation email (non-blocking).
 		try {
 			await sendTouristPaymentConfirmationEmail(data.tourist_info.email, {
 				name: data.tourist_info.name,
@@ -415,25 +450,25 @@ class BookingService {
 				phone: data.tourist_info.phone,
 				city: data.travel_details.city,
 				places: data.travel_details.places,
-				date: data.travel_details.date.toString(),
+				date: new Date(data.travel_details.date).toISOString(),
 				persons: data.travel_details.no_of_person,
 				duration: data.booking_configuration.duration,
 				amount: data.booking_configuration.price,
 				transactionId: transaction.transaction_id,
-				orderId: razorpay_order_id,
+				orderId: transaction.razorpay_order_id,
 			});
-		} catch (emailError) {
-			// Non-blocking - don't fail the booking if email fails
+		} catch {
+			// Non-blocking — don't fail the booking if email fails.
 		}
 
-		// Step 7: Generate the booking invoice (non-blocking)
+		// Booking invoice (non-blocking).
 		try {
 			await InvoiceService.createBookingInvoice(transaction, booking);
-		} catch (invoiceError) {
-			// Non-blocking - don't fail the booking if invoice generation fails
+		} catch {
+			// Non-blocking — don't fail the booking if invoice generation fails.
 		}
 
-		return transformBooking(booking);
+		return booking;
 	}
 
 	/**
@@ -513,6 +548,15 @@ class BookingService {
 				type: 'tourist',
 				account: account._id,
 				description: 'Get My Guide Tour Package Advance Payment',
+				// Server-held snapshot so the webhook can create the booking without
+				// the browser echoing it back at verify time.
+				metadata: {
+					tourId: data.tourId,
+					guideId: data.guideId,
+					startDate: data.startDate,
+					endDate: data.endDate,
+					tourists: data.tourists,
+				},
 			}
 		);
 
@@ -526,7 +570,9 @@ class BookingService {
 	}
 
 	/**
-	 * Verify Razorpay signature and create a package-tour booking after payment.
+	 * Verify a package-booking payment and hand back its booking. Booking creation
+	 * is delegated to fulfillPackageBooking, shared with the webhook — see
+	 * verifyAndCreateBooking for the full rationale.
 	 */
 	async verifyAndCreatePackageBooking(params: {
 		razorpay_order_id: string;
@@ -552,19 +598,54 @@ class BookingService {
 			throw new NotFoundError('Transaction not found');
 		}
 
-		// Same replay guard as the customised-booking path: one payment, one booking.
-		const alreadyCreated = await findBookingForSpentTransaction(transaction);
-		if (alreadyCreated) {
-			return transformBooking(alreadyCreated);
-		}
+		const decoded = this.resolvePackageTerms(transaction, booking_data);
+		const { booking, packageTitle, guideName } = await this.fulfillPackageBooking(
+			transaction,
+			decoded,
+			{ paymentId: razorpay_payment_id, userId: user_id }
+		);
 
-		const decoded: {
-			tourId: string;
-			guideId: string;
-			startDate: string;
-			endDate: string;
-			tourists: number;
-		} = JSON.parse(Buffer.from(booking_data, 'base64').toString());
+		return {
+			...transformBooking(booking),
+			package_info: { title: packageTitle },
+			guide_info: { name: guideName },
+		};
+	}
+
+	/** Package equivalent of resolveCustomisedTerms. */
+	private resolvePackageTerms(
+		transaction: ITransaction,
+		bookingData: string
+	): PackageBookingTerms {
+		const meta = transaction.metadata;
+		if (meta && Object.keys(meta).length > 0) {
+			return meta as unknown as PackageBookingTerms;
+		}
+		return JSON.parse(Buffer.from(bookingData, 'base64').toString()) as PackageBookingTerms;
+	}
+
+	/**
+	 * Idempotently turn a captured package-advance payment into a Booking. Same
+	 * one-payment-one-booking guarantee as fulfillCustomisedBooking; callable from
+	 * both the browser verify path and the webhook.
+	 */
+	async fulfillPackageBooking(
+		transaction: ITransaction,
+		decoded: PackageBookingTerms,
+		opts: { paymentId?: string; userId?: string } = {}
+	): Promise<{ booking: IBooking; packageTitle: string; guideName: string }> {
+		const existing = await BookingDB.findOne({ transaction_id: transaction.transaction_id });
+		if (existing) {
+			const [pkg, guide] = await Promise.all([
+				existing.package ? PackageDB.findById(existing.package) : null,
+				existing.allocated_guide ? AccountDB.findById(existing.allocated_guide) : null,
+			]);
+			return {
+				booking: existing,
+				packageTitle: pkg ? resolvePackageFields(pkg).title : 'Tour Package',
+				guideName: guide?.name ?? '',
+			};
+		}
 
 		const pkg = await PackageDB.findById(decoded.tourId);
 		if (!pkg) {
@@ -587,67 +668,78 @@ class BookingService {
 			throw new NotFoundError('Guide not found');
 		}
 
-		const account = await AccountDB.findById(user_id);
+		const ownerId = transaction.account?.toString() ?? opts.userId;
+		const account = ownerId ? await AccountDB.findById(ownerId) : null;
 		if (!account) {
 			throw new NotFoundError('Account not found');
 		}
 
 		const { title, city, places } = resolvePackageFields(pkg);
 
-		const booking = await BookingDB.create({
-			booking_type: 'package',
-			package: pkg._id,
-			tourist_info: {
-				name: account.name,
-				gender: 'other',
-				phone: account.phone || 'N/A',
-				email: account.email,
-				country: 'N/A',
-			},
-			travel_details: {
-				places,
-				city,
-				date: new Date(decoded.startDate),
-				no_of_person: decoded.tourists,
-				preferences: { hotel: false, taxi: false },
-			},
-			guide_preferences: {
-				guide_language: [],
-				gender: 'none',
-			},
-			booking_configuration: {
-				duration: 'full-day',
-				foreign_language_required: false,
-				early_late_hours: false,
-				extra_city_allowances: false,
-				special_event_allowances: [],
-				price: total,
-			},
-			end_date: new Date(decoded.endDate),
-			advance_paid: advance,
-			balance_due: total - advance,
-			allocated_guide: guide._id,
-			linked_to: new Types.ObjectId(user_id),
-			transaction_id: transaction.transaction_id,
-			status: 'allocated',
-		});
+		let booking: IBooking;
+		try {
+			booking = await BookingDB.create({
+				booking_type: 'package',
+				package: pkg._id,
+				tourist_info: {
+					name: account.name,
+					gender: 'other',
+					phone: account.phone || 'N/A',
+					email: account.email,
+					country: 'N/A',
+				},
+				travel_details: {
+					places,
+					city,
+					date: new Date(decoded.startDate),
+					no_of_person: decoded.tourists,
+					preferences: { hotel: false, taxi: false },
+				},
+				guide_preferences: {
+					guide_language: [],
+					gender: 'none',
+				},
+				booking_configuration: {
+					duration: 'full-day',
+					foreign_language_required: false,
+					early_late_hours: false,
+					extra_city_allowances: false,
+					special_event_allowances: [],
+					price: total,
+				},
+				end_date: new Date(decoded.endDate),
+				advance_paid: advance,
+				balance_due: total - advance,
+				allocated_guide: guide._id,
+				linked_to: account._id,
+				transaction_id: transaction.transaction_id,
+				status: 'allocated',
+			});
+		} catch (err: unknown) {
+			if ((err as { code?: number })?.code === 11000) {
+				const raced = await BookingDB.findOne({ transaction_id: transaction.transaction_id });
+				if (raced) {
+					return { booking: raced, packageTitle: title, guideName: guide.name };
+				}
+			}
+			throw err;
+		}
 
 		transaction.reference_id = booking._id.toString();
 		transaction.reference_type = 'booking';
+		if (opts.paymentId && !transaction.razorpay_payment_id) {
+			transaction.razorpay_payment_id = opts.paymentId;
+		}
 		transaction.status = 'paid';
 		await transaction.save();
 
 		try {
 			await InvoiceService.createBookingInvoice(transaction, booking);
-		} catch (invoiceError) {
-			// Non-blocking — don't fail the booking if invoice generation fails
+		} catch {
+			// Non-blocking — don't fail the booking if invoice generation fails.
 		}
 
-		return {
-			...transformBooking(booking),
-			package_info: { title },
-			guide_info: { name: guide.name },
-		};
+		return { booking, packageTitle: title, guideName: guide.name };
 	}
 
 	/**
@@ -869,7 +961,7 @@ class BookingService {
 					transactionId: booking.transaction_id,
 					orderId: transaction.razorpay_order_id || 'N/A',
 				});
-			} catch (emailError) {
+			} catch {
 				// Non-blocking - booking was confirmed successfully
 			}
 		}

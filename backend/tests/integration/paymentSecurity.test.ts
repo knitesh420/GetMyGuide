@@ -338,4 +338,104 @@ describe('Payment integrity', () => {
 			expect(untouched!.status).toBe('pending');
 		});
 	});
+
+	/**
+	 * Regression cover for the fulfilment gap (F1) and the webhook-vs-verify race
+	 * (F2): a captured booking payment must become exactly one Booking whether the
+	 * browser finishes verifying or not, and in whichever order the two arrive.
+	 */
+	describe('webhook fulfilment (F1/F2)', () => {
+		function capturedPayload(orderId: string, paymentId: string) {
+			return {
+				event: 'payment.captured',
+				payload: { payment: { entity: { id: paymentId, order_id: orderId } } },
+			};
+		}
+
+		/** Seed a booking order that carries its terms server-side (metadata). */
+		async function seedBookingOrder(payload: any, amount: number, account?: Types.ObjectId) {
+			const orderId = `order_${crypto.randomBytes(6).toString('hex')}`;
+			const paymentId = `pay_${crypto.randomBytes(6).toString('hex')}`;
+			await TransactionDB.create({
+				reference_id: 'temp-ref',
+				reference_type: 'pending_booking',
+				type: 'tourist',
+				account: account ?? null,
+				razorpay_order_id: orderId,
+				razorpay_customer_id: 'cust_test',
+				transaction_id: crypto.randomBytes(16).toString('hex'),
+				status: 'pending',
+				amount,
+				currency: 'INR',
+				metadata: payload,
+			});
+			return { orderId, paymentId };
+		}
+
+		it('creates the booking from the webhook when the browser never verifies', async () => {
+			const payload = bookingPayload();
+			const amount = await priceOf(payload);
+			const account = new Types.ObjectId();
+			const { orderId, paymentId } = await seedBookingOrder(payload, amount, account);
+
+			// No browser verify call — only the server-to-server webhook fires.
+			await PaymentService.handleWebhookEvent(capturedPayload(orderId, paymentId), 'evt_fulfil');
+
+			expect(await BookingDB.countDocuments({})).toBe(1);
+			const booking = await BookingDB.findOne({});
+			expect(booking!.status).toBe('successful');
+			// The order was opened by an account, so the booking is linked to it.
+			expect(booking!.linked_to?.toString()).toBe(account.toString());
+
+			const txn = await TransactionDB.findOne({ razorpay_order_id: orderId });
+			expect(txn!.status).toBe('paid');
+			expect(txn!.reference_type).toBe('booking');
+			expect(txn!.razorpay_payment_id).toBe(paymentId);
+		});
+
+		it('does not double-book when the webhook fulfils before the browser verifies', async () => {
+			const payload = bookingPayload();
+			const amount = await priceOf(payload);
+			const { orderId, paymentId } = await seedBookingOrder(payload, amount);
+
+			// Webhook wins the race and creates the booking...
+			await PaymentService.handleWebhookEvent(capturedPayload(orderId, paymentId), 'evt_first_win');
+			expect(await BookingDB.countDocuments({})).toBe(1);
+
+			// ...then the browser's verify arrives. Previously this threw
+			// "This payment has already been used"; now it returns the same booking.
+			const res = await request(app)
+				.post('/booking/verify-guest-booking')
+				.send({
+					razorpay_order_id: orderId,
+					razorpay_payment_id: paymentId,
+					razorpay_signature: sign(orderId, paymentId),
+					booking_data: Buffer.from(JSON.stringify(payload)).toString('base64'),
+				});
+
+			expect([200, 201]).toContain(res.status);
+			expect(await BookingDB.countDocuments({})).toBe(1);
+		});
+
+		it('does not double-book when the browser verifies before the webhook arrives', async () => {
+			const payload = bookingPayload();
+			const amount = await priceOf(payload);
+			const { orderId, paymentId } = await seedBookingOrder(payload, amount);
+
+			const verify = await request(app)
+				.post('/booking/verify-guest-booking')
+				.send({
+					razorpay_order_id: orderId,
+					razorpay_payment_id: paymentId,
+					razorpay_signature: sign(orderId, paymentId),
+					booking_data: Buffer.from(JSON.stringify(payload)).toString('base64'),
+				});
+			expect(verify.status).toBe(201);
+			expect(await BookingDB.countDocuments({})).toBe(1);
+
+			// The webhook then lands on an already-settled transaction — a no-op.
+			await PaymentService.handleWebhookEvent(capturedPayload(orderId, paymentId), 'evt_late');
+			expect(await BookingDB.countDocuments({})).toBe(1);
+		});
+	});
 });

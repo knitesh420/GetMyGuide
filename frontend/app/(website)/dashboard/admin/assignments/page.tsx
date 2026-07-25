@@ -12,17 +12,20 @@ import {
   fetchGuidesAvailability,
   reassignGuide,
 } from "@/lib/redux/thunks/assignment/assignmentThunks";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Skeleton } from "@/components/ui/skeleton";
+  AdminCellStack,
+  AdminPanel,
+  AdminSection,
+  AdminTable,
+  AdminTableCell,
+  AdminTableHead,
+  AdminTableRow,
+  EmptyState,
+  PageHeader,
+} from "@/components/admin/ui";
+import { SkeletonTable } from "@/components/animations/Skeletons";
 import { AssignmentStatusBadge } from "@/components/assignment/AssignmentStatusBadge";
 import { AssignGuideModal } from "@/components/assignment/AssignGuideModal";
 import { showToast } from "@/lib/utils/toastHelper";
@@ -101,38 +104,39 @@ export default function AdminAssignmentsPage() {
   };
 
   return (
-    <div className="flex-1 space-y-8 p-4 sm:p-6 md:p-8 bg-muted/40">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Assignment Management</h2>
-        <p className="text-muted-foreground">Assign guides to bookings and track acceptance.</p>
-      </div>
+    <div className="space-y-6 lg:space-y-8">
+      <PageHeader
+        title="Assignment Management"
+        description="Assign guides to bookings and track acceptance."
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Bookings Awaiting a Guide</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <AdminPanel>
+        <AdminSection title="Bookings Awaiting a Guide">
           {bookingsAwaitingAssignment.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No bookings currently need a guide.</p>
+            <p className="text-sm text-slate-500">No bookings currently need a guide.</p>
           ) : (
             <div className="space-y-3">
               {bookingsAwaitingAssignment.map((booking) => (
-                <div key={booking.id} className="flex items-center justify-between rounded-md border p-3">
+                <div
+                  key={booking.id}
+                  className="flex flex-col gap-3 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
                   <div>
-                    <p className="font-medium">
+                    <p className="font-medium text-slate-900">
                       {booking.travel_details.city} — {booking.tourist_info.name}
                     </p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-slate-500">
                       {new Date(booking.travel_details.date).toLocaleDateString()} ·{" "}
                       {booking.travel_details.no_of_person} traveler(s)
                     </p>
-                    <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-xs text-muted-foreground">
+                    <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-xs text-slate-400">
                       <span>Booking: {booking.bookingCode ?? "—"}</span>
                       <span>Tourist: {booking.touristCode ?? "—"}</span>
                     </p>
                   </div>
                   <Button
                     size="sm"
+                    className="shrink-0"
                     onClick={() => {
                       setSelectedBookingId(booking.id);
                       setReassignId(null);
@@ -146,60 +150,58 @@ export default function AdminAssignmentsPage() {
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </AdminSection>
+      </AdminPanel>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>All Assignments</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading && assignments.length === 0 ? (
-            <Skeleton className="h-40" />
-          ) : assignments.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No assignments yet.</p>
+      {loading && assignments.length === 0 ? (
+        <SkeletonTable rows={6} columns={7} />
+      ) : (
+        <AdminPanel>
+          {assignments.length === 0 ? (
+            <EmptyState
+              bare
+              icon={ClipboardList}
+              title="No assignments yet"
+              description="Once you assign a guide to a booking, it appears here with its acceptance status."
+            />
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Ref</TableHead>
-                  <TableHead>City</TableHead>
-                  <TableHead>Tourist</TableHead>
-                  <TableHead>Guide</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Notes</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {assignments.map((assignment) => {
+            <AdminTable>
+              <AdminTableHead
+                columns={["Ref", "City", "Tourist", "Guide", "Status", "Notes", "Action"]}
+              />
+              <tbody>
+                {assignments.map((assignment, i) => {
                   const booking = asBooking(assignment.booking);
                   const guide = asAccount(assignment.guide);
                   const canReassign = assignment.status === "pending" || assignment.status === "declined";
                   return (
-                    <TableRow key={assignment._id}>
-                      <TableCell className="font-mono text-xs text-muted-foreground">
+                    <AdminTableRow key={assignment._id} index={i}>
+                      <AdminTableCell className="font-mono text-xs text-slate-400">
                         <div>{assignment.assignmentCode ?? "—"}</div>
                         <div>{booking?.bookingCode ?? "—"}</div>
-                      </TableCell>
-                      <TableCell>{booking?.travel_details.city ?? "—"}</TableCell>
-                      <TableCell>
-                        <div>{booking?.tourist_info.name ?? "—"}</div>
-                        <div className="font-mono text-xs text-muted-foreground">
-                          {booking?.touristCode ?? "—"}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>{guide?.name ?? "—"}</div>
-                        <div className="font-mono text-xs text-muted-foreground">
-                          {guide?.guideCode ?? "—"}
-                        </div>
-                      </TableCell>
-                      <TableCell>
+                      </AdminTableCell>
+                      <AdminTableCell className="font-semibold text-slate-900">
+                        {booking?.travel_details.city ?? "—"}
+                      </AdminTableCell>
+                      <AdminTableCell>
+                        <AdminCellStack
+                          primary={booking?.tourist_info.name ?? "—"}
+                          secondary={booking?.touristCode ?? "—"}
+                        />
+                      </AdminTableCell>
+                      <AdminTableCell>
+                        <AdminCellStack
+                          primary={guide?.name ?? "—"}
+                          secondary={guide?.guideCode ?? "—"}
+                        />
+                      </AdminTableCell>
+                      <AdminTableCell>
                         <AssignmentStatusBadge status={assignment.status} />
-                      </TableCell>
-                      <TableCell className="max-w-[200px] truncate">{assignment.adminNotes ?? "—"}</TableCell>
-                      <TableCell className="text-right">
+                      </AdminTableCell>
+                      <AdminTableCell className="max-w-[200px] truncate">
+                        {assignment.adminNotes ?? "—"}
+                      </AdminTableCell>
+                      <AdminTableCell last>
                         {canReassign && (
                           <Button
                             size="sm"
@@ -216,15 +218,15 @@ export default function AdminAssignmentsPage() {
                             Reassign
                           </Button>
                         )}
-                      </TableCell>
-                    </TableRow>
+                      </AdminTableCell>
+                    </AdminTableRow>
                   );
                 })}
-              </TableBody>
-            </Table>
+              </tbody>
+            </AdminTable>
           )}
-        </CardContent>
-      </Card>
+        </AdminPanel>
+      )}
 
       <AssignGuideModal
         isOpen={modalOpen}

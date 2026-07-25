@@ -4,7 +4,10 @@ import WebhookEventDB from '@mongo/repo/WebhookEvent';
 import type ITransaction from '@mongo/types/transaction';
 import type { ITransactionFailure } from '@mongo/types/transaction';
 import RazorpayProvider from '@provider/razorpay';
+import BalancePaymentService from '@services/balancePayment';
+import BookingService from '@services/booking';
 import GuideService from '@services/guide';
+import TourGuideService from '@services/tourguide';
 import { timingSafeCompare } from '@utils/paymentVerify';
 import crypto from 'crypto';
 import { Types } from 'mongoose';
@@ -164,8 +167,74 @@ class PaymentService {
 		transaction.status = 'success';
 		await transaction.save();
 
-		// Update registration status with retry
+		// Finalise whatever this payment was for — a booking, a membership, etc.
+		await this.fulfillCapturedPayment(transaction, paymentId);
+	}
+
+	/**
+	 * Route a freshly-captured payment to the code that finalises it.
+	 *
+	 * Booking orders are turned into a Booking HERE — on the webhook, server-side
+	 * — so a captured payment always yields a booking even if the browser never
+	 * returns to verify. The domain services do the heavy lifting; this only
+	 * routes by reference_type, keeping the webhook path thin. Every fulfilment is
+	 * idempotent (guarded by Booking's unique transaction_id), so it is safe to
+	 * run alongside a concurrent browser verify.
+	 */
+	private async fulfillCapturedPayment(
+		transaction: ITransaction,
+		paymentId: string
+	): Promise<void> {
+		const refType = transaction.reference_type;
+		const meta = transaction.metadata;
+
+		try {
+			switch (refType) {
+				case 'pending_booking':
+					if (!meta) return this.logUnfulfillable(transaction);
+					await BookingService.fulfillCustomisedBooking(transaction, meta as never, { paymentId });
+					return;
+
+				case 'pending_package_booking':
+					if (!meta) return this.logUnfulfillable(transaction);
+					await BookingService.fulfillPackageBooking(transaction, meta as never, { paymentId });
+					return;
+
+				case 'pending_direct_booking':
+					if (!meta) return this.logUnfulfillable(transaction);
+					await TourGuideService.fulfillDirectBooking(transaction, meta as never, { paymentId });
+					return;
+
+				case 'booking_balance':
+					await BalancePaymentService.settleFromWebhook(transaction, paymentId);
+					return;
+			}
+		} catch (err) {
+			// Leave the transaction 'success' with no booking; the notification
+			// watcher's reconciliation sweep retries these from the snapshot, so a
+			// transient failure here self-heals rather than losing the booking.
+			logError('Webhook: booking fulfilment from captured payment failed', {
+				orderId: transaction.razorpay_order_id,
+				referenceType: refType,
+				error: err,
+			});
+			return;
+		}
+
+		// Everything else — guide membership, and the legacy account-tourist path.
 		await this.updateRegistrationStatus(transaction, 'completed');
+	}
+
+	/**
+	 * A booking order opened before its terms were snapshotted server-side. The
+	 * client still carries the terms and completes the booking on verify, so
+	 * there is nothing this side can reconstruct — only the browser path can.
+	 */
+	private logUnfulfillable(transaction: ITransaction): void {
+		info('Webhook: captured booking payment has no server-side terms to fulfil', {
+			transactionId: transaction.transaction_id,
+			referenceType: transaction.reference_type,
+		});
 	}
 
 	/**

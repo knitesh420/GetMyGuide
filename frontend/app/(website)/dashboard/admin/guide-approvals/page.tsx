@@ -13,7 +13,8 @@ import {
   rejectGuide,
 } from "@/lib/redux/thunks/guide/guideThunk";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { AdminPanel, EmptyState, PageHeader } from "@/components/admin/ui";
+import { SkeletonList } from "@/components/animations/Skeletons";
 import { GuideDocumentLinks } from "@/components/admin/GuideDocumentLinks";
 
 const shortDate = (value?: string) =>
@@ -104,32 +105,24 @@ export default function AdminGuideApprovalsPage() {
   };
 
   return (
-    <div className="space-y-6 p-4 sm:p-6 md:p-8">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight">Guide Verification</h1>
-        <p className="text-muted-foreground">
-          Check each guide&apos;s documents before they can take bookings.
-        </p>
-      </header>
+    <div className="space-y-6 lg:space-y-8">
+      <PageHeader
+        title="Guide Verification"
+        description="Check each guide's documents before they can take bookings."
+      />
 
       {loading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 2 }).map((_, i) => (
-            <Skeleton key={i} className="h-48" />
-          ))}
-        </div>
+        <SkeletonList rows={2} />
       ) : guides.length === 0 ? (
-        <div className="flex flex-col items-center rounded-xl border bg-white px-6 py-16 text-center">
-          <BadgeCheck className="h-10 w-10 text-green-500" />
-          <p className="mt-4 font-semibold text-slate-900">Nothing to review</p>
-          <p className="mt-1 text-sm text-slate-500">
-            Every guide who has submitted documents has been dealt with.
-          </p>
-        </div>
+        <EmptyState
+          icon={BadgeCheck}
+          title="Nothing to review"
+          description="Every guide who has submitted documents has been dealt with."
+        />
       ) : (
         <div className="space-y-4">
           {guides.map((guide) => (
-            <article key={guide.accountId} className="rounded-xl border bg-white p-5 shadow-sm">
+            <AdminPanel key={guide.accountId} className="p-5">
               <div className="flex flex-wrap gap-5">
                 <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full bg-slate-100">
                   {guide.profileImage ? (
@@ -266,7 +259,7 @@ export default function AdminGuideApprovalsPage() {
                   </Button>
                 </div>
               )}
-            </article>
+            </AdminPanel>
           ))}
         </div>
       )}

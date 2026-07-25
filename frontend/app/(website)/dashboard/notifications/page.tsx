@@ -25,11 +25,13 @@ export default function NotificationsPage() {
   }, [dispatch]);
 
   return (
-    <div className="flex-1 space-y-6 p-4 sm:p-6 md:p-8 bg-muted/40">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Notifications</h2>
-          <p className="text-muted-foreground">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            Notifications
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
             Assignments, trips, payments, and membership updates.
           </p>
         </div>
@@ -43,36 +45,43 @@ export default function NotificationsPage() {
 
       {loading && notifications.length === 0 ? (
         <div className="space-y-3">
-          <Skeleton className="h-20" />
-          <Skeleton className="h-20" />
-          <Skeleton className="h-20" />
+          <Skeleton className="h-20 rounded-xl" />
+          <Skeleton className="h-20 rounded-xl" />
+          <Skeleton className="h-20 rounded-xl" />
         </div>
       ) : notifications.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
-            <BellRing className="h-8 w-8" />
-            <p>You&apos;re all caught up. No notifications yet.</p>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-slate-200 bg-white px-6 py-16 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100">
+            <BellRing className="h-7 w-7 text-slate-400" />
+          </div>
+          <p className="text-sm font-semibold text-slate-800">
+            You&apos;re all caught up
+          </p>
+          <p className="text-sm text-slate-500">No notifications yet.</p>
+        </div>
       ) : (
         <div className="space-y-3">
           {notifications.map((notification) => (
             <Card
               key={notification._id}
               className={
-                notification.isRead ? "" : "border-primary/50 bg-primary/5"
+                notification.isRead
+                  ? "border-slate-200"
+                  : "border-primary/50 bg-primary/5"
               }
             >
               <CardContent className="flex items-start justify-between gap-4 py-4">
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="font-semibold">{notification.title}</p>
+                    <p className="font-semibold text-slate-900">
+                      {notification.title}
+                    </p>
                     {!notification.isRead && <Badge>New</Badge>}
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">
+                  <p className="mt-1 text-sm text-slate-600">
                     {notification.message}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-2">
+                  <p className="mt-2 text-xs text-slate-400">
                     {new Date(notification.createdAt).toLocaleString()}
                   </p>
                 </div>
@@ -80,6 +89,7 @@ export default function NotificationsPage() {
                   <Button
                     variant="ghost"
                     size="sm"
+                    className="shrink-0"
                     onClick={() =>
                       dispatch(markNotificationRead(notification._id))
                     }

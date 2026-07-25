@@ -1,5 +1,6 @@
 import { AccountDB, BookingDB, TransactionDB } from '@mongo';
 import IBooking from '@mongo/types/booking';
+import ITransaction from '@mongo/types/transaction';
 import { JWTPayload } from '@services/jwt';
 import { verifyRazorpaySignature } from '@utils/paymentVerify';
 import { Types } from 'mongoose';
@@ -167,6 +168,66 @@ class BalancePaymentService {
 		}
 
 		return booking;
+	}
+
+	/**
+	 * Settle a balance payment straight from the Razorpay webhook, for when the
+	 * browser never came back to verify(). Idempotent: the money mutation is an
+	 * atomic conditional update guarded on `balance_due > 0`, so a concurrent
+	 * verify() or a retried delivery that already settled the booking is a no-op.
+	 */
+	async settleFromWebhook(transaction: ITransaction, paymentId?: string): Promise<void> {
+		if (transaction.reference_type !== BALANCE_REFERENCE_TYPE) return;
+
+		const booking = await BookingDB.findById(transaction.reference_id);
+		if (!booking) return;
+		if (!booking.balance_due || booking.balance_due <= 0) return;
+
+		const outstanding = booking.balance_due;
+		// Don't silently settle a figure that has drifted from what was quoted.
+		if (transaction.amount !== outstanding) return;
+
+		// Atomic claim: only one caller can flip a still-outstanding balance to
+		// paid, so verify() and this webhook can never both credit the advance.
+		const settled = await BookingDB.findOneAndUpdate(
+			{ _id: booking._id, balance_due: { $gt: 0 } },
+			{
+				$set: { balance_due: 0, balance_paid_at: new Date() },
+				$inc: { advance_paid: outstanding },
+				$push: {
+					statusHistory: {
+						status: booking.status,
+						at: new Date(),
+						note: 'Balance paid in full (webhook)',
+					},
+				},
+			},
+			{ new: true }
+		);
+		if (!settled) return;
+
+		if (paymentId && !transaction.razorpay_payment_id) {
+			transaction.razorpay_payment_id = paymentId;
+		}
+		transaction.status = 'paid';
+		await transaction.save();
+
+		try {
+			await InvoiceService.createBookingInvoice(transaction, settled);
+		} catch {
+			// Non-blocking — the money is in; an invoice failure must not undo that.
+		}
+
+		if (settled.linked_to) {
+			await NotificationService.create({
+				recipient: settled.linked_to,
+				type: 'payment_successful',
+				title: 'Balance paid',
+				message: `Your balance of ₹${outstanding.toLocaleString('en-IN')} has been received. Your booking is paid in full.`,
+				relatedEntity: { kind: 'Booking', id: settled._id.toString() },
+				dedupeKey: `balance_paid:${settled._id.toString()}`,
+			});
+		}
 	}
 
 	/**

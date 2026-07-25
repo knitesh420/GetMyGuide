@@ -11,7 +11,16 @@ import {
   recordPayout,
 } from "@/lib/redux/thunks/earning/earningThunks";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AdminPanel,
+  AdminTable,
+  AdminTableCell,
+  AdminTableHead,
+  AdminTableRow,
+  EmptyState,
+  PageHeader,
+} from "@/components/admin/ui";
+import { SkeletonList } from "@/components/animations/Skeletons";
 
 const currency = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -152,21 +161,18 @@ export default function AdminPayoutsPage() {
   const totalOwed = payoutQueue.reduce((sum, row) => sum + row.amount, 0);
 
   return (
-    <div className="space-y-6 p-4 sm:p-6 md:p-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Guide Payouts</h1>
-          <p className="text-muted-foreground">
-            Guides whose earnings have cleared the hold window. Pay them, then record the transfer.
-          </p>
-        </div>
+    <div className="space-y-6 lg:space-y-8">
+      <PageHeader
+        title="Guide Payouts"
+        description="Guides whose earnings have cleared the hold window. Pay them, then record the transfer."
+      >
         {payoutQueue.length > 0 && (
-          <div className="text-right">
+          <div className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-right">
             <p className="text-xs text-slate-500">Total owed</p>
             <p className="text-2xl font-bold text-slate-900">{currency.format(totalOwed)}</p>
           </div>
         )}
-      </header>
+      </PageHeader>
 
       {error && <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
@@ -174,18 +180,16 @@ export default function AdminPayoutsPage() {
         <h2 className="text-sm font-semibold text-slate-900">Awaiting payout</h2>
 
         {loading && payoutQueue.length === 0 ? (
-          <div className="space-y-3">
-            {Array.from({ length: 2 }).map((_, i) => (
-              <Skeleton key={i} className="h-28" />
-            ))}
-          </div>
+          <SkeletonList rows={2} />
         ) : payoutQueue.length === 0 ? (
-          <p className="rounded-xl border bg-white px-6 py-12 text-center text-sm text-slate-500">
-            Nobody is owed anything right now.
-          </p>
+          <EmptyState
+            icon={Banknote}
+            title="Nobody is owed anything right now"
+            description="Guides appear here once their earnings clear the hold window."
+          />
         ) : (
           payoutQueue.map((row) => (
-            <article key={row.guideId} className="rounded-xl border bg-white p-5 shadow-sm">
+            <AdminPanel key={row.guideId} className="p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="min-w-0">
                   <h3 className="font-semibold text-slate-900">
@@ -255,7 +259,7 @@ export default function AdminPayoutsPage() {
               {openGuideId === row.guideId && (
                 <SettleForm row={row} onDone={() => setOpenGuideId(null)} />
               )}
-            </article>
+            </AdminPanel>
           ))
         )}
       </section>
@@ -264,36 +268,39 @@ export default function AdminPayoutsPage() {
         <h2 className="text-sm font-semibold text-slate-900">Payout history</h2>
 
         {payouts.length === 0 ? (
-          <p className="rounded-xl border bg-white px-6 py-12 text-center text-sm text-slate-500">
-            No payouts recorded yet.
-          </p>
+          <EmptyState
+            icon={Banknote}
+            title="No payouts recorded yet"
+            description="Every transfer you record against the queue is logged here."
+          />
         ) : (
-          <div className="overflow-x-auto rounded-xl border bg-white">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs text-slate-500">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Payout</th>
-                  <th className="px-4 py-3 font-medium">Guide</th>
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium">Method</th>
-                  <th className="px-4 py-3 font-medium">Reference</th>
-                  <th className="px-4 py-3 font-medium">Amount</th>
-                </tr>
-              </thead>
+          <AdminPanel>
+            <AdminTable>
+              <AdminTableHead
+                columns={["Payout", "Guide", "Date", "Method", "Reference", "Amount"]}
+              />
               <tbody>
-                {payouts.map((payout) => (
-                  <tr key={payout._id} className="border-t">
-                    <td className="px-4 py-3 font-medium">{payout.payoutCode ?? "—"}</td>
-                    <td className="px-4 py-3">{payout.guide?.name ?? "—"}</td>
-                    <td className="px-4 py-3">{shortDate(payout.paidAt)}</td>
-                    <td className="px-4 py-3 capitalize">{payout.method.replace("_", " ")}</td>
-                    <td className="px-4 py-3 font-mono text-xs">{payout.reference}</td>
-                    <td className="px-4 py-3 font-semibold">{currency.format(payout.amount)}</td>
-                  </tr>
+                {payouts.map((payout, i) => (
+                  <AdminTableRow key={payout._id} index={i}>
+                    <AdminTableCell className="font-semibold text-slate-900">
+                      {payout.payoutCode ?? "—"}
+                    </AdminTableCell>
+                    <AdminTableCell>{payout.guide?.name ?? "—"}</AdminTableCell>
+                    <AdminTableCell>{shortDate(payout.paidAt)}</AdminTableCell>
+                    <AdminTableCell className="capitalize">
+                      {payout.method.replace("_", " ")}
+                    </AdminTableCell>
+                    <AdminTableCell className="font-mono text-xs">
+                      {payout.reference}
+                    </AdminTableCell>
+                    <AdminTableCell last className="font-semibold text-slate-900">
+                      {currency.format(payout.amount)}
+                    </AdminTableCell>
+                  </AdminTableRow>
                 ))}
               </tbody>
-            </table>
-          </div>
+            </AdminTable>
+          </AdminPanel>
         )}
       </section>
     </div>

@@ -13,9 +13,9 @@ import {
 } from "@/lib/redux/thunks/cashPayment/cashPaymentThunks";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AdminPanel, AdminSection } from "@/components/admin/ui";
+import { Shimmer } from "@/components/animations/Skeletons";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 
 const rupees = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -183,28 +183,25 @@ export function CashPaymentPanel({
   };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
-        <div>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Coins className="h-4 w-4" />
-            Cash payments
-          </CardTitle>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {summary.count === 0
-              ? "No cash payments recorded."
-              : `${summary.count} payment${summary.count === 1 ? "" : "s"} · ${rupees.format(summary.totalAmount)} total`}
-          </p>
-        </div>
-        {!showForm && (
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="mr-1.5 h-4 w-4" />
-            Record cash payment
-          </Button>
-        )}
-      </CardHeader>
-
-      <CardContent className="space-y-5">
+    <AdminPanel>
+      <AdminSection
+        title="Cash payments"
+        icon={Coins}
+        description={
+          summary.count === 0
+            ? "No cash payments recorded."
+            : `${summary.count} payment${summary.count === 1 ? "" : "s"} · ${rupees.format(summary.totalAmount)} total`
+        }
+        action={
+          !showForm && (
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="mr-1.5 h-4 w-4" />
+              Record cash payment
+            </Button>
+          )
+        }
+      >
+        <div className="space-y-5">
         {showForm && (
           <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border bg-slate-50 p-4">
             <div className="flex items-center justify-between">
@@ -313,9 +310,9 @@ export function CashPaymentPanel({
         )}
 
         {loading && payments.length === 0 ? (
-          <Skeleton className="h-32" />
+          <Shimmer className="h-32 w-full" />
         ) : payments.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-slate-500">
             Nothing recorded yet. Use “Record cash payment” when {guideName} is paid in cash.
           </p>
         ) : (
@@ -415,13 +412,14 @@ export function CashPaymentPanel({
           </div>
         )}
 
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <p className="flex items-center gap-1.5 text-xs text-slate-400">
           <Lock className="h-3 w-3" />
           Only admins can record, edit or void these. Voided records are kept for the audit trail and
           hidden from the guide.
         </p>
-      </CardContent>
-    </Card>
+        </div>
+      </AdminSection>
+    </AdminPanel>
   );
 }
 

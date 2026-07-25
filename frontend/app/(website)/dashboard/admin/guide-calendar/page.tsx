@@ -9,9 +9,9 @@ import {
   fetchGuideCalendar,
   fetchGuidesAvailability,
 } from "@/lib/redux/thunks/assignment/assignmentThunks";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { AdminPanel, AdminSection, PageHeader } from "@/components/admin/ui";
+import { Shimmer } from "@/components/animations/Skeletons";
 import {
   Select,
   SelectContent,
@@ -66,25 +66,25 @@ export default function AdminGuideCalendarPage() {
   const unavailableGuides = guidesAvailability.filter((g) => !g.isAvailable);
 
   return (
-    <div className="flex-1 space-y-8 p-4 sm:p-6 md:p-8 bg-muted/40">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Guide Calendar</h2>
-        <p className="text-muted-foreground">
-          View a guide&apos;s booked trips, leave, and blocked dates before assigning them.
-        </p>
-      </div>
+    <div className="space-y-6 lg:space-y-8">
+      <PageHeader
+        title="Guide Calendar"
+        description="View a guide's booked trips, leave, and blocked dates before assigning them."
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center gap-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <AdminPanel>
+          <div className="flex items-center gap-2 border-b border-slate-200 px-6 py-4">
             <CheckCircle2 className="h-5 w-5 text-green-600" />
-            <CardTitle className="text-base">Available Today ({availableGuides.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
+            <h2 className="text-sm font-semibold text-slate-900">
+              Available Today ({availableGuides.length})
+            </h2>
+          </div>
+          <div className="px-6 py-5">
             {loading && guidesAvailability.length === 0 ? (
-              <Skeleton className="h-24" />
+              <Shimmer className="h-24 w-full" />
             ) : availableGuides.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No guides available today.</p>
+              <p className="text-sm text-slate-500">No guides available today.</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {availableGuides.map((g) => (
@@ -94,25 +94,27 @@ export default function AdminGuideCalendarPage() {
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </AdminPanel>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-destructive" />
-            <CardTitle className="text-base">Unavailable / Conflict Alerts ({unavailableGuides.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <AdminPanel>
+          <div className="flex items-center gap-2 border-b border-slate-200 px-6 py-4">
+            <AlertTriangle className="h-5 w-5 text-red-500" />
+            <h2 className="text-sm font-semibold text-slate-900">
+              Unavailable / Conflict Alerts ({unavailableGuides.length})
+            </h2>
+          </div>
+          <div className="px-6 py-5">
             {loading && guidesAvailability.length === 0 ? (
-              <Skeleton className="h-24" />
+              <Shimmer className="h-24 w-full" />
             ) : unavailableGuides.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No conflicts today.</p>
+              <p className="text-sm text-slate-500">No conflicts today.</p>
             ) : (
               <div className="space-y-2">
                 {unavailableGuides.map((g) => (
                   <div key={g.accountId} className="text-sm">
-                    <span className="font-medium">{g.name}</span>
-                    <span className="text-muted-foreground">
+                    <span className="font-medium text-slate-900">{g.name}</span>
+                    <span className="text-slate-500">
                       {" — "}
                       {g.conflicts.map((c) => c.reason ?? c.type).join("; ")}
                     </span>
@@ -120,37 +122,38 @@ export default function AdminGuideCalendarPage() {
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </AdminPanel>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Guide Calendar</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="max-w-sm">
-            <Select value={selectedGuideId} onValueChange={setSelectedGuideId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a guide to view their calendar" />
-              </SelectTrigger>
-              <SelectContent>
-                {assignableGuides.map((guide) => (
-                  <SelectItem key={guide.accountId} value={guide.accountId}>
-                    {guide.name} {guide.city ? `— ${guide.city}` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      <AdminPanel>
+        <AdminSection title="Guide Calendar">
+          <div className="space-y-4">
+            <div className="max-w-sm">
+              <Select value={selectedGuideId} onValueChange={setSelectedGuideId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a guide to view their calendar" />
+                </SelectTrigger>
+                <SelectContent>
+                  {assignableGuides.map((guide) => (
+                    <SelectItem key={guide.accountId} value={guide.accountId}>
+                      {guide.name} {guide.city ? `— ${guide.city}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          {selectedGuideId ? (
-            <GuideCalendarView calendar={selectedGuideCalendar} loading={loading} />
-          ) : (
-            <p className="text-sm text-muted-foreground">Select a guide above to view their availability calendar.</p>
-          )}
-        </CardContent>
-      </Card>
+            {selectedGuideId ? (
+              <GuideCalendarView calendar={selectedGuideCalendar} loading={loading} />
+            ) : (
+              <p className="text-sm text-slate-500">
+                Select a guide above to view their availability calendar.
+              </p>
+            )}
+          </div>
+        </AdminSection>
+      </AdminPanel>
     </div>
   );
 }

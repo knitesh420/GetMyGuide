@@ -26,8 +26,15 @@ import { fetchGuideCashPayments } from "@/lib/redux/thunks/cashPayment/cashPayme
 import { useAuth } from "@/lib/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AdminPanel,
+  AdminSection,
+  AdminTable,
+  AdminTableCell,
+  AdminTableHead,
+  AdminTableRow,
+} from "@/components/admin/ui";
 import { GuideDocumentLinks } from "@/components/admin/GuideDocumentLinks";
 import { CashPaymentPanel } from "@/components/admin/CashPaymentPanel";
 
@@ -183,7 +190,7 @@ export default function AdminGuideDetailPage() {
 
   if (detailLoading && !detail) {
     return (
-      <div className="flex-1 space-y-6 p-4 sm:p-6 md:p-8">
+      <div className="space-y-6">
         <Skeleton className="h-10 w-64" />
         <Skeleton className="h-64" />
         <Skeleton className="h-64" />
@@ -193,8 +200,8 @@ export default function AdminGuideDetailPage() {
 
   if (!detail) {
     return (
-      <div className="flex-1 p-4 sm:p-6 md:p-8">
-        <p className="text-sm text-muted-foreground">This guide could not be loaded.</p>
+      <div>
+        <p className="text-sm text-slate-500">This guide could not be loaded.</p>
         <Button variant="ghost" className="mt-3" onClick={() => router.push("/dashboard/admin/guides")}>
           <ArrowLeft className="mr-1.5 h-4 w-4" />
           Back to guides
@@ -204,19 +211,21 @@ export default function AdminGuideDetailPage() {
   }
 
   return (
-    <div className="flex-1 space-y-6 bg-muted/40 p-4 sm:p-6 md:p-8">
+    <div className="space-y-6 lg:space-y-8">
       <div>
         <Link
           href="/dashboard/admin/guides"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-slate-900"
+          className="inline-flex items-center gap-1.5 text-sm text-slate-500 transition-colors hover:text-slate-900"
         >
           <ArrowLeft className="h-4 w-4" />
           All guides
         </Link>
 
         <div className="mt-2 flex flex-wrap items-center gap-3">
-          <h2 className="text-3xl font-bold tracking-tight">{detail.name}</h2>
-          <span className="font-mono text-sm text-muted-foreground">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            {detail.name}
+          </h1>
+          <span className="font-mono text-sm text-slate-500">
             {detail.guideCode ?? "—"}
           </span>
           <Badge variant={APPROVAL_BADGE[detail.approvalStatus] ?? "outline"}>
@@ -238,265 +247,260 @@ export default function AdminGuideDetailPage() {
             </>
           )}
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-sm text-slate-500">
           {detail.email} · {detail.phone ?? "—"} · {detail.city || "No city"}
         </p>
       </div>
 
       {/* ---- Profile & membership ------------------------------------- */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Membership</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 text-sm">
-            <div className="flex items-center gap-2">
-              <Badge variant={membershipState?.tone ?? "outline"}>{membershipState?.label}</Badge>
-              <span className="text-muted-foreground">{membershipState?.detail}</span>
+        <AdminPanel>
+          <AdminSection title="Membership">
+            <div className="space-y-4 text-sm">
+              <div className="flex items-center gap-2">
+                <Badge variant={membershipState?.tone ?? "outline"}>{membershipState?.label}</Badge>
+                <span className="text-slate-500">{membershipState?.detail}</span>
+              </div>
+
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+                <div>
+                  <dt className="text-xs text-slate-400">Fee paid on</dt>
+                  <dd className="font-medium text-slate-800">{dateTime(detail.membershipPaidAt)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Subscription started</dt>
+                  <dd className="font-medium text-slate-800">{dateTime(detail.membershipStartDate)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Expires</dt>
+                  <dd className="font-medium text-slate-800">{dateTime(detail.membershipExpiryDate)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-400">Approved</dt>
+                  <dd className="font-medium text-slate-800">{dateTime(detail.approvedAt)}</dd>
+                </div>
+              </dl>
+
+              {detail.rejectionReason && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                  <p className="font-medium">Rejected</p>
+                  <p className="mt-0.5">{detail.rejectionReason}</p>
+                </div>
+              )}
+
+              <div>
+                <p className="text-xs text-slate-400">Published rates</p>
+                <p className="font-medium text-slate-800">
+                  {detail.pricing?.fullDay
+                    ? `${rupees.format(detail.pricing.fullDay)} full day${
+                        detail.pricing.halfDay
+                          ? ` · ${rupees.format(detail.pricing.halfDay)} half day`
+                          : ""
+                      }`
+                    : "No rates published"}
+                </p>
+              </div>
             </div>
-
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
-              <div>
-                <dt className="text-xs text-muted-foreground">Fee paid on</dt>
-                <dd className="font-medium">{dateTime(detail.membershipPaidAt)}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">Subscription started</dt>
-                <dd className="font-medium">{dateTime(detail.membershipStartDate)}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">Expires</dt>
-                <dd className="font-medium">{dateTime(detail.membershipExpiryDate)}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">Approved</dt>
-                <dd className="font-medium">{dateTime(detail.approvedAt)}</dd>
-              </div>
-            </dl>
-
-            {detail.rejectionReason && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                <p className="font-medium">Rejected</p>
-                <p className="mt-0.5">{detail.rejectionReason}</p>
-              </div>
-            )}
-
-            <div>
-              <p className="text-xs text-muted-foreground">Published rates</p>
-              <p className="font-medium">
-                {detail.pricing?.fullDay
-                  ? `${rupees.format(detail.pricing.fullDay)} full day${
-                      detail.pricing.halfDay
-                        ? ` · ${rupees.format(detail.pricing.halfDay)} half day`
-                        : ""
-                    }`
-                  : "No rates published"}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+          </AdminSection>
+        </AdminPanel>
 
         {/* ---- KYC documents ------------------------------------------ */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <FileText className="h-4 w-4" />
-              Identity documents
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <GuideDocumentLinks documents={detail.documents} />
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Lock className="h-3 w-3" />
-              Only admins can open these.
-            </p>
-            {detail.pan && (
-              <div>
-                <p className="text-xs text-muted-foreground">PAN</p>
-                <p className="font-mono text-sm font-medium">{detail.pan}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <AdminPanel>
+          <AdminSection title="Identity documents" icon={FileText}>
+            <div className="space-y-3">
+              <GuideDocumentLinks documents={detail.documents} />
+              <p className="flex items-center gap-1.5 text-xs text-slate-400">
+                <Lock className="h-3 w-3" />
+                Only admins can open these.
+              </p>
+              {detail.pan && (
+                <div>
+                  <p className="text-xs text-slate-400">PAN</p>
+                  <p className="font-mono text-sm font-medium text-slate-800">{detail.pan}</p>
+                </div>
+              )}
+            </div>
+          </AdminSection>
+        </AdminPanel>
       </div>
 
       {/* ---- Admin notes --------------------------------------------- */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <NotebookPen className="h-4 w-4" />
-            Internal notes
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={5}
-            maxLength={5000}
-            placeholder="Anything the team should know about this guide — verification history, complaints, agreements made over the phone…"
-            className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-          />
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Lock className="h-3 w-3" />
-              Visible to admins only. The guide never sees this.
-              {detail.adminNotesUpdatedAt && (
-                <span className="ml-1">
-                  · Last edited {dateTime(detail.adminNotesUpdatedAt)}
-                  {detail.adminNotesUpdatedBy ? ` by ${detail.adminNotesUpdatedBy}` : ""}
-                </span>
-              )}
-            </p>
-            <Button size="sm" onClick={handleSaveNotes} disabled={savingNotes || !notesDirty}>
-              {savingNotes ? "Saving…" : "Save notes"}
-            </Button>
+      <AdminPanel>
+        <AdminSection title="Internal notes" icon={NotebookPen}>
+          <div className="space-y-3">
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={5}
+              maxLength={5000}
+              placeholder="Anything the team should know about this guide — verification history, complaints, agreements made over the phone…"
+              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+            />
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="flex items-center gap-1.5 text-xs text-slate-400">
+                <Lock className="h-3 w-3" />
+                Visible to admins only. The guide never sees this.
+                {detail.adminNotesUpdatedAt && (
+                  <span className="ml-1">
+                    · Last edited {dateTime(detail.adminNotesUpdatedAt)}
+                    {detail.adminNotesUpdatedBy ? ` by ${detail.adminNotesUpdatedBy}` : ""}
+                  </span>
+                )}
+              </p>
+              <Button size="sm" onClick={handleSaveNotes} disabled={savingNotes || !notesDirty}>
+                {savingNotes ? "Saving…" : "Save notes"}
+              </Button>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </AdminSection>
+      </AdminPanel>
 
       {/* ---- Payment information (ADMIN ONLY) ------------------------ */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <CreditCard className="h-4 w-4" />
-            Payment information
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Lock className="h-3 w-3" />
-            Payment identifiers and bank details are never shown to tourists or on any public page.
-          </p>
+      <AdminPanel>
+        <AdminSection title="Payment information" icon={CreditCard}>
+          <div className="space-y-6">
+            <p className="flex items-center gap-1.5 text-xs text-slate-400">
+              <Lock className="h-3 w-3" />
+              Payment identifiers and bank details are never shown to tourists or on any public page.
+            </p>
 
-          {/* Bank / payout destination */}
-          <div>
-            <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
-              <Banknote className="h-4 w-4 text-muted-foreground" />
-              Payout destination
-            </h3>
-            {detail.bankDetails ? (
-              <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
-                <div>
-                  <dt className="text-xs text-muted-foreground">Account holder</dt>
-                  <dd className="font-medium">{detail.bankDetails.accountHolderName ?? "—"}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Account number</dt>
-                  <dd className="font-mono font-medium">{detail.bankDetails.accountNumber ?? "—"}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">IFSC</dt>
-                  <dd className="font-mono font-medium">{detail.bankDetails.ifsc ?? "—"}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">UPI ID</dt>
-                  <dd className="font-medium">{detail.bankDetails.upiId ?? "—"}</dd>
-                </div>
-              </dl>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                The guide has not set a payout destination yet.
-              </p>
-            )}
-          </div>
-
-          {/* Auto-refund on rejection */}
-          {detail.membershipRefund && (
-            <div
-              className={`rounded-lg border p-4 ${
-                detail.membershipRefund.status === "processed"
-                  ? "border-green-200 bg-green-50"
-                  : "border-red-200 bg-red-50"
-              }`}
-            >
-              <h3 className="flex items-center gap-1.5 text-sm font-semibold">
-                <Undo2 className="h-4 w-4" />
-                Membership refund —{" "}
-                {detail.membershipRefund.status === "processed" ? "processed" : "FAILED"}
+            {/* Bank / payout destination */}
+            <div>
+              <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                <Banknote className="h-4 w-4 text-slate-400" />
+                Payout destination
               </h3>
-              <dl className="mt-2 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
-                <div>
-                  <dt className="text-xs text-muted-foreground">Amount</dt>
-                  <dd className="font-medium">{rupees.format(detail.membershipRefund.amount)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Refund ID</dt>
-                  <dd className="font-mono text-xs font-medium">
-                    {detail.membershipRefund.refundId ?? "—"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Date &amp; time</dt>
-                  <dd className="font-medium">{dateTime(detail.membershipRefund.refundedAt)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Payment refunded</dt>
-                  <dd className="font-mono text-xs font-medium">
-                    {detail.membershipRefund.razorpay_payment_id ?? "—"}
-                  </dd>
-                </div>
-              </dl>
-              {detail.membershipRefund.failureReason && (
-                <p className="mt-2 text-sm text-red-800">
-                  <span className="font-medium">Reason:</span>{" "}
-                  {detail.membershipRefund.failureReason} — the money has NOT gone back. Refund it
-                  from the Razorpay dashboard.
+              {detail.bankDetails ? (
+                <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
+                  <div>
+                    <dt className="text-xs text-slate-400">Account holder</dt>
+                    <dd className="font-medium text-slate-800">{detail.bankDetails.accountHolderName ?? "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-400">Account number</dt>
+                    <dd className="font-mono font-medium text-slate-800">{detail.bankDetails.accountNumber ?? "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-400">IFSC</dt>
+                    <dd className="font-mono font-medium text-slate-800">{detail.bankDetails.ifsc ?? "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-400">UPI ID</dt>
+                    <dd className="font-medium text-slate-800">{detail.bankDetails.upiId ?? "—"}</dd>
+                  </div>
+                </dl>
+              ) : (
+                <p className="text-sm text-slate-500">
+                  The guide has not set a payout destination yet.
                 </p>
               )}
             </div>
-          )}
 
-          {/* Online (Razorpay) membership payments */}
-          <div>
-            <h3 className="mb-2 text-sm font-semibold">Online payments (Razorpay)</h3>
-            {detail.transactions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No membership payments on record.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-xs text-muted-foreground">
-                      <th className="pb-2 pr-4 font-medium">Payment ID</th>
-                      <th className="pb-2 pr-4 font-medium">Razorpay payment</th>
-                      <th className="pb-2 pr-4 font-medium">Order</th>
-                      <th className="pb-2 pr-4 font-medium">Amount</th>
-                      <th className="pb-2 pr-4 font-medium">Status</th>
-                      <th className="pb-2 font-medium">Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detail.transactions.map((t) => (
-                      <tr key={t._id} className="border-b last:border-0">
-                        <td className="py-2 pr-4 font-mono text-xs">{t.paymentCode ?? "—"}</td>
-                        <td className="py-2 pr-4 font-mono text-xs">
-                          {t.razorpay_payment_id ?? "—"}
-                        </td>
-                        <td className="py-2 pr-4 font-mono text-xs">{t.razorpay_order_id}</td>
-                        <td className="py-2 pr-4 font-medium">{rupees.format(t.amount)}</td>
-                        <td className="py-2 pr-4">
-                          <Badge
-                            variant={
-                              t.status === "refunded"
-                                ? "pending"
-                                : t.status === "failed"
-                                  ? "destructive"
-                                  : "success"
-                            }
-                          >
-                            {t.status}
-                          </Badge>
-                        </td>
-                        <td className="py-2 text-muted-foreground">{shortDate(t.createdAt)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {/* Auto-refund on rejection */}
+            {detail.membershipRefund && (
+              <div
+                className={`rounded-lg border p-4 ${
+                  detail.membershipRefund.status === "processed"
+                    ? "border-green-200 bg-green-50"
+                    : "border-red-200 bg-red-50"
+                }`}
+              >
+                <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+                  <Undo2 className="h-4 w-4" />
+                  Membership refund —{" "}
+                  {detail.membershipRefund.status === "processed" ? "processed" : "FAILED"}
+                </h3>
+                <dl className="mt-2 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
+                  <div>
+                    <dt className="text-xs text-slate-400">Amount</dt>
+                    <dd className="font-medium text-slate-800">{rupees.format(detail.membershipRefund.amount)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-400">Refund ID</dt>
+                    <dd className="font-mono text-xs font-medium text-slate-800">
+                      {detail.membershipRefund.refundId ?? "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-400">Date &amp; time</dt>
+                    <dd className="font-medium text-slate-800">{dateTime(detail.membershipRefund.refundedAt)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-400">Payment refunded</dt>
+                    <dd className="font-mono text-xs font-medium text-slate-800">
+                      {detail.membershipRefund.razorpay_payment_id ?? "—"}
+                    </dd>
+                  </div>
+                </dl>
+                {detail.membershipRefund.failureReason && (
+                  <p className="mt-2 text-sm text-red-800">
+                    <span className="font-medium">Reason:</span>{" "}
+                    {detail.membershipRefund.failureReason} — the money has NOT gone back. Refund it
+                    from the Razorpay dashboard.
+                  </p>
+                )}
               </div>
             )}
+
+            {/* Online (Razorpay) membership payments */}
+            <div>
+              <h3 className="mb-2 text-sm font-semibold text-slate-900">Online payments (Razorpay)</h3>
+              {detail.transactions.length === 0 ? (
+                <p className="text-sm text-slate-500">No membership payments on record.</p>
+              ) : (
+                <div className="-mx-6 border-t border-slate-200">
+                  <AdminTable>
+                    <AdminTableHead
+                      columns={[
+                        "Payment ID",
+                        "Razorpay payment",
+                        "Order",
+                        "Amount",
+                        "Status",
+                        "Date",
+                      ]}
+                    />
+                    <tbody>
+                      {detail.transactions.map((t, i) => (
+                        <AdminTableRow key={t._id} index={i}>
+                          <AdminTableCell className="font-mono text-xs">
+                            {t.paymentCode ?? "—"}
+                          </AdminTableCell>
+                          <AdminTableCell className="font-mono text-xs">
+                            {t.razorpay_payment_id ?? "—"}
+                          </AdminTableCell>
+                          <AdminTableCell className="font-mono text-xs">
+                            {t.razorpay_order_id}
+                          </AdminTableCell>
+                          <AdminTableCell className="font-medium text-slate-900">
+                            {rupees.format(t.amount)}
+                          </AdminTableCell>
+                          <AdminTableCell>
+                            <Badge
+                              variant={
+                                t.status === "refunded"
+                                  ? "pending"
+                                  : t.status === "failed"
+                                    ? "destructive"
+                                    : "success"
+                              }
+                            >
+                              {t.status}
+                            </Badge>
+                          </AdminTableCell>
+                          <AdminTableCell last className="text-slate-500">
+                            {shortDate(t.createdAt)}
+                          </AdminTableCell>
+                        </AdminTableRow>
+                      ))}
+                    </tbody>
+                  </AdminTable>
+                </div>
+              )}
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </AdminSection>
+      </AdminPanel>
 
       {/* ---- Manual cash payments ------------------------------------ */}
       <CashPaymentPanel guideAccountId={accountId} guideName={detail.name} />

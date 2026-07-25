@@ -5,9 +5,10 @@ import { useDispatch, useSelector } from "react-redux";
 import { useRouter } from "next/navigation";
 import { AppDispatch, RootState } from "@/lib/store";
 import { deleteReview, fetchAllReviewsForAdmin, toggleHideReview } from "@/lib/redux/thunks/review/reviewThunks";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, PageHeader } from "@/components/admin/ui";
+import { SkeletonList } from "@/components/animations/Skeletons";
 import { ReviewCard } from "@/components/review/ReviewCard";
 import { showToast } from "@/lib/utils/toastHelper";
 import { useAuth } from "@/lib/hooks/useAuth";
@@ -51,47 +52,46 @@ export default function AdminReviewsPage() {
   };
 
   return (
-    <div className="flex-1 space-y-6 p-4 sm:p-6 md:p-8 bg-muted/40">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Review Moderation</h2>
-        <p className="text-muted-foreground">Hide or remove inappropriate reviews.</p>
-      </div>
+    <div className="space-y-6 lg:space-y-8">
+      <PageHeader
+        title="Review Moderation"
+        description="Hide or remove inappropriate reviews."
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>All Reviews</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {loading && adminReviews.length === 0 ? (
-            <Skeleton className="h-24" />
-          ) : adminReviews.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No reviews yet.</p>
-          ) : (
-            adminReviews.map((review) => (
-              <ReviewCard
-                key={review._id}
-                review={review}
-                showTourist
-                showGuide
-                actions={
-                  <div className="flex gap-2 pt-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleToggleHide(review._id, review.isHidden)}
-                    >
-                      {review.isHidden ? "Unhide" : "Hide"}
-                    </Button>
-                    <Button size="sm" variant="destructive" onClick={() => handleDelete(review._id)}>
-                      Delete
-                    </Button>
-                  </div>
-                }
-              />
-            ))
-          )}
-        </CardContent>
-      </Card>
+      {loading && adminReviews.length === 0 ? (
+        <SkeletonList rows={4} />
+      ) : adminReviews.length === 0 ? (
+        <EmptyState
+          icon={Star}
+          title="No reviews yet"
+          description="Reviews left by tourists after their trips will appear here for moderation."
+        />
+      ) : (
+        <div className="space-y-4">
+          {adminReviews.map((review) => (
+            <ReviewCard
+              key={review._id}
+              review={review}
+              showTourist
+              showGuide
+              actions={
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleToggleHide(review._id, review.isHidden)}
+                  >
+                    {review.isHidden ? "Unhide" : "Hide"}
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={() => handleDelete(review._id)}>
+                    Delete
+                  </Button>
+                </div>
+              }
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
