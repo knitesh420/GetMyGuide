@@ -3,15 +3,16 @@ import { Types } from 'mongoose';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from 'node-be-utilities';
 import { clearDatabase, connectTestDB, disconnectTestDB } from '../../setup/db.setup';
 
-// Mock email provider — these are pure side effects we don't want firing in
-// tests, and this also covers the pure email senders AssignmentService reuses
-// from booking.ts (sendBookingAllocatedTouristEmail/GuideEmail).
-jest.mock('@provider/email', () => ({
-	sendBookingAllocatedTouristEmail: jest.fn().mockResolvedValue(true),
-	sendBookingAllocatedGuideEmail: jest.fn().mockResolvedValue(true),
-	sendGuideAssignedEmail: jest.fn().mockResolvedValue(true),
-	sendGuideAcceptedEmail: jest.fn().mockResolvedValue(true),
-}));
+// Email is stubbed globally in tests/setup/mocks.ts — every export resolves to
+// an async no-op, which is all this suite needs (it asserts on database state,
+// never on a send).
+//
+// This file used to declare its own jest.mock returning
+// `jest.fn().mockResolvedValue(true)`. jest.config sets `resetMocks: true`,
+// which blanks a jest.fn's implementation before every test, so those senders
+// returned `undefined` by the time the service called them and booking.ts threw
+// "Failed to send email to tourist" on every allocation. The global stub uses
+// plain functions precisely so a reset cannot strip it.
 
 import AssignmentService from '@services/assignment';
 

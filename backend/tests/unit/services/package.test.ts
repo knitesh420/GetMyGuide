@@ -38,7 +38,10 @@ describe('PackageService', () => {
 			const result = await PackageService.createPackage(packageData);
 
 			expect(result).toHaveProperty('id');
-			expect(result).not.toHaveProperty('_id');
+			// transformPackage deliberately emits `_id` alongside `id`: the frontend
+			// reads `pkg.id || pkg._id` (frontend/app/(website)/services/page.tsx), so
+			// both keys are part of the contract and carry the same value.
+			expect(result._id).toBe(result.id);
 			expect(result.title).toBe(packageData.title);
 			expect(result.city).toBe(packageData.city);
 			expect(result.places).toEqual(packageData.places);
@@ -75,7 +78,7 @@ describe('PackageService', () => {
 			expect(result.status).toBe('active');
 		});
 
-		it('should default status to inactive when not provided', async () => {
+		it('should default status to active when not provided', async () => {
 			const packageData = {
 				title: 'Test Package',
 				city: 'Mumbai',
@@ -86,7 +89,10 @@ describe('PackageService', () => {
 
 			const result = await PackageService.createPackage(packageData);
 
-			expect(result.status).toBe('inactive');
+			// The schema default is 'active' (src/mongo/repo/Package.ts) — a package
+			// an admin creates is on sale straight away and is withdrawn by an
+			// explicit switch to 'inactive'.
+			expect(result.status).toBe('active');
 		});
 	});
 
@@ -131,7 +137,7 @@ describe('PackageService', () => {
 			results.forEach((pkg) => {
 				expect(pkg.status).toBe('active');
 				expect(pkg).toHaveProperty('id');
-				expect(pkg).not.toHaveProperty('_id');
+				expect(pkg._id).toBe(pkg.id);
 			});
 		});
 
@@ -209,7 +215,7 @@ describe('PackageService', () => {
 			const result = await PackageService.getPackageById(pkg._id, false);
 
 			expect(result).toHaveProperty('id');
-			expect(result).not.toHaveProperty('_id');
+			expect(result._id).toBe(result.id);
 			expect(result.id).toBe(pkg._id.toString());
 			expect(result.title).toBe('Test Package');
 		});

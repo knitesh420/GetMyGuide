@@ -22,7 +22,9 @@ jest.mock('@utils/cloudinaryUpload', () => ({
 }));
 
 import { sendInvoiceEmail } from '@provider/email';
+import razorpay from '@provider/razorpay';
 import InvoiceService from '@services/invoice';
+import uploadToCloudinary from '@utils/cloudinaryUpload';
 
 function bookingFixture(overrides: Partial<Record<string, any>> = {}) {
 	return {
@@ -86,7 +88,23 @@ describe('InvoiceService', () => {
 	beforeEach(async () => {
 		await clearDatabase();
 		jest.clearAllMocks();
+
+		// Every double this suite relies on has to be re-installed here, not just
+		// declared in the jest.mock factories above. Two things erase those
+		// factories' implementations:
+		//
+		//  - jest.config's `resetMocks: true` blanks each jest.fn before every
+		//    test, so `getPayment` resolved `undefined` and the invoice came out
+		//    with `paymentInfo.method: undefined`.
+		//  - tests/setup/mocks.ts installs its own `uploadToCloudinary`
+		//    implementation in a beforeEach. Setup-file hooks run before the ones
+		//    declared in a test file, so re-installing here is what makes this
+		//    suite's URL win.
 		(sendInvoiceEmail as jest.Mock).mockResolvedValue(true);
+		(razorpay.payments.getPayment as jest.Mock).mockResolvedValue({ method: 'card' });
+		(uploadToCloudinary as jest.Mock).mockResolvedValue({
+			secure_url: 'https://cloudinary.test/invoice.pdf',
+		});
 	});
 
 	describe('createBookingInvoice', () => {

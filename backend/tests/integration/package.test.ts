@@ -1,71 +1,99 @@
+import PackageDB from '@mongo/repo/Package';
 import AuthService from '@services/auth';
 import express from 'express';
-import fs from 'fs';
-import path from 'path';
 import request from 'supertest';
 import configServer from '../../src/server-config';
 import { testSignupData, testUser } from '../helpers/fixtures';
 import { clearDatabase, connectTestDB, disconnectTestDB } from '../setup/db.setup';
 
+/**
+ * Packages are localised: the text fields live under `translations.<locale>`
+ * and English is mandatory on create. Everything numeric (price, group size,
+ * duration) stays at the top level, and at least one image must be uploaded —
+ * the controller pushes each file to Cloudinary before writing the document.
+ *
+ * Responses from this module are `{ success, data }` (and `{ success, count,
+ * data }` for the listings) rather than the flattened Respond() envelope the
+ * rest of the API uses.
+ */
 describe('Package API Integration Tests', () => {
 	let app: express.Application;
 	let adminToken: string;
 	let userToken: string;
-	const testUploadDir = path.join(__dirname, '../../static/misc');
-	const testPackagesDir = path.join(__dirname, '../../static/packages');
 
-	// Create test image buffer
-	const createImageBuffer = () => {
-		return Buffer.from(
+	const createImageBuffer = () =>
+		Buffer.from(
 			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
 			'base64'
 		);
+
+	/** A complete English translation — every field the validator insists on. */
+	const englishTranslation = (overrides: Record<string, unknown> = {}) => ({
+		title: 'Test Package',
+		city: 'Mumbai',
+		shortDescription: 'A short description',
+		description: '<p>A detailed description of the package</p>',
+		places: ['Taj Mahal', 'Red Fort'],
+		inclusions: ['Guide', 'Transport'],
+		exclusions: ['Meals'],
+		highlights: ['Sunset view'],
+		...overrides,
+	});
+
+	/** POST /package with the multipart shape the route expects. */
+	const postPackage = (
+		fields: {
+			price?: string;
+			numberOfPeople?: string;
+			numberOfDays?: string;
+			featured?: string;
+			translations?: string;
+		} = {},
+		{ images = 1, token = adminToken }: { images?: number; token?: string } = {}
+	) => {
+		const body = {
+			price: '5000',
+			numberOfPeople: '2',
+			numberOfDays: '3',
+			featured: 'false',
+			translations: JSON.stringify({ en: englishTranslation() }),
+			...fields,
+		};
+
+		const req = request(app).post('/package').set('Authorization', `Bearer ${token}`);
+		Object.entries(body).forEach(([key, value]) => req.field(key, value));
+		for (let i = 0; i < images; i += 1) {
+			req.attach('images', createImageBuffer(), `test-image-${i + 1}.jpg`);
+		}
+		return req;
 	};
+
+	/** Seed a package directly, bypassing the upload path. */
+	const seedPackage = (overrides: Record<string, unknown> = {}) =>
+		PackageDB.create({
+			price: 5000,
+			numberOfPeople: 2,
+			numberOfDays: 3,
+			images: [{ url: 'https://res.cloudinary.com/test/a.jpg', publicId: 'packages/a' }],
+			translations: { en: englishTranslation() },
+			status: 'active',
+			featured: false,
+			...overrides,
+		});
 
 	beforeAll(async () => {
 		await connectTestDB();
 		app = express();
 		configServer(app as express.Express);
-
-		// Ensure test upload directories exist
-		if (!fs.existsSync(testUploadDir)) {
-			fs.mkdirSync(testUploadDir, { recursive: true });
-		}
-		if (!fs.existsSync(testPackagesDir)) {
-			fs.mkdirSync(testPackagesDir, { recursive: true });
-		}
-
-		// Create admin user
-		const adminData = { ...testSignupData, email: 'admin@example.com', role: 'admin' as const };
-		const adminResult = await AuthService.signup(adminData);
-		adminToken = adminResult.accessToken;
-
-		// Create regular user
-		const userResult = await AuthService.signup(testUser);
-		userToken = userResult.accessToken;
 	});
 
 	afterAll(async () => {
 		await disconnectTestDB();
-		// Clean up test files
-		[testUploadDir, testPackagesDir].forEach((dir) => {
-			if (fs.existsSync(dir)) {
-				const files = fs.readdirSync(dir);
-				files.forEach((file) => {
-					try {
-						fs.unlinkSync(path.join(dir, file));
-					} catch {
-						// Ignore errors during cleanup
-					}
-				});
-			}
-		});
 	});
 
 	beforeEach(async () => {
 		await clearDatabase();
 
-		// Recreate admin and user after clearing database
 		const adminData = { ...testSignupData, email: 'admin@example.com', role: 'admin' as const };
 		const adminResult = await AuthService.signup(adminData);
 		adminToken = adminResult.accessToken;
@@ -76,538 +104,358 @@ describe('Package API Integration Tests', () => {
 
 	describe('POST /package', () => {
 		it('should successfully create a package with images (admin)', async () => {
-			const imageBuffer1 = createImageBuffer();
-			const imageBuffer2 = createImageBuffer();
-
-			const response = await request(app)
-				.post('/package')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('title', 'Test Package')
-				.field('city', 'Mumbai')
-				.field('places', JSON.stringify(['Taj Mahal', 'Red Fort']))
-				.field('price', '5000')
-				.field('featured', 'false')
-				.attach('images', imageBuffer1, 'test-image-1.jpg')
-				.attach('images', imageBuffer2, 'test-image-2.jpg');
+			const response = await postPackage({}, { images: 2 });
 
 			expect(response.status).toBe(201);
 			expect(response.body.success).toBe(true);
-			expect(response.body).toBeDefined();
-			expect(response.body.title).toBe('Test Package');
-			expect(response.body.city).toBe('Mumbai');
-			expect(response.body.places).toEqual(['Taj Mahal', 'Red Fort']);
-			expect(response.body.price).toBe(5000);
-			expect(response.body.featured).toBe(false);
-			expect(response.body.status).toBe('inactive');
-			expect(response.body.images).toBeInstanceOf(Array);
-			expect(response.body.images.length).toBe(2);
-			expect(response.body).toHaveProperty('id');
-			expect(response.body).not.toHaveProperty('_id');
+			expect(response.body.data.price).toBe(5000);
+			expect(response.body.data.numberOfPeople).toBe(2);
+			expect(response.body.data.numberOfDays).toBe(3);
+			expect(response.body.data.featured).toBe(false);
+			expect(response.body.data.translations.en.title).toBe('Test Package');
+			expect(response.body.data.translations.en.city).toBe('Mumbai');
+			expect(response.body.data.translations.en.places).toEqual(['Taj Mahal', 'Red Fort']);
+			expect(response.body.data.images).toHaveLength(2);
+			expect(response.body.data.images[0].url).toEqual(expect.any(String));
+			expect(response.body.data.images[0].publicId).toEqual(expect.any(String));
 		});
 
-		it('should create package with all optional fields', async () => {
-			const imageBuffer = createImageBuffer();
-
-			const response = await request(app)
-				.post('/package')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('title', 'Premium Package')
-				.field('city', 'Delhi')
-				.field('places', JSON.stringify(['India Gate']))
-				.field('price', '10000')
-				.field('shortDescription', 'A premium tour')
-				.field('description', 'Detailed description')
-				.field('inclusions', JSON.stringify(['Breakfast', 'Lunch']))
-				.field('exclusions', JSON.stringify(['Dinner']))
-				.field('featured', 'true')
-				.attach('images', imageBuffer, 'test-image.jpg');
+		it('should default status to active', async () => {
+			const response = await postPackage();
 
 			expect(response.status).toBe(201);
-			expect(response.body.shortDescription).toBe('A premium tour');
-			expect(response.body.description).toBe('Detailed description');
-			expect(response.body.inclusions).toEqual(['Breakfast', 'Lunch']);
-			expect(response.body.exclusions).toEqual(['Dinner']);
-			expect(response.body.featured).toBe(true);
+			// A package an admin creates is on sale immediately; withdrawing it is
+			// an explicit switch to 'inactive'.
+			expect(response.body.data.status).toBe('active');
 		});
 
-		it('should return 401 when user is not authenticated', async () => {
-			const imageBuffer = createImageBuffer();
+		it('should create a featured package with extra locales', async () => {
+			const response = await postPackage({
+				featured: 'true',
+				translations: JSON.stringify({
+					en: englishTranslation(),
+					fr: englishTranslation({ title: 'Forfait test', city: 'Bombay' }),
+				}),
+			});
 
-			const response = await request(app)
-				.post('/package')
-				.field('title', 'Test Package')
-				.field('city', 'Mumbai')
-				.field('places', JSON.stringify(['Place 1']))
-				.field('price', '5000')
-				.attach('images', imageBuffer, 'test-image.jpg');
-
-			expect(response.status).toBe(401);
+			expect(response.status).toBe(201);
+			expect(response.body.data.featured).toBe(true);
+			expect(response.body.data.translations.fr.title).toBe('Forfait test');
 		});
 
-		it('should return 401 when non-admin user tries to create package', async () => {
-			const imageBuffer = createImageBuffer();
-
-			const response = await request(app)
-				.post('/package')
-				.set('Authorization', `Bearer ${userToken}`)
-				.field('title', 'Test Package')
-				.field('city', 'Mumbai')
-				.field('places', JSON.stringify(['Place 1']))
-				.field('price', '5000')
-				.attach('images', imageBuffer, 'test-image.jpg');
-
-			expect(response.status).toBe(401);
-		});
-
-		it('should return 400 when images are missing', async () => {
-			const response = await request(app)
-				.post('/package')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('title', 'Test Package')
-				.field('city', 'Mumbai')
-				.field('places', JSON.stringify(['Place 1']))
-				.field('price', '5000');
+		it('should return 400 when no image is attached', async () => {
+			const response = await postPackage({}, { images: 0 });
 
 			expect(response.status).toBe(400);
 		});
 
-		it('should return 400 when required fields are missing', async () => {
-			const imageBuffer = createImageBuffer();
-
-			const response = await request(app)
-				.post('/package')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('title', 'Test Package')
-				.attach('images', imageBuffer, 'test-image.jpg');
+		it('should return 400 when the English translation is missing', async () => {
+			const response = await postPackage({
+				translations: JSON.stringify({ fr: englishTranslation() }),
+			});
 
 			expect(response.status).toBe(400);
+		});
+
+		it('should return 400 when an English field is blank', async () => {
+			const response = await postPackage({
+				translations: JSON.stringify({ en: englishTranslation({ title: '  ' }) }),
+			});
+
+			expect(response.status).toBe(400);
+		});
+
+		it('should return 400 for a negative price', async () => {
+			const response = await postPackage({ price: '-1' });
+
+			expect(response.status).toBe(400);
+		});
+
+		it('should return 400 for invalid translations JSON', async () => {
+			const response = await postPackage({ translations: '{not json' });
+
+			expect(response.status).toBe(400);
+		});
+
+		it('should return 403 when a non-admin user tries to create a package', async () => {
+			// 403, not 401: the tourist is authenticated, just not an admin.
+			const response = await postPackage({}, { token: userToken });
+
+			expect(response.status).toBe(403);
+		});
+
+		it('should return 401 when unauthenticated', async () => {
+			const response = await request(app)
+				.post('/package')
+				.field('price', '5000')
+				.attach('images', createImageBuffer(), 'test-image.jpg');
+
+			expect(response.status).toBe(401);
 		});
 	});
 
 	describe('GET /package', () => {
-		let packageId1: string;
-
 		beforeEach(async () => {
-			const imageBuffer = createImageBuffer();
-
-			// Create active package
-			const response1 = await request(app)
-				.post('/package')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('title', 'Active Package')
-				.field('city', 'Mumbai')
-				.field('places', JSON.stringify(['Place 1']))
-				.field('price', '5000')
-				.attach('images', imageBuffer, 'test-image-1.jpg');
-
-			packageId1 = response1.body.id;
-
-			// Update status to active
-			await request(app)
-				.post(`/package/${packageId1}/update-status`)
-				.set('Authorization', `Bearer ${adminToken}`)
-				.send({ status: 'active' });
-
-			// Create inactive package
-			await request(app)
-				.post('/package')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('title', 'Inactive Package')
-				.field('city', 'Delhi')
-				.field('places', JSON.stringify(['Place 2']))
-				.field('price', '6000')
-				.attach('images', imageBuffer, 'test-image-2.jpg');
+			await seedPackage({ translations: { en: englishTranslation({ title: 'Active One' }) } });
+			await seedPackage({
+				featured: true,
+				translations: { en: englishTranslation({ title: 'Featured One', city: 'Delhi' }) },
+			});
+			await seedPackage({
+				status: 'inactive',
+				translations: { en: englishTranslation({ title: 'Hidden One' }) },
+			});
 		});
 
-		it('should get only active packages for public users', async () => {
+		it('should return only active packages (public route)', async () => {
 			const response = await request(app).get('/package');
 
 			expect(response.status).toBe(200);
 			expect(response.body.success).toBe(true);
-			expect(response.body.packages).toBeInstanceOf(Array);
-			expect(response.body.packages.length).toBe(1);
-			expect(response.body.packages[0].status).toBe('active');
-			expect(response.body.packages[0]).toHaveProperty('id');
-			expect(response.body.packages[0]).not.toHaveProperty('_id');
-		});
-
-		it('should get all packages for admin users', async () => {
-			const response = await request(app)
-				.get('/package')
-				.set('Authorization', `Bearer ${adminToken}`);
-
-			expect(response.status).toBe(200);
-			expect(response.body.packages.length).toBeGreaterThanOrEqual(2);
+			expect(response.body.count).toBe(2);
+			expect(response.body.data).toHaveLength(2);
+			expect(
+				response.body.data.every((pkg: { status: string }) => pkg.status === 'active')
+			).toBe(true);
 		});
 
 		it('should filter by featured status', async () => {
-			// Make package featured
-			await request(app)
-				.patch(`/package/${packageId1}`)
-				.set('Authorization', `Bearer ${adminToken}`)
-				.send({ featured: true });
-
 			const response = await request(app).get('/package?featured=true');
 
 			expect(response.status).toBe(200);
-			response.body.packages.forEach((pkg: any) => {
-				expect(pkg.featured).toBe(true);
-				expect(pkg.status).toBe('active');
-			});
+			expect(response.body.data).toHaveLength(1);
+			expect(response.body.data[0].translations.en.title).toBe('Featured One');
 		});
 
-		it('should filter by city', async () => {
-			const response = await request(app).get('/package?city=Mumbai');
+		it('should honour a limit', async () => {
+			const response = await request(app).get('/package?limit=1');
 
 			expect(response.status).toBe(200);
-			response.body.packages.forEach((pkg: any) => {
-				expect(pkg.city).toBe('Mumbai');
-				expect(pkg.status).toBe('active');
-			});
+			expect(response.body.data).toHaveLength(1);
 		});
 
-		it('should combine featured and city filters', async () => {
-			await request(app)
-				.patch(`/package/${packageId1}`)
-				.set('Authorization', `Bearer ${adminToken}`)
-				.send({ featured: true });
+		it('should sort newest first', async () => {
+			const response = await request(app).get('/package');
 
-			const response = await request(app).get('/package?featured=true&city=Mumbai');
+			const [first, second] = response.body.data;
+			expect(new Date(first.createdAt).getTime()).toBeGreaterThanOrEqual(
+				new Date(second.createdAt).getTime()
+			);
+		});
+	});
+
+	describe('GET /package/admin/all', () => {
+		beforeEach(async () => {
+			await seedPackage();
+			await seedPackage({ status: 'inactive' });
+		});
+
+		it('should return inactive packages too (admin)', async () => {
+			// The admin table has to keep showing a withdrawn package, otherwise
+			// there is no way left to switch it back on.
+			const response = await request(app)
+				.get('/package/admin/all')
+				.set('Authorization', `Bearer ${adminToken}`);
 
 			expect(response.status).toBe(200);
-			response.body.packages.forEach((pkg: any) => {
-				expect(pkg.featured).toBe(true);
-				expect(pkg.city).toBe('Mumbai');
-				expect(pkg.status).toBe('active');
-			});
+			expect(response.body.count).toBe(2);
+		});
+
+		it('should return 403 for a non-admin user', async () => {
+			const response = await request(app)
+				.get('/package/admin/all')
+				.set('Authorization', `Bearer ${userToken}`);
+
+			expect(response.status).toBe(403);
+		});
+
+		it('should return 401 when unauthenticated', async () => {
+			const response = await request(app).get('/package/admin/all');
+
+			expect(response.status).toBe(401);
 		});
 	});
 
 	describe('GET /package/:id', () => {
-		let activePackageId: string;
-		let inactivePackageId: string;
+		it('should get an active package by id (public route)', async () => {
+			const pkg = await seedPackage();
 
-		beforeEach(async () => {
-			const imageBuffer = createImageBuffer();
-
-			// Create active package
-			const response1 = await request(app)
-				.post('/package')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('title', 'Active Package')
-				.field('city', 'Mumbai')
-				.field('places', JSON.stringify(['Place 1']))
-				.field('price', '5000')
-				.attach('images', imageBuffer, 'test-image-1.jpg');
-
-			activePackageId = response1.body.id;
-
-			await request(app)
-				.post(`/package/${activePackageId}/update-status`)
-				.set('Authorization', `Bearer ${adminToken}`)
-				.send({ status: 'active' });
-
-			// Create inactive package
-			const response2 = await request(app)
-				.post('/package')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('title', 'Inactive Package')
-				.field('city', 'Delhi')
-				.field('places', JSON.stringify(['Place 2']))
-				.field('price', '6000')
-				.attach('images', imageBuffer, 'test-image-2.jpg');
-
-			inactivePackageId = response2.body.id;
-		});
-
-		it('should get active package by id (public route)', async () => {
-			const response = await request(app).get(`/package/${activePackageId}`);
+			const response = await request(app).get(`/package/${pkg._id}`);
 
 			expect(response.status).toBe(200);
 			expect(response.body.success).toBe(true);
-			expect(response.body.id).toBe(activePackageId);
-			expect(response.body.title).toBe('Active Package');
-			expect(response.body.status).toBe('active');
-			expect(response.body).toHaveProperty('id');
-			expect(response.body).not.toHaveProperty('_id');
+			expect(response.body.data._id).toBe(pkg._id.toString());
+			expect(response.body.data.translations.en.title).toBe('Test Package');
 		});
 
-		it('should return 404 for inactive package (public)', async () => {
-			const response = await request(app).get(`/package/${inactivePackageId}`);
+		it('should return 404 for an inactive package (public)', async () => {
+			// A withdrawn package must not stay readable to anyone who knows its id.
+			const pkg = await seedPackage({ status: 'inactive' });
+
+			const response = await request(app).get(`/package/${pkg._id}`);
 
 			expect(response.status).toBe(404);
 		});
 
-		it('should get inactive package by id (admin)', async () => {
-			const response = await request(app)
-				.get(`/package/${inactivePackageId}`)
-				.set('Authorization', `Bearer ${adminToken}`);
-
-			expect(response.status).toBe(200);
-			expect(response.body.id).toBe(inactivePackageId);
-			expect(response.body.status).toBe('inactive');
-		});
-
-		it('should return 400 for invalid package id format', async () => {
-			const response = await request(app).get('/package/invalid-id');
+		it('should return 400 for a malformed id', async () => {
+			const response = await request(app).get('/package/not-an-id');
 
 			expect(response.status).toBe(400);
 		});
 
-		it('should return 404 for non-existent package id', async () => {
-			const fakeId = '507f1f77bcf86cd799439011';
-			const response = await request(app).get(`/package/${fakeId}`);
+		it('should return 404 for a well-formed id that matches nothing', async () => {
+			const response = await request(app).get('/package/507f1f77bcf86cd799439011');
 
 			expect(response.status).toBe(404);
 		});
 	});
 
 	describe('PATCH /package/:id', () => {
-		let packageId: string;
-
-		beforeEach(async () => {
-			const imageBuffer = createImageBuffer();
-
-			const response = await request(app)
-				.post('/package')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('title', 'Original Title')
-				.field('city', 'Mumbai')
-				.field('places', JSON.stringify(['Place 1']))
-				.field('price', '5000')
-				.attach('images', imageBuffer, 'test-image.jpg');
-
-			packageId = response.body.id;
-		});
-
 		it('should update package fields (admin)', async () => {
+			const pkg = await seedPackage();
+
 			const response = await request(app)
-				.patch(`/package/${packageId}`)
+				.patch(`/package/${pkg._id}`)
 				.set('Authorization', `Bearer ${adminToken}`)
-				.send({
-					title: 'Updated Title',
-					price: 6000,
-					featured: true,
-				});
+				.field('price', '7500')
+				.field('numberOfDays', '5')
+				.field('featured', 'true');
 
 			expect(response.status).toBe(200);
-			expect(response.body.title).toBe('Updated Title');
-			expect(response.body.price).toBe(6000);
-			expect(response.body.featured).toBe(true);
+			expect(response.body.success).toBe(true);
+			expect(response.body.data.price).toBe(7500);
+			expect(response.body.data.numberOfDays).toBe(5);
+			expect(response.body.data.featured).toBe(true);
 		});
 
-		it('should update package with new images (admin)', async () => {
-			const newImageBuffer = createImageBuffer();
+		it('should switch a package to inactive (admin)', async () => {
+			// Status is changed through PATCH — there is no separate
+			// /:id/update-status endpoint.
+			const pkg = await seedPackage();
 
 			const response = await request(app)
-				.patch(`/package/${packageId}`)
+				.patch(`/package/${pkg._id}`)
 				.set('Authorization', `Bearer ${adminToken}`)
-				.field('title', 'Updated with Images')
-				.attach('images', newImageBuffer, 'new-image.jpg');
+				.field('status', 'inactive');
 
 			expect(response.status).toBe(200);
-			expect(response.body.images).toBeInstanceOf(Array);
-			expect(response.body.images.length).toBe(1);
+			expect(response.body.data.status).toBe('inactive');
+
+			// And it drops out of the public listing.
+			const listing = await request(app).get('/package');
+			expect(listing.body.count).toBe(0);
 		});
 
-		it('should return 401 when non-admin tries to update', async () => {
-			const response = await request(app)
-				.patch(`/package/${packageId}`)
-				.set('Authorization', `Bearer ${userToken}`)
-				.send({ title: 'Updated Title' });
+		it('should return 400 for an invalid status', async () => {
+			const pkg = await seedPackage();
 
-			expect(response.status).toBe(401);
-		});
-
-		it('should return 404 for non-existent package', async () => {
-			const fakeId = '507f1f77bcf86cd799439011';
 			const response = await request(app)
-				.patch(`/package/${fakeId}`)
+				.patch(`/package/${pkg._id}`)
 				.set('Authorization', `Bearer ${adminToken}`)
-				.send({ title: 'Updated Title' });
+				.field('status', 'archived');
+
+			expect(response.status).toBe(400);
+		});
+
+		it('should append newly uploaded images (admin)', async () => {
+			const pkg = await seedPackage();
+
+			const response = await request(app)
+				.patch(`/package/${pkg._id}`)
+				.set('Authorization', `Bearer ${adminToken}`)
+				.attach('images', createImageBuffer(), 'new-image.jpg');
+
+			expect(response.status).toBe(200);
+			expect(response.body.data.images).toHaveLength(2);
+		});
+
+		it('should update a single locale without dropping the others', async () => {
+			const pkg = await seedPackage({
+				translations: {
+					en: englishTranslation(),
+					fr: englishTranslation({ title: 'Forfait' }),
+				},
+			});
+
+			const response = await request(app)
+				.patch(`/package/${pkg._id}`)
+				.set('Authorization', `Bearer ${adminToken}`)
+				.field(
+					'translations',
+					JSON.stringify({ en: englishTranslation({ title: 'Renamed' }) })
+				);
+
+			expect(response.status).toBe(200);
+			expect(response.body.data.translations.en.title).toBe('Renamed');
+			expect(response.body.data.translations.fr.title).toBe('Forfait');
+		});
+
+		it('should return 404 for a package that does not exist', async () => {
+			const response = await request(app)
+				.patch('/package/507f1f77bcf86cd799439011')
+				.set('Authorization', `Bearer ${adminToken}`)
+				.field('price', '100');
 
 			expect(response.status).toBe(404);
+		});
+
+		it('should return 403 when a non-admin tries to update', async () => {
+			const pkg = await seedPackage();
+
+			const response = await request(app)
+				.patch(`/package/${pkg._id}`)
+				.set('Authorization', `Bearer ${userToken}`)
+				.field('price', '100');
+
+			expect(response.status).toBe(403);
 		});
 	});
 
 	describe('DELETE /package/:id', () => {
-		let packageId: string;
-
-		beforeEach(async () => {
-			const imageBuffer = createImageBuffer();
+		it('should delete a package (admin)', async () => {
+			const pkg = await seedPackage();
 
 			const response = await request(app)
-				.post('/package')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('title', 'Package to Delete')
-				.field('city', 'Mumbai')
-				.field('places', JSON.stringify(['Place 1']))
-				.field('price', '5000')
-				.attach('images', imageBuffer, 'test-image.jpg');
-
-			packageId = response.body.id;
-		});
-
-		it('should delete package (admin)', async () => {
-			const response = await request(app)
-				.delete(`/package/${packageId}`)
+				.delete(`/package/${pkg._id}`)
 				.set('Authorization', `Bearer ${adminToken}`);
 
 			expect(response.status).toBe(200);
-			expect(response.body.message).toBe('Package deleted successfully');
+			expect(response.body.success).toBe(true);
+			expect(await PackageDB.findById(pkg._id)).toBeNull();
+		});
 
-			// Verify package is deleted
-			const getResponse = await request(app)
-				.get(`/package/${packageId}`)
+		it('should return 400 for a malformed id', async () => {
+			const response = await request(app)
+				.delete('/package/not-an-id')
 				.set('Authorization', `Bearer ${adminToken}`);
 
-			expect(getResponse.status).toBe(404);
+			expect(response.status).toBe(400);
 		});
 
-		it('should return 401 when non-admin tries to delete', async () => {
+		it('should return 404 for a package that does not exist', async () => {
 			const response = await request(app)
-				.delete(`/package/${packageId}`)
-				.set('Authorization', `Bearer ${userToken}`);
-
-			expect(response.status).toBe(401);
-		});
-
-		it('should return 404 for non-existent package', async () => {
-			const fakeId = '507f1f77bcf86cd799439011';
-			const response = await request(app)
-				.delete(`/package/${fakeId}`)
+				.delete('/package/507f1f77bcf86cd799439011')
 				.set('Authorization', `Bearer ${adminToken}`);
 
 			expect(response.status).toBe(404);
 		});
-	});
 
-	describe('POST /package/:id/update-status', () => {
-		let packageId: string;
-
-		beforeEach(async () => {
-			const imageBuffer = createImageBuffer();
+		it('should return 403 when a non-admin tries to delete', async () => {
+			const pkg = await seedPackage();
 
 			const response = await request(app)
-				.post('/package')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('title', 'Status Test Package')
-				.field('city', 'Mumbai')
-				.field('places', JSON.stringify(['Place 1']))
-				.field('price', '5000')
-				.attach('images', imageBuffer, 'test-image.jpg');
+				.delete(`/package/${pkg._id}`)
+				.set('Authorization', `Bearer ${userToken}`);
 
-			packageId = response.body.id;
+			expect(response.status).toBe(403);
 		});
 
-		it('should update package status to active (admin)', async () => {
-			const response = await request(app)
-				.post(`/package/${packageId}/update-status`)
-				.set('Authorization', `Bearer ${adminToken}`)
-				.send({ status: 'active' });
+		it('should return 401 when unauthenticated', async () => {
+			const pkg = await seedPackage();
 
-			expect(response.status).toBe(200);
-			expect(response.body.status).toBe('active');
-		});
-
-		it('should update package status to inactive (admin)', async () => {
-			// First set to active
-			await request(app)
-				.post(`/package/${packageId}/update-status`)
-				.set('Authorization', `Bearer ${adminToken}`)
-				.send({ status: 'active' });
-
-			// Then set to inactive
-			const response = await request(app)
-				.post(`/package/${packageId}/update-status`)
-				.set('Authorization', `Bearer ${adminToken}`)
-				.send({ status: 'inactive' });
-
-			expect(response.status).toBe(200);
-			expect(response.body.status).toBe('inactive');
-		});
-
-		it('should return 401 when non-admin tries to update status', async () => {
-			const response = await request(app)
-				.post(`/package/${packageId}/update-status`)
-				.set('Authorization', `Bearer ${userToken}`)
-				.send({ status: 'active' });
+			const response = await request(app).delete(`/package/${pkg._id}`);
 
 			expect(response.status).toBe(401);
-		});
-
-		it('should return 400 for invalid status', async () => {
-			const response = await request(app)
-				.post(`/package/${packageId}/update-status`)
-				.set('Authorization', `Bearer ${adminToken}`)
-				.send({ status: 'invalid' });
-
-			expect(response.status).toBe(400);
-		});
-	});
-
-	describe('GET /package/available-cities', () => {
-		beforeEach(async () => {
-			const imageBuffer = createImageBuffer();
-
-			// Create active packages in different cities
-			const response1 = await request(app)
-				.post('/package')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('title', 'Mumbai Package')
-				.field('city', 'Mumbai')
-				.field('places', JSON.stringify(['Place 1']))
-				.field('price', '5000')
-				.attach('images', imageBuffer, 'test-image-1.jpg');
-
-			await request(app)
-				.post(`/package/${response1.body.id}/update-status`)
-				.set('Authorization', `Bearer ${adminToken}`)
-				.send({ status: 'active' });
-
-			const response2 = await request(app)
-				.post('/package')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('title', 'Delhi Package')
-				.field('city', 'Delhi')
-				.field('places', JSON.stringify(['Place 2']))
-				.field('price', '6000')
-				.attach('images', imageBuffer, 'test-image-2.jpg');
-
-			await request(app)
-				.post(`/package/${response2.body.id}/update-status`)
-				.set('Authorization', `Bearer ${adminToken}`)
-				.send({ status: 'active' });
-
-			// Create inactive package (should not be included)
-			await request(app)
-				.post('/package')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('title', 'Inactive Package')
-				.field('city', 'Bangalore')
-				.field('places', JSON.stringify(['Place 3']))
-				.field('price', '7000')
-				.attach('images', imageBuffer, 'test-image-3.jpg');
-		});
-
-		it('should return available cities from active packages (public route)', async () => {
-			const response = await request(app).get('/package/available-cities');
-
-			expect(response.status).toBe(200);
-			expect(response.body.success).toBe(true);
-			expect(response.body.cities).toBeInstanceOf(Array);
-			expect(response.body.cities.length).toBe(2);
-			expect(response.body.cities).toContain('Mumbai');
-			expect(response.body.cities).toContain('Delhi');
-			expect(response.body.cities).not.toContain('Bangalore');
-		});
-
-		it('should return cities in sorted order', async () => {
-			const response = await request(app).get('/package/available-cities');
-
-			expect(response.status).toBe(200);
-			expect(response.body.cities[0]).toBe('Delhi');
-			expect(response.body.cities[1]).toBe('Mumbai');
 		});
 	});
 });

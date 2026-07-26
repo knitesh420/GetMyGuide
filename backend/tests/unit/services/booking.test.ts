@@ -125,25 +125,81 @@ describe('BookingService', () => {
 
 			const result = await BookingService.createBooking(bookingData, testUserId);
 
-			expect(result.data).toEqual(mockTransaction);
+			// The transaction fields are passed straight through, plus the two the
+			// checkout page needs to settle the payment afterwards.
+			expect(result.data).toMatchObject(mockTransaction);
+			expect(result.data.user_id).toBe(testUserId.toString());
+			expect(result.data.booking_data).toEqual(expect.any(String));
+
 			expect(TransactionService.createTransaction).toHaveBeenCalledWith(
 				{
 					name: bookingData.tourist_info.name,
 					email: bookingData.tourist_info.email,
 					phone_number: bookingData.tourist_info.phone,
 				},
-				bookingData.booking_configuration.price,
+				expect.any(Number),
 				expect.objectContaining({
-					reference_type: 'booking',
+					// Nothing is booked until the money arrives, so the transaction
+					// points at a temporary reference rather than a booking id.
+					reference_type: 'pending_booking',
+					account: testUserId,
 					description: 'Get My Guide Customised Booking Payment',
+					// Server-held snapshot the webhook reads back to create the
+					// booking even if the browser never returns to verify.
+					metadata: expect.objectContaining({ tourist_info: bookingData.tourist_info }),
 				})
 			);
 
-			const booking = await BookingDB.findOne({ linked_to: testUserId });
-			expect(booking).toBeTruthy();
-			expect(booking?.status).toBe('payment-pending');
-			expect(booking?.tourist_info.name).toBe('John Doe');
-			expect(booking?.transaction_id).toBeDefined();
+			// createBooking deliberately writes no booking. The row is created once
+			// the payment settles, by fulfillCustomisedBooking — called from either
+			// the verify endpoint or the Razorpay webhook.
+			expect(await BookingDB.findOne({ linked_to: testUserId })).toBeNull();
+		});
+
+		it('should price the booking on the server and ignore the amount the client sent', async () => {
+			const bookingData = {
+				tourist_info: {
+					name: 'John Doe',
+					gender: 'male' as const,
+					phone: '+1234567890',
+					email: 'john@example.com',
+					country: 'USA',
+				},
+				travel_details: {
+					places: ['Taj Mahal'],
+					city: 'Agra',
+					date: new Date('2026-12-25'),
+					no_of_person: 2,
+					preferences: { hotel: true, taxi: false },
+				},
+				guide_preferences: {
+					guide_language: ['English'],
+					gender: 'male' as const,
+				},
+				booking_configuration: {
+					duration: 'full-day' as const,
+					foreign_language_required: true,
+					early_late_hours: false,
+					extra_city_allowances: false,
+					special_event_allowances: [],
+					// A tampered price: whatever the client claims, the charge must be
+					// the server's own calculation.
+					price: 1,
+				},
+			};
+
+			(TransactionService.createTransaction as jest.Mock).mockResolvedValue({
+				transaction_id: 'txn',
+				razorpay_options: {} as any,
+			});
+
+			await BookingService.createBooking(bookingData, testUserId);
+
+			const [, chargedAmount, options] = (TransactionService.createTransaction as jest.Mock).mock
+				.calls[0];
+			expect(chargedAmount).toBeGreaterThan(1);
+			// The snapshot the webhook trusts carries the recalculated price too.
+			expect(options.metadata.booking_configuration.price).toBe(chargedAmount);
 		});
 
 		it('should create booking with optional outstation field', async () => {
@@ -192,13 +248,22 @@ describe('BookingService', () => {
 
 			(TransactionService.createTransaction as jest.Mock).mockResolvedValue(mockTransaction);
 
-			await BookingService.createBooking(bookingData, testUserId);
+			const result = await BookingService.createBooking(bookingData, testUserId);
 
-			const booking = await BookingDB.findOne({ linked_to: testUserId });
-			expect(booking).toBeTruthy();
-			expect(booking?.booking_configuration.outstation).toBeDefined();
-			expect(booking?.booking_configuration.outstation?.distance).toBe(100);
-			expect(booking?.booking_configuration.outstation?.over_night_stay).toBe(2);
+			// No booking row exists yet, so the outstation terms have to be checked
+			// where they are actually held until payment settles: the base64 blob
+			// handed to the client, and the server-held metadata snapshot.
+			const encoded = JSON.parse(Buffer.from(result.data.booking_data, 'base64').toString());
+			expect(encoded.booking_configuration.outstation).toEqual({
+				distance: 100,
+				over_night_stay: 2,
+				accomodation_meals: true,
+				special_excursion: ['Beach Tour'],
+			});
+
+			const [, , options] = (TransactionService.createTransaction as jest.Mock).mock.calls[0];
+			expect(options.metadata.booking_configuration.outstation.distance).toBe(100);
+			expect(options.metadata.booking_configuration.outstation.over_night_stay).toBe(2);
 		});
 	});
 
@@ -440,7 +505,7 @@ describe('BookingService', () => {
 			expect(sendBookingAllocatedGuideEmail).toHaveBeenCalled();
 		});
 
-		it('should allocate guide from payment-pending status', async () => {
+		it('should refuse to allocate a guide to an unpaid booking', async () => {
 			const booking = await BookingDB.create({
 				tourist_info: {
 					name: 'John Doe',
@@ -473,9 +538,16 @@ describe('BookingService', () => {
 				status: 'payment-pending',
 			});
 
-			const result = await BookingService.allocateGuide(booking._id, testGuideId);
+			// Allocation is gated on the money having arrived: allocateGuide accepts
+			// only 'successful' or 'confirmed'. A payment-pending booking must not
+			// consume a guide's availability.
+			await expect(BookingService.allocateGuide(booking._id, testGuideId)).rejects.toThrow(
+				ServerError
+			);
 
-			expect(result.status).toBe('allocated');
+			const untouched = await BookingDB.findById(booking._id);
+			expect(untouched?.status).toBe('payment-pending');
+			expect(untouched?.allocated_guide).toBeUndefined();
 		});
 
 		it('should throw NotFoundError if booking not found', async () => {
@@ -777,8 +849,10 @@ describe('BookingService', () => {
 			expect(result).toEqual(mockTransactionStatus);
 			expect(TransactionService.getTransactionStatus).toHaveBeenCalledWith('txn-1');
 
+			// 'successful' is the paid state a booking lands in — it is what
+			// allocateGuide accepts and what the allocation flow builds on.
 			const updatedBooking = await BookingDB.findById(booking._id);
-			expect(updatedBooking?.status).toBe('confirmed');
+			expect(updatedBooking?.status).toBe('successful');
 		});
 
 		it('should not update booking status if payment not completed', async () => {

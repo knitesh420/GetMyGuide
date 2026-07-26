@@ -100,7 +100,9 @@ describe('Booking Controller', () => {
 				mockRequest.locals.data,
 				expect.any(Types.ObjectId)
 			);
-			expect(mockResponse.status).toHaveBeenCalledWith(201);
+			// 200, not 201: this endpoint creates no booking. It opens a Razorpay
+			// order; the booking resource is created after the payment settles.
+			expect(mockResponse.status).toHaveBeenCalledWith(200);
 			expect(mockResponse.json).toHaveBeenCalledWith({
 				success: true,
 				...mockTransactionData,
@@ -292,7 +294,11 @@ describe('Booking Controller', () => {
 	describe('getTransactionStatus', () => {
 		it('should return transaction status', async () => {
 			const bookingId = new Types.ObjectId();
-			mockRequest.locals = { id: bookingId };
+			// The handler resolves the caller and passes them down: the service
+			// scopes the lookup by owner, so a request with no user on locals is
+			// not a case this endpoint can ever see.
+			const mockUser = createMockUser({ userId: '507f1f77bcf86cd799439011', role: 'tourist' });
+			mockRequest.locals = { id: bookingId, user: mockUser };
 
 			const mockTransactionStatus = {
 				transaction_id: 'txn-1',
@@ -310,7 +316,11 @@ describe('Booking Controller', () => {
 				mockNext as any
 			);
 
-			expect(BookingService.getTransactionStatus).toHaveBeenCalledWith(bookingId);
+			expect(BookingService.getTransactionStatus).toHaveBeenCalledWith(
+				bookingId,
+				expect.any(Types.ObjectId),
+				'tourist'
+			);
 			expect(mockResponse.status).toHaveBeenCalledWith(200);
 			expect(mockResponse.json).toHaveBeenCalledWith({
 				success: true,
@@ -320,7 +330,8 @@ describe('Booking Controller', () => {
 
 		it('should handle NotFoundError', async () => {
 			const bookingId = new Types.ObjectId();
-			mockRequest.locals = { id: bookingId };
+			const mockUser = createMockUser({ userId: '507f1f77bcf86cd799439011', role: 'tourist' });
+			mockRequest.locals = { id: bookingId, user: mockUser };
 
 			const error = new NotFoundError('Booking not found');
 			(BookingService.getTransactionStatus as jest.Mock).mockRejectedValue(error);

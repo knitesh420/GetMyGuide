@@ -7,28 +7,37 @@ import configServer from '../../src/server-config';
 import { testSignupData, testUser } from '../helpers/fixtures';
 import { clearDatabase, connectTestDB, disconnectTestDB } from '../setup/db.setup';
 
+/**
+ * A blog entry is a YouTube video plus a description, and optionally one
+ * uploaded cover image. The video itself is never uploaded — the API takes a
+ * `youtubeUrl`, stores the extracted 11-character video id, and derives the
+ * thumbnail from it.
+ */
 describe('Blog API Integration Tests', () => {
 	let app: express.Application;
 	let adminToken: string;
 	let userToken: string;
 	const testUploadDir = path.join(__dirname, '../../static/misc');
 
-	// Create test video buffer (minimal valid MP4 header)
-	const createVideoBuffer = () => {
-		// Minimal MP4 file header
-		return Buffer.from([
-			0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0x00, 0x00, 0x02,
-			0x00, 0x69, 0x73, 0x6f, 0x6d, 0x69, 0x73, 0x6f, 0x32, 0x61, 0x76, 0x63, 0x31, 0x6d, 0x70,
-			0x34, 0x31,
-		]);
-	};
+	const YOUTUBE_URL = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+	const YOUTUBE_ID = 'dQw4w9WgXcQ';
 
-	// Create test image buffer
-	const createImageBuffer = () => {
-		return Buffer.from(
+	const createImageBuffer = () =>
+		Buffer.from(
 			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
 			'base64'
 		);
+
+	/** POST /blog as admin, as multipart (the route parses form-data). */
+	const postBlog = (
+		fields: Record<string, string>,
+		image?: Buffer,
+		token: string = adminToken
+	) => {
+		const req = request(app).post('/blog').set('Authorization', `Bearer ${token}`);
+		Object.entries(fields).forEach(([key, value]) => req.field(key, value));
+		if (image) req.attach('image', image, 'cover.jpg');
+		return req;
 	};
 
 	beforeAll(async () => {
@@ -36,30 +45,18 @@ describe('Blog API Integration Tests', () => {
 		app = express();
 		configServer(app as express.Express);
 
-		// Ensure test upload directory exists
 		if (!fs.existsSync(testUploadDir)) {
 			fs.mkdirSync(testUploadDir, { recursive: true });
 		}
-
-		// Create admin user
-		const adminData = { ...testSignupData, email: 'admin@example.com', role: 'admin' as const };
-		const adminResult = await AuthService.signup(adminData);
-		adminToken = adminResult.accessToken;
-
-		// Create regular user
-		const userResult = await AuthService.signup(testUser);
-		userToken = userResult.accessToken;
 	});
 
 	afterAll(async () => {
 		await disconnectTestDB();
-		// Clean up test files
 		if (fs.existsSync(testUploadDir)) {
-			const files = fs.readdirSync(testUploadDir);
-			files.forEach((file) => {
+			fs.readdirSync(testUploadDir).forEach((file) => {
 				try {
 					fs.unlinkSync(path.join(testUploadDir, file));
-				} catch (error) {
+				} catch {
 					// Ignore errors during cleanup
 				}
 			});
@@ -69,7 +66,6 @@ describe('Blog API Integration Tests', () => {
 	beforeEach(async () => {
 		await clearDatabase();
 
-		// Recreate admin and user after clearing database
 		const adminData = { ...testSignupData, email: 'admin@example.com', role: 'admin' as const };
 		const adminResult = await AuthService.signup(adminData);
 		adminToken = adminResult.accessToken;
@@ -79,134 +75,137 @@ describe('Blog API Integration Tests', () => {
 	});
 
 	describe('POST /blog', () => {
-		it('should successfully create a blog with video only (admin)', async () => {
-			const videoBuffer = createVideoBuffer();
-
-			const response = await request(app)
-				.post('/blog')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('description', 'Test blog description')
-				.field('hasImage', 'false')
-				.attach('video', videoBuffer, 'test-video.mp4');
+		it('should successfully create a blog from a YouTube URL (admin)', async () => {
+			const response = await postBlog({
+				description: 'Test blog description',
+				youtubeUrl: YOUTUBE_URL,
+				hasImage: 'false',
+			});
 
 			expect(response.status).toBe(201);
 			expect(response.body.success).toBe(true);
-			expect(response.body).toBeDefined();
 			expect(response.body.description).toBe('Test blog description');
 			expect(response.body.hasImage).toBe(false);
-			expect(response.body.videoFilename).toBeDefined();
+			expect(response.body.videoId).toBe(YOUTUBE_ID);
+			expect(response.body.thumbnailUrl).toBe(`https://img.youtube.com/vi/${YOUTUBE_ID}/0.jpg`);
 			expect(response.body.imageFilename).toBeUndefined();
 			expect(response.body).toHaveProperty('id');
 			expect(response.body).not.toHaveProperty('_id');
 		});
 
-		it('should successfully create a blog with video and image (admin)', async () => {
-			const videoBuffer = createVideoBuffer();
-			const imageBuffer = createImageBuffer();
-
-			const response = await request(app)
-				.post('/blog')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('description', 'Test blog with image')
-				.field('hasImage', 'true')
-				.attach('video', videoBuffer, 'test-video.mp4')
-				.attach('image', imageBuffer, 'test-image.jpg');
+		it('should successfully create a blog with a cover image (admin)', async () => {
+			const response = await postBlog(
+				{
+					description: 'Test blog with image',
+					youtubeUrl: YOUTUBE_URL,
+					hasImage: 'true',
+				},
+				createImageBuffer()
+			);
 
 			expect(response.status).toBe(201);
 			expect(response.body.success).toBe(true);
-			expect(response.body).toBeDefined();
 			expect(response.body.description).toBe('Test blog with image');
 			expect(response.body.hasImage).toBe(true);
-			expect(response.body.videoFilename).toBeDefined();
+			expect(response.body.videoId).toBe(YOUTUBE_ID);
 			expect(response.body.imageFilename).toBeDefined();
 			expect(response.body).toHaveProperty('id');
-			expect(response.body).not.toHaveProperty('_id');
+		});
+
+		it('should accept a youtu.be short link', async () => {
+			const response = await postBlog({
+				description: 'Short link',
+				youtubeUrl: `https://youtu.be/${YOUTUBE_ID}`,
+				hasImage: 'false',
+			});
+
+			expect(response.status).toBe(201);
+			expect(response.body.videoId).toBe(YOUTUBE_ID);
+		});
+
+		it('should accept a shorts link', async () => {
+			const response = await postBlog({
+				description: 'Shorts link',
+				youtubeUrl: `https://youtube.com/shorts/${YOUTUBE_ID}`,
+				hasImage: 'false',
+			});
+
+			expect(response.status).toBe(201);
+			expect(response.body.videoId).toBe(YOUTUBE_ID);
 		});
 
 		it('should return 401 when user is not authenticated', async () => {
-			const videoBuffer = createVideoBuffer();
-
 			const response = await request(app)
 				.post('/blog')
 				.field('description', 'Test blog')
-				.field('hasImage', 'false')
-				.attach('video', videoBuffer, 'test-video.mp4');
-
-			expect(response.status).toBe(401);
-		});
-
-		it('should return 401 when non-admin user tries to create blog', async () => {
-			const videoBuffer = createVideoBuffer();
-
-			const response = await request(app)
-				.post('/blog')
-				.set('Authorization', `Bearer ${userToken}`)
-				.field('description', 'Test blog')
-				.field('hasImage', 'false')
-				.attach('video', videoBuffer, 'test-video.mp4');
-
-			expect(response.status).toBe(401);
-		});
-
-		it('should return 400 when video file is missing', async () => {
-			const response = await request(app)
-				.post('/blog')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('description', 'Test blog')
+				.field('youtubeUrl', YOUTUBE_URL)
 				.field('hasImage', 'false');
 
-			expect(response.status).toBe(400);
+			expect(response.status).toBe(401);
+		});
+
+		it('should return 403 when a non-admin tries to create a blog', async () => {
+			// 403, not 401: the tourist is authenticated, they are just not allowed.
+			const response = await postBlog(
+				{ description: 'Test blog', youtubeUrl: YOUTUBE_URL, hasImage: 'false' },
+				undefined,
+				userToken
+			);
+
+			expect(response.status).toBe(403);
 		});
 
 		it('should return 400 when description is missing', async () => {
-			const videoBuffer = createVideoBuffer();
-
-			const response = await request(app)
-				.post('/blog')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('hasImage', 'false')
-				.attach('video', videoBuffer, 'test-video.mp4');
+			const response = await postBlog({ youtubeUrl: YOUTUBE_URL, hasImage: 'false' });
 
 			expect(response.status).toBe(400);
 		});
 
-		it('should return 400 when hasImage is true but image file is missing', async () => {
-			const videoBuffer = createVideoBuffer();
+		it('should return 400 when youtubeUrl is missing', async () => {
+			const response = await postBlog({ description: 'Test blog', hasImage: 'false' });
 
+			expect(response.status).toBe(400);
+		});
+
+		it('should return 400 when youtubeUrl is not a URL', async () => {
+			const response = await postBlog({
+				description: 'Test blog',
+				youtubeUrl: 'not-a-url',
+				hasImage: 'false',
+			});
+
+			expect(response.status).toBe(400);
+		});
+
+		it('should return 400 for a URL that is not a YouTube video', async () => {
+			// Passes the validator's url() check, then fails id extraction.
+			const response = await postBlog({
+				description: 'Test blog',
+				youtubeUrl: 'https://example.com/video',
+				hasImage: 'false',
+			});
+
+			expect(response.status).toBe(400);
+		});
+
+		it('should return 400 when hasImage is true but no image is uploaded', async () => {
+			const response = await postBlog({
+				description: 'Test blog',
+				youtubeUrl: YOUTUBE_URL,
+				hasImage: 'true',
+			});
+
+			expect(response.status).toBe(400);
+		});
+
+		it('should return 400 when the uploaded image is not an allowed type', async () => {
 			const response = await request(app)
 				.post('/blog')
 				.set('Authorization', `Bearer ${adminToken}`)
 				.field('description', 'Test blog')
+				.field('youtubeUrl', YOUTUBE_URL)
 				.field('hasImage', 'true')
-				.attach('video', videoBuffer, 'test-video.mp4');
-
-			expect(response.status).toBe(400);
-		});
-
-		it('should return 400 when non-video file is uploaded as video', async () => {
-			const imageBuffer = createImageBuffer();
-
-			const response = await request(app)
-				.post('/blog')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('description', 'Test blog')
-				.field('hasImage', 'false')
-				.attach('video', imageBuffer, 'test-image.jpg');
-
-			expect(response.status).toBe(400);
-		});
-
-		it('should return 400 when invalid image type is uploaded', async () => {
-			const videoBuffer = createVideoBuffer();
-			const textBuffer = Buffer.from('This is a text file');
-
-			const response = await request(app)
-				.post('/blog')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('description', 'Test blog')
-				.field('hasImage', 'true')
-				.attach('video', videoBuffer, 'test-video.mp4')
-				.attach('image', textBuffer, 'test.txt');
+				.attach('image', Buffer.from('This is a text file'), 'test.txt');
 
 			expect(response.status).toBe(400);
 		});
@@ -214,26 +213,16 @@ describe('Blog API Integration Tests', () => {
 
 	describe('GET /blog', () => {
 		beforeEach(async () => {
-			// Create some test blogs
-			const videoBuffer = createVideoBuffer();
-			const imageBuffer = createImageBuffer();
+			await postBlog({
+				description: 'First blog',
+				youtubeUrl: YOUTUBE_URL,
+				hasImage: 'false',
+			}).expect(201);
 
-			// Create blog 1
-			await request(app)
-				.post('/blog')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('description', 'First blog')
-				.field('hasImage', 'false')
-				.attach('video', videoBuffer, 'test-video-1.mp4');
-
-			// Create blog 2
-			await request(app)
-				.post('/blog')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('description', 'Second blog')
-				.field('hasImage', 'true')
-				.attach('video', videoBuffer, 'test-video-2.mp4')
-				.attach('image', imageBuffer, 'test-image-2.jpg');
+			await postBlog(
+				{ description: 'Second blog', youtubeUrl: YOUTUBE_URL, hasImage: 'true' },
+				createImageBuffer()
+			).expect(201);
 		});
 
 		it('should get all blogs (public route)', async () => {
@@ -241,11 +230,11 @@ describe('Blog API Integration Tests', () => {
 
 			expect(response.status).toBe(200);
 			expect(response.body.success).toBe(true);
-			expect(response.body).toBeDefined();
 			expect(response.body.blogs).toBeInstanceOf(Array);
 			expect(response.body.blogs.length).toBe(2);
 			expect(response.body.blogs[0]).toHaveProperty('description');
-			expect(response.body.blogs[0]).toHaveProperty('videoFilename');
+			expect(response.body.blogs[0]).toHaveProperty('videoId');
+			expect(response.body.blogs[0]).toHaveProperty('thumbnailUrl');
 			expect(response.body.blogs[0]).toHaveProperty('id');
 			expect(response.body.blogs[0]).not.toHaveProperty('_id');
 		});
@@ -255,7 +244,6 @@ describe('Blog API Integration Tests', () => {
 
 			expect(response.status).toBe(200);
 			expect(response.body.blogs.length).toBeGreaterThan(1);
-			// Most recent should be first
 			const firstDate = new Date(response.body.blogs[0].createdAt);
 			const secondDate = new Date(response.body.blogs[1].createdAt);
 			expect(firstDate.getTime()).toBeGreaterThanOrEqual(secondDate.getTime());
@@ -266,16 +254,14 @@ describe('Blog API Integration Tests', () => {
 		let blogId: string;
 
 		beforeEach(async () => {
-			const videoBuffer = createVideoBuffer();
-			const imageBuffer = createImageBuffer();
-
-			const response = await request(app)
-				.post('/blog')
-				.set('Authorization', `Bearer ${adminToken}`)
-				.field('description', 'Test blog for get by id')
-				.field('hasImage', 'true')
-				.attach('video', videoBuffer, 'test-video.mp4')
-				.attach('image', imageBuffer, 'test-image.jpg');
+			const response = await postBlog(
+				{
+					description: 'Test blog for get by id',
+					youtubeUrl: YOUTUBE_URL,
+					hasImage: 'true',
+				},
+				createImageBuffer()
+			).expect(201);
 
 			blogId = response.body.id;
 		});
@@ -285,11 +271,10 @@ describe('Blog API Integration Tests', () => {
 
 			expect(response.status).toBe(200);
 			expect(response.body.success).toBe(true);
-			expect(response.body).toBeDefined();
 			expect(response.body.id).toBe(blogId);
 			expect(response.body.description).toBe('Test blog for get by id');
 			expect(response.body.hasImage).toBe(true);
-			expect(response.body).toHaveProperty('id');
+			expect(response.body.videoId).toBe(YOUTUBE_ID);
 			expect(response.body).not.toHaveProperty('_id');
 		});
 
@@ -304,6 +289,45 @@ describe('Blog API Integration Tests', () => {
 			const response = await request(app).get(`/blog/${fakeId}`);
 
 			expect(response.status).toBe(404);
+		});
+	});
+
+	describe('DELETE /blog/:id', () => {
+		let blogId: string;
+
+		beforeEach(async () => {
+			const response = await postBlog({
+				description: 'Blog to delete',
+				youtubeUrl: YOUTUBE_URL,
+				hasImage: 'false',
+			}).expect(201);
+
+			blogId = response.body.id;
+		});
+
+		it('should delete a blog (admin)', async () => {
+			const response = await request(app)
+				.delete(`/blog/${blogId}`)
+				.set('Authorization', `Bearer ${adminToken}`);
+
+			expect(response.status).toBe(200);
+			expect(response.body.success).toBe(true);
+
+			await request(app).get(`/blog/${blogId}`).expect(404);
+		});
+
+		it('should return 403 when a non-admin tries to delete', async () => {
+			const response = await request(app)
+				.delete(`/blog/${blogId}`)
+				.set('Authorization', `Bearer ${userToken}`);
+
+			expect(response.status).toBe(403);
+		});
+
+		it('should return 401 when unauthenticated', async () => {
+			const response = await request(app).delete(`/blog/${blogId}`);
+
+			expect(response.status).toBe(401);
 		});
 	});
 });

@@ -1,3 +1,11 @@
+// tests/setup/mocks.ts replaces `cloudinary` and `@config/cloudinary` with
+// stubs for every other suite. This one must not get them: it asserts that the
+// route builds a *signed* Admin-API download URL, which only the real SDK can
+// produce — and the stub has no `config()` at all, so the beforeAll below died
+// with "cloudinary.config is not a function".
+jest.unmock('cloudinary');
+jest.unmock('@config/cloudinary');
+
 import cloudinary from '@config/cloudinary';
 import { AccountDB, GuideDB } from '@mongo';
 import AuthService from '@services/auth';

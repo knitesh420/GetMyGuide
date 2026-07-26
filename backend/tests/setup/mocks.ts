@@ -35,6 +35,10 @@ jest.mock('@utils/cloudinaryUpload', () => ({
 jest.mock('@config/cloudinary', () => ({
 	__esModule: true,
 	default: {
+		// A plain function, not jest.fn: `config` is called at module load by the
+		// real config and by suites that need credentials in place, so it has to
+		// survive resetMocks like the raw-package stub below does.
+		config: () => undefined,
 		uploader: {
 			destroy: jest.fn(),
 			upload: jest.fn(),
@@ -66,7 +70,16 @@ jest.mock('cloudinary', () => {
  * before every test — leaving them returning `undefined` and callers blowing up
  * on `result.secure_url`. Re-installing them in beforeEach is what makes the
  * doubles survive that reset.
+ *
+ * Every write here is guarded by isMock(). A suite is allowed to opt out of
+ * these doubles — guideIdentityDocumentView.test.ts calls jest.unmock to get
+ * the real Cloudinary URL signing it asserts on — and this shared hook must not
+ * then explode on the real module with "destroy.mockResolvedValue is not a
+ * function", failing every test in that file.
  */
+const isMock = (fn: unknown): fn is jest.Mock =>
+	typeof fn === 'function' && '_isMockFunction' in fn;
+
 beforeEach(() => {
 	/* eslint-disable @typescript-eslint/no-var-requires */
 	const uploadToCloudinary = require('@utils/cloudinaryUpload').default;
@@ -74,19 +87,25 @@ beforeEach(() => {
 	/* eslint-enable @typescript-eslint/no-var-requires */
 
 	let counter = 0;
-	uploadToCloudinary.mockImplementation(async (_buffer: Buffer, folder: string) => {
-		counter += 1;
-		return {
-			secure_url: `https://res.cloudinary.com/test/${folder}/asset-${counter}.jpg`,
-			public_id: `${folder}/asset-${counter}`,
-		};
-	});
+	if (isMock(uploadToCloudinary)) {
+		uploadToCloudinary.mockImplementation(async (_buffer: Buffer, folder: string) => {
+			counter += 1;
+			return {
+				secure_url: `https://res.cloudinary.com/test/${folder}/asset-${counter}.jpg`,
+				public_id: `${folder}/asset-${counter}`,
+			};
+		});
+	}
 
-	cloudinary.uploader.destroy.mockResolvedValue({ result: 'ok' });
-	cloudinary.uploader.upload.mockResolvedValue({
-		secure_url: 'https://res.cloudinary.com/test/asset.jpg',
-		public_id: 'test/asset',
-	});
+	if (isMock(cloudinary.uploader.destroy)) {
+		cloudinary.uploader.destroy.mockResolvedValue({ result: 'ok' });
+	}
+	if (isMock(cloudinary.uploader.upload)) {
+		cloudinary.uploader.upload.mockResolvedValue({
+			secure_url: 'https://res.cloudinary.com/test/asset.jpg',
+			public_id: 'test/asset',
+		});
+	}
 });
 
 export {};

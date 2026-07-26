@@ -133,18 +133,97 @@ describe('Booking API Integration Tests', () => {
 			const response = await request(app)
 				.post('/booking/customised-booking')
 				.set('Authorization', `Bearer ${touristToken}`)
+				.set('x-idempotency-key', 'booking-create-0001')
 				.send(bookingData);
 
-			expect(response.status).toBe(201);
+			// 200, not 201: this opens a Razorpay order. Nothing is created yet.
+			expect(response.status).toBe(200);
 			expect(response.body.success).toBe(true);
-			expect(response.body).toBeDefined();
 			expect(response.body.transaction_id).toBe('test-txn-id');
+			expect(response.body.booking_data).toEqual(expect.any(String));
+			expect(response.body.user_id).toBe(touristId);
 			expect(TransactionService.createTransaction).toHaveBeenCalled();
 
-			const booking = await BookingDB.findOne({ linked_to: touristId });
-			expect(booking).toBeTruthy();
-			expect(booking?.status).toBe('payment-pending');
-			expect(booking?.tourist_info.name).toBe('John Doe');
+			// The booking row is written only once the payment settles — by the
+			// verify endpoint or the Razorpay webhook, not here.
+			expect(await BookingDB.findOne({ linked_to: touristId })).toBeNull();
+		});
+
+		it('should require an idempotency key', async () => {
+			const response = await request(app)
+				.post('/booking/customised-booking')
+				.set('Authorization', `Bearer ${touristToken}`)
+				.send({
+					tourist_info: {
+						name: 'John Doe',
+						gender: 'male',
+						phone: '+1234567890',
+						email: 'john@example.com',
+						country: 'USA',
+					},
+					travel_details: {
+						places: ['Taj Mahal'],
+						city: 'Agra',
+						date: '2026-12-25',
+						no_of_person: 2,
+						preferences: { hotel: true, taxi: false },
+					},
+					guide_preferences: { guide_language: ['English'], gender: 'male' },
+					booking_configuration: {
+						duration: 'full-day',
+						foreign_language_required: true,
+						early_late_hours: false,
+						extra_city_allowances: false,
+						special_event_allowances: [],
+						price: 5000,
+					},
+				});
+
+			expect(response.status).toBe(400);
+		});
+
+		it('should replay the first response for a repeated idempotency key', async () => {
+			const bookingData = {
+				tourist_info: {
+					name: 'John Doe',
+					gender: 'male',
+					phone: '+1234567890',
+					email: 'john@example.com',
+					country: 'USA',
+				},
+				travel_details: {
+					places: ['Taj Mahal'],
+					city: 'Agra',
+					date: '2026-12-25',
+					no_of_person: 2,
+					preferences: { hotel: true, taxi: false },
+				},
+				guide_preferences: { guide_language: ['English'], gender: 'male' },
+				booking_configuration: {
+					duration: 'full-day',
+					foreign_language_required: true,
+					early_late_hours: false,
+					extra_city_allowances: false,
+					special_event_allowances: [],
+					price: 5000,
+				},
+			};
+
+			const send = () =>
+				request(app)
+					.post('/booking/customised-booking')
+					.set('Authorization', `Bearer ${touristToken}`)
+					.set('x-idempotency-key', 'booking-create-dup1')
+					.send(bookingData);
+
+			const first = await send();
+			const second = await send();
+
+			expect(first.status).toBe(200);
+			expect(second.status).toBe(200);
+			// One Razorpay order for two identical submissions — a double-tap on
+			// "Pay" must not open (or charge for) a second order.
+			expect(TransactionService.createTransaction).toHaveBeenCalledTimes(1);
 		});
 
 		it('should create booking with optional outstation field', async () => {
@@ -189,12 +268,16 @@ describe('Booking API Integration Tests', () => {
 			const response = await request(app)
 				.post('/booking/customised-booking')
 				.set('Authorization', `Bearer ${touristToken}`)
+				.set('x-idempotency-key', 'booking-create-0002')
 				.send(bookingData);
 
-			expect(response.status).toBe(201);
-			const booking = await BookingDB.findOne({ linked_to: touristId });
-			expect(booking?.booking_configuration.outstation).toBeDefined();
-			expect(booking?.booking_configuration.outstation?.distance).toBe(100);
+			expect(response.status).toBe(200);
+
+			// Until payment settles the outstation terms live in the encoded
+			// snapshot handed back to the client, not in a booking row.
+			const encoded = JSON.parse(Buffer.from(response.body.booking_data, 'base64').toString());
+			expect(encoded.booking_configuration.outstation.distance).toBe(100);
+			expect(encoded.booking_configuration.outstation.over_night_stay).toBe(2);
 		});
 
 		it('should fail without authentication', async () => {
@@ -350,7 +433,8 @@ describe('Booking API Integration Tests', () => {
 				.get('/booking/')
 				.set('Authorization', `Bearer ${touristToken}`);
 
-			expect(response.status).toBe(401);
+			// 403, not 401: the tourist is authenticated but outranked.
+			expect(response.status).toBe(403);
 		});
 	});
 
@@ -442,7 +526,8 @@ describe('Booking API Integration Tests', () => {
 				.set('Authorization', `Bearer ${touristToken}`)
 				.send({ guide_id: guideId });
 
-			expect(response.status).toBe(401);
+			// 403, not 401: allocation is admin-only and the caller is a tourist.
+			expect(response.status).toBe(403);
 		});
 	});
 
@@ -543,9 +628,10 @@ describe('Booking API Integration Tests', () => {
 			expect(response.body.order_status).toBe('paid');
 			expect(TransactionService.getTransactionStatus).toHaveBeenCalledWith('test-txn-id');
 
-			// Check that booking status was updated
+			// Reading a paid transaction promotes the booking out of
+			// payment-pending into 'successful' — the paid state allocation needs.
 			const updatedBooking = await BookingDB.findById(booking._id);
-			expect(updatedBooking?.status).toBe('confirmed');
+			expect(updatedBooking?.status).toBe('successful');
 		});
 
 		it('should fail without authentication', async () => {
