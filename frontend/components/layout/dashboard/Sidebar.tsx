@@ -240,23 +240,35 @@ export default function Sidebar({
         ${isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"}
         lg:sticky lg:z-30 lg:h-full lg:translate-x-0 lg:shadow-none`}
       >
+        {/* The drawer's close control, built from the same 40px rounded-xl box
+            as the header's — this panel only ever appears below lg, i.e. on
+            exactly the screens where the tap target matters. The offset tracks
+            the brand block's height so the box stays centred in it:
+            (64-40)/2 = 12px, (72-40)/2 = 16px. Never visible at lg, so there's
+            no third step. */}
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 p-2 text-slate-500 hover:text-slate-800 lg:hidden"
+          aria-label="Close menu"
+          className="hover:border-primary/30 hover:text-primary absolute top-3 right-4 flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white/60 text-slate-500 transition-colors sm:top-4 lg:hidden"
         >
-          <X className="h-6 w-6" />
+          <X className="h-4 w-4" />
         </button>
 
-        {/* h-18 (72px) and px-6 match the dashboard Header, so the brand sits on
-            the same line as the page title — and, on the admin panel, the accent
-            rule the layout draws across both columns lands on this block's
-            bottom edge. The border is only needed below lg, where this panel is
-            an overlay drawer (z-70) floating above the shell rather than a
-            column sitting flush under that rule. */}
-        <div className="flex h-18 shrink-0 items-center border-b px-6 lg:border-b-0">
+        {/* `h-16 sm:h-18 lg:h-20` mirrors the dashboard Header exactly, so the
+            brand sits on the same line as the page title at every width. Change
+            one and you must change the other. The border is only needed below
+            lg, where this panel is an overlay drawer (z-70) floating above the
+            shell rather than a column standing beside it. */}
+        <div className="flex h-16 shrink-0 items-center border-b px-6 sm:h-18 lg:h-20 lg:border-b-0">
+          {/* text-xl, not text-2xl: at 24px the wordmark's 32px line box filled
+              the block to within 16px of its edges and sat visually flush
+              against the rule beneath it. 20px drops the line box to 28px,
+              clearing 18px above and below in the 64px block and 22px in the
+              72px one — the same air the header's 32px control boxes get, which
+              is what puts the brand and the page title on one rhythm. */}
           <Link
             href="/"
-            className="text-2xl font-extrabold tracking-tight text-slate-900"
+            className="text-xl font-extrabold tracking-tight text-slate-900"
           >
             GetMyGuide
           </Link>

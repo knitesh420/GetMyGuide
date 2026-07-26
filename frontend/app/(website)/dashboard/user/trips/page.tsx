@@ -73,8 +73,8 @@ export default function UserTripsPage() {
           className="space-y-6"
         >
           <span className="sr-only">Loading your trips…</span>
-          <Skeleton className="h-44 rounded-2xl" />
-          <Skeleton className="h-44 rounded-2xl" />
+          <Skeleton className="h-44 rounded-xl" />
+          <Skeleton className="h-44 rounded-xl" />
         </div>
       ) : myTrips.length === 0 ? (
         <Card className={CARD}>
@@ -95,14 +95,14 @@ export default function UserTripsPage() {
             return (
               <Card
                 key={trip._id}
-                className={cn(CARD, "gap-0 p-6 lg:p-8")}
+                className={cn(CARD, "gap-0 p-5")}
               >
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0 space-y-1">
-                    <h2 className="truncate text-xl font-semibold text-gray-900">
+                    <h2 className="truncate text-base font-semibold text-slate-900">
                       {booking?.travel_details.city ?? "Trip"}
                     </h2>
-                    <p className="truncate font-mono text-xs text-gray-500">
+                    <p className="truncate font-mono text-xs text-slate-500">
                       {trip.tripCode ? `${trip.tripCode} · ` : ""}
                       {booking?.bookingCode ?? "—"}
                     </p>
@@ -110,16 +110,16 @@ export default function UserTripsPage() {
                   <TripStatusBadge status={trip.status} />
                 </div>
 
-                <dl className="mt-6 grid grid-cols-1 gap-5 border-t border-gray-200 pt-6 sm:grid-cols-2">
+                <dl className="mt-5 grid grid-cols-1 gap-4 border-t border-slate-200 pt-5 sm:grid-cols-2">
                   <div className="space-y-0.5">
-                    <dt className="text-xs text-gray-500">Travel date</dt>
-                    <dd className="text-sm font-medium text-gray-900">
+                    <dt className="text-xs font-medium text-slate-400">Travel date</dt>
+                    <dd className="text-sm font-semibold text-slate-900">
                       {formatDate(booking?.travel_details.date)}
                     </dd>
                   </div>
                   <div className="space-y-0.5">
-                    <dt className="text-xs text-gray-500">Guide</dt>
-                    <dd className="text-sm font-medium text-gray-900">
+                    <dt className="text-xs font-medium text-slate-400">Guide</dt>
+                    <dd className="text-sm font-semibold text-slate-900">
                       {guide?.name ?? "Not assigned yet"}
                     </dd>
                   </div>
@@ -127,10 +127,10 @@ export default function UserTripsPage() {
 
                 <p
                   className={cn(
-                    "mt-6 rounded-xl border p-4 text-sm leading-relaxed",
+                    "mt-5 rounded-xl border p-4 text-sm leading-relaxed",
                     isComplete
                       ? "border-green-200 bg-green-50 font-medium text-green-700"
-                      : "border-gray-200 bg-gray-50 text-gray-700",
+                      : "border-slate-200 bg-slate-50 text-slate-700",
                   )}
                 >
                   {STATUS_DESCRIPTION[trip.status]}

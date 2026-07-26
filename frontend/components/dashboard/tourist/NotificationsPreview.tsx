@@ -12,7 +12,7 @@ import type { NotificationItem } from "@/lib/data";
 import { SectionCard } from "./SectionCard";
 import { EmptyState } from "./EmptyState";
 import { formatRelative } from "./format";
-import { ROW_PADDING } from "./ui";
+import { ROW_DIVIDER, ROW_PADDING } from "./ui";
 import { cn } from "@/lib/utils";
 
 function NotificationRow({
@@ -29,7 +29,7 @@ function NotificationRow({
       className={cn(
         "flex items-start justify-between gap-3 transition-colors",
         ROW_PADDING,
-        unread ? "bg-teal-50" : "hover:bg-gray-50",
+        unread ? "bg-teal-50/70" : "hover:bg-slate-50",
       )}
     >
       {/* The unread marker is a colour cue, so it carries a text equivalent for
@@ -44,7 +44,7 @@ function NotificationRow({
 
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-semibold leading-tight text-gray-900">
+          <p className="text-sm leading-tight font-semibold text-slate-900">
             {notification.title}
           </p>
           {unread && (
@@ -53,10 +53,13 @@ function NotificationRow({
             </Badge>
           )}
         </div>
-        <p className="line-clamp-2 text-sm leading-relaxed text-gray-700">
+        <p className="line-clamp-2 text-sm leading-relaxed text-slate-600">
           {notification.message}
         </p>
-        <time dateTime={notification.createdAt} className="block text-xs text-gray-500">
+        <time
+          dateTime={notification.createdAt}
+          className="block text-xs text-slate-400"
+        >
           {formatRelative(notification.createdAt)}
         </time>
       </div>
@@ -98,7 +101,7 @@ export function NotificationsPreview({
           <Button
             size="sm"
             variant="ghost"
-            className="h-9 rounded-lg px-2.5 text-xs font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+            className="h-8 rounded-lg px-2.5 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
             onClick={() => dispatch(markAllNotificationsRead())}
           >
             Mark all read
@@ -113,7 +116,7 @@ export function NotificationsPreview({
           description="Updates about your bookings, guides and trips will show up here."
         />
       ) : (
-        <ul className="divide-y divide-gray-200">
+        <ul className={ROW_DIVIDER}>
           {notifications.map((notification) => (
             <NotificationRow
               key={notification._id}

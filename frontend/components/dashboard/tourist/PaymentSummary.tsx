@@ -23,12 +23,12 @@ function Figure({
   tone?: "danger";
 }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-      <dt className="text-sm font-medium text-gray-500">{label}</dt>
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <dt className="text-xs font-medium text-slate-400">{label}</dt>
       <dd
         className={cn(
-          "mt-1 text-xl font-bold tracking-tight tabular-nums lg:text-2xl",
-          tone === "danger" ? "text-red-600" : "text-gray-900",
+          "mt-2 truncate text-2xl leading-none font-bold tracking-tight tabular-nums",
+          tone === "danger" ? "text-red-600" : "text-slate-900",
         )}
       >
         {value}
@@ -76,21 +76,21 @@ function FailedPayments({ payments }: { payments: FailedPaymentEntry[] }) {
             className="flex flex-col gap-1 border-t border-red-200/70 pt-3 first:border-0 first:pt-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
           >
             <div className="min-w-0">
-              <p className="text-sm font-medium text-gray-900">
+              <p className="text-sm font-medium text-slate-900">
                 {formatCurrency(payment.amount, payment.currency)}
-                <span className="font-normal text-gray-500">
+                <span className="font-normal text-slate-500">
                   {" · "}
                   {ATTEMPT_LABEL[payment.referenceType] ?? "Payment"}
                 </span>
               </p>
-              <p className="mt-0.5 text-xs text-gray-600">
+              <p className="mt-0.5 text-xs text-slate-600">
                 {payment.failure?.description ??
                   payment.failure?.reason ??
                   (payment.status === "pending_verification"
                     ? "Paid, but we're still confirming it — our team is on it."
                     : "The payment was not completed.")}
               </p>
-              <p className="mt-0.5 text-xs text-gray-400">
+              <p className="mt-0.5 text-xs text-slate-400">
                 {formatDate(payment.attemptedAt)}
               </p>
             </div>
@@ -181,7 +181,7 @@ export function PaymentSummary({
           action={{ label: "Explore Tours", href: "/services" }}
         />
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {failed.length > 0 && <FailedPayments payments={failed} />}
 
           <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -204,12 +204,12 @@ export function PaymentSummary({
           </dl>
 
           {latest && (
-            <div className="flex flex-col gap-4 rounded-xl border border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-4 rounded-xl border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0 space-y-0.5">
-                <p className="truncate font-mono text-sm font-medium text-gray-900">
+                <p className="truncate font-mono text-sm font-medium text-slate-900">
                   {latest.invoiceNumber}
                 </p>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-slate-500">
                   {latest.destination ? `${latest.destination} · ` : ""}
                   Paid {formatDate(latest.paidAt)}
                 </p>
@@ -219,7 +219,7 @@ export function PaymentSummary({
                 variant="outline"
                 onClick={downloadLatest}
                 disabled={downloading}
-                className="h-9 shrink-0 rounded-lg border-gray-200 text-gray-700 hover:bg-teal-500/10 hover:text-teal-700"
+                className="h-9 shrink-0 rounded-lg border-slate-200 text-slate-700 hover:bg-teal-500/10 hover:text-teal-700"
               >
                 {downloading ? (
                   <Loader2

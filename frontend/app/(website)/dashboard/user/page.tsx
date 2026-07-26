@@ -54,9 +54,9 @@ export default function UserDashboardPage() {
   if (error && !overview) {
     return (
       <div className={PAGE}>
-        <Alert variant="destructive" className="rounded-2xl p-6">
+        <Alert variant="destructive" className="rounded-xl p-5">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle className="text-lg font-semibold">
+          <AlertTitle className="font-semibold">
             Could not load your dashboard
           </AlertTitle>
           <AlertDescription className="flex flex-col items-start gap-4">
@@ -108,15 +108,18 @@ export default function UserDashboardPage() {
       </section>
 
       {/* Previews of the detail pages on the left; the at-a-glance widgets that
-          have no page of their own on the right. */}
-      <div className="grid gap-6 lg:gap-8 xl:grid-cols-3">
-        <div className="space-y-8 lg:space-y-10 xl:col-span-2">
+          have no page of their own on the right. One column until xl, where
+          there's finally room for a 2:1 split without either side going narrow.
+          The gap and the in-column rhythm are both 24px, so a card's neighbour
+          sits the same distance away whichever direction it's in. */}
+      <div className="grid gap-6 xl:grid-cols-3">
+        <div className="space-y-6 xl:col-span-2">
           <RecentBookingsPreview bookings={recentBookings} />
           <RecentTripsPreview trips={recentTrips} />
           <QuickActions />
         </div>
 
-        <div className="space-y-8 lg:space-y-10">
+        <div className="space-y-6">
           <NotificationsPreview
             notifications={notifications}
             unreadCount={stats.unreadNotifications}

@@ -101,14 +101,14 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <Card className={cn(CARD, "gap-0 p-6 lg:p-8")}>
-      <h2 className="flex items-center gap-2 text-xl font-semibold text-gray-900">
+    <Card className={cn(CARD, "gap-0 p-5")}>
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
         {Icon && (
-          <Icon aria-hidden="true" className="h-5 w-5 shrink-0 text-teal-600" />
+          <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" />
         )}
         {title}
       </h2>
-      <div className="mt-6">{children}</div>
+      <div className="mt-4">{children}</div>
     </Card>
   );
 }
@@ -124,10 +124,10 @@ function DetailItem({
 }) {
   return (
     <div className="flex items-start gap-3">
-      <Icon aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-teal-600" />
+      <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
       <div className="min-w-0 space-y-0.5">
-        <p className="text-xs text-gray-500">{label}</p>
-        <p className="text-sm font-medium break-words text-gray-900">
+        <p className="text-xs font-medium text-slate-400">{label}</p>
+        <p className="text-sm font-semibold break-words text-slate-900">
           {value || "N/A"}
         </p>
       </div>
@@ -151,12 +151,12 @@ function Field({
 }) {
   return (
     <div className="min-w-0 space-y-1">
-      <dt className="text-xs font-medium uppercase tracking-wide text-gray-500">
+      <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
         {label}
       </dt>
       <dd
         className={cn(
-          "text-sm font-medium break-words text-gray-900",
+          "text-sm font-medium break-words text-slate-900",
           mono && "font-mono",
         )}
       >
@@ -242,8 +242,8 @@ export default function BookingDetailPage() {
           <Skeleton className="h-10 w-72" />
           <Skeleton className="h-5 w-56" />
         </div>
-        <Skeleton className="h-48 rounded-2xl" />
-        <Skeleton className="h-64 rounded-2xl" />
+        <Skeleton className="h-48 rounded-xl" />
+        <Skeleton className="h-64 rounded-xl" />
       </div>
     );
   }
@@ -251,14 +251,14 @@ export default function BookingDetailPage() {
   if (error) {
     return (
       <div className={PAGE_NARROW}>
-        <Card className={cn(CARD, "p-6 lg:p-8")}>
+        <Card className={cn(CARD, "p-5")}>
           <div className="flex flex-col items-center gap-4 py-8 text-center">
             <AlertCircle aria-hidden="true" className="h-12 w-12 text-red-600" />
             <div className="space-y-1.5">
-              <p className="text-lg font-semibold text-gray-900">
+              <p className="text-lg font-semibold text-slate-900">
                 Could not load this booking
               </p>
-              <p className="mx-auto max-w-sm text-sm leading-relaxed text-gray-500">
+              <p className="mx-auto max-w-sm text-sm leading-relaxed text-slate-500">
                 {error}
               </p>
             </div>
@@ -274,9 +274,9 @@ export default function BookingDetailPage() {
   if (!booking) {
     return (
       <div className={PAGE_NARROW}>
-        <Card className={cn(CARD, "p-6 lg:p-8")}>
+        <Card className={cn(CARD, "p-5")}>
           <div className="flex flex-col items-center gap-4 py-8 text-center">
-            <p className="text-lg font-semibold text-gray-900">
+            <p className="text-lg font-semibold text-slate-900">
               Booking not found
             </p>
             <Button asChild className="h-10 rounded-lg px-5">
@@ -302,7 +302,7 @@ export default function BookingDetailPage() {
         <Button
           asChild
           variant="outline"
-          className="h-9 rounded-lg border-gray-200 text-gray-700 hover:bg-teal-500/10 hover:text-teal-700"
+          className="h-9 rounded-lg border-slate-200 text-slate-700 hover:bg-teal-500/10 hover:text-teal-700"
         >
           <Link href="/dashboard/user/my-bookings">
             <ArrowLeft aria-hidden="true" className="mr-1.5 h-4 w-4" />
@@ -313,16 +313,16 @@ export default function BookingDetailPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-2">
             <h1 className={PAGE_TITLE}>{booking.travel_details.city}</h1>
-            <p className="flex items-start gap-2 text-sm leading-relaxed text-gray-500 md:text-base">
+            <p className="flex items-start gap-2 text-sm leading-relaxed text-slate-500 md:text-base">
               <MapPin aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{booking.travel_details.places.join(", ")}</span>
             </p>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-slate-500">
               Booking ID:{" "}
-              <span className="font-mono font-medium text-gray-900">
+              <span className="font-mono font-medium text-slate-900">
                 {booking.bookingCode ?? "—"}
               </span>
-              <span className="mx-2 text-gray-300">·</span>
+              <span className="mx-2 text-slate-300">·</span>
               Booked on {formatDate(booking.createdAt)}
             </p>
           </div>
@@ -336,12 +336,12 @@ export default function BookingDetailPage() {
         </div>
       </div>
 
-      <Alert className="rounded-2xl border-teal-200 bg-teal-50 p-6">
+      <Alert className="rounded-xl border-teal-200 bg-teal-50 p-5">
         <CheckCircle className="h-4 w-4 text-teal-600" />
-        <AlertTitle className="font-semibold text-gray-900">
+        <AlertTitle className="font-semibold text-slate-900">
           Booking Received
         </AlertTitle>
-        <AlertDescription className="text-sm leading-relaxed text-gray-700">
+        <AlertDescription className="text-sm leading-relaxed text-slate-700">
           Your custom tour guide request has been recorded. Our team will use
           these details to coordinate the guide assignment.
         </AlertDescription>
@@ -508,7 +508,7 @@ export default function BookingDetailPage() {
       {/* Payment Details — sourced from the tourist's own invoice */}
       <Section title="Payment Details" icon={CreditCard}>
         {invoiceLoading ? (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="flex items-center gap-2 text-sm text-slate-500">
             <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
             Loading payment details…
           </div>
@@ -582,7 +582,7 @@ export default function BookingDetailPage() {
               <Field label="Transaction ID" value={booking.transaction_id} mono />
               <Field label="Amount" value={formatCurrency(config.price)} />
             </Fields>
-            <p className="text-sm leading-relaxed text-gray-500">
+            <p className="text-sm leading-relaxed text-slate-500">
               A detailed invoice isn&apos;t available yet. If you just paid, it
               may take a moment to generate — check back shortly.
             </p>

@@ -19,7 +19,7 @@ function SuccessMessage() {
     <div className="flex flex-col items-center gap-6 text-center">
       <span
         aria-hidden="true"
-        className="flex h-20 w-20 items-center justify-center rounded-2xl bg-green-500/10 ring-1 ring-inset ring-green-500/20"
+        className="flex h-20 w-20 items-center justify-center rounded-xl bg-green-500/10 ring-1 ring-inset ring-green-500/20"
       >
         <CheckCircle className="h-10 w-10 text-green-600" />
       </span>
@@ -28,16 +28,16 @@ function SuccessMessage() {
         <h1 className={PAGE_TITLE}>Payment Successful!</h1>
 
         {amount && (
-          <p className="text-sm text-gray-500 md:text-base">
+          <p className="text-sm text-slate-500 md:text-base">
             You have successfully paid{" "}
-            <span className="text-2xl font-bold tracking-tight text-gray-900 lg:text-3xl">
+            <span className="text-2xl font-bold tracking-tight text-slate-900">
               {formatCurrency(Number(amount))}
             </span>
             .
           </p>
         )}
 
-        <p className="mx-auto max-w-md text-sm leading-relaxed text-gray-700 md:text-base">
+        <p className="mx-auto max-w-md text-sm leading-relaxed text-slate-700 md:text-base">
           Your booking status has been updated. A confirmation has been sent to
           your email.
         </p>
@@ -53,7 +53,7 @@ function SuccessMessage() {
         <Button
           asChild
           variant="outline"
-          className="h-10 rounded-lg border-gray-200 px-5 text-gray-700 hover:bg-teal-500/10 hover:text-teal-700"
+          className="h-10 rounded-lg border-slate-200 px-5 text-slate-700 hover:bg-teal-500/10 hover:text-teal-700"
         >
           <Link href="/dashboard/user">Back to Dashboard</Link>
         </Button>
@@ -72,7 +72,7 @@ function SuccessSkeleton() {
       className="flex flex-col items-center gap-6"
     >
       <span className="sr-only">Confirming your payment…</span>
-      <Skeleton className="h-20 w-20 rounded-2xl" />
+      <Skeleton className="h-20 w-20 rounded-xl" />
       <div className="flex flex-col items-center gap-3">
         <Skeleton className="h-10 w-72" />
         <Skeleton className="h-5 w-56" />
@@ -89,7 +89,7 @@ function SuccessSkeleton() {
 export default function PaymentSuccessPage() {
   return (
     <div className="mx-auto flex w-full max-w-2xl justify-center py-8 lg:py-10">
-      <Card className={`${CARD} w-full p-8 lg:p-12`}>
+      <Card className={`${CARD} w-full p-6 lg:p-8`}>
         <Suspense fallback={<SuccessSkeleton />}>
           <SuccessMessage />
         </Suspense>

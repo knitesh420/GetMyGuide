@@ -16,30 +16,32 @@ import type { TouristDashboardStats } from "@/lib/data";
 import { formatCurrency } from "./format";
 import { cn } from "@/lib/utils";
 import CountUp from "@/components/animations/CountUp";
-import { EASE_OUT, staggerParent } from "@/lib/motion";
+import { EASE_OUT } from "@/lib/motion";
 
 /**
- * Tailwind can't see class names built at runtime, so each accent is spelled out
- * as a literal here rather than interpolated from a colour name.
+ * Icon tile fill, foreground and hairline ring, per tone — the same five-value
+ * shape as `GuideStatCard`'s STAT_TONES, extended with the two extra tones the
+ * tourist stats need. Tailwind can't see class names built at runtime, so each
+ * is spelled out as a literal rather than interpolated from a colour name.
  */
-const ACCENTS = {
-  teal: "bg-teal-500/10 text-teal-600",
-  emerald: "bg-emerald-500/10 text-emerald-600",
-  sky: "bg-sky-500/10 text-sky-600",
-  amber: "bg-amber-500/10 text-amber-600",
-  violet: "bg-violet-500/10 text-violet-600",
-  rose: "bg-rose-500/10 text-rose-600",
-  slate: "bg-slate-500/10 text-slate-600",
+const STAT_TONES = {
+  teal: "bg-teal-50 text-teal-600 ring-teal-200",
+  green: "bg-green-50 text-green-600 ring-green-200",
+  blue: "bg-blue-50 text-blue-600 ring-blue-200",
+  amber: "bg-amber-50 text-amber-600 ring-amber-200",
+  violet: "bg-violet-50 text-violet-600 ring-violet-200",
+  rose: "bg-rose-50 text-rose-600 ring-rose-200",
+  slate: "bg-slate-50 text-slate-500 ring-slate-200",
 } as const;
 
-type Accent = keyof typeof ACCENTS;
+type StatTone = keyof typeof STAT_TONES;
 
 interface StatDef {
   key: keyof TouristDashboardStats;
   label: string;
-  description: string;
+  hint: string;
   icon: LucideIcon;
-  accent: Accent;
+  tone: StatTone;
   href: string;
   /** Render as money rather than a plain count. */
   money?: boolean;
@@ -49,63 +51,80 @@ const STATS: StatDef[] = [
   {
     key: "upcomingTrips",
     label: "Upcoming Trips",
-    description: "Planned and ready to go",
+    hint: "Planned and ready to go",
     icon: CalendarCheck,
-    accent: "teal",
+    tone: "teal",
     href: "/dashboard/user/trips",
   },
   {
     key: "completedTrips",
     label: "Completed Trips",
-    description: "Journeys you've finished",
+    hint: "Journeys you've finished",
     icon: CircleCheckBig,
-    accent: "emerald",
+    tone: "green",
     href: "/dashboard/user/trips",
   },
   {
     key: "activeBookings",
     label: "Active Bookings",
-    description: "Paid and in progress",
+    hint: "Paid and in progress",
     icon: Ticket,
-    accent: "sky",
+    tone: "blue",
     href: "/dashboard/user/my-bookings",
   },
   {
     key: "pendingPayments",
     label: "Pending Payments",
-    description: "Bookings awaiting payment",
+    hint: "Bookings awaiting payment",
     icon: CreditCard,
-    accent: "amber",
+    tone: "amber",
     href: "/dashboard/user/my-bookings",
   },
   {
     key: "unreadNotifications",
     label: "Unread Alerts",
-    description: "Updates you haven't seen",
+    hint: "Updates you haven't seen",
     icon: BellDot,
-    accent: "violet",
+    tone: "violet",
     href: "/dashboard/notifications",
   },
   {
     key: "pendingReviews",
     label: "Pending Reviews",
-    description: "Trips waiting on your rating",
+    hint: "Trips waiting on your rating",
     icon: Star,
-    accent: "rose",
+    tone: "rose",
     href: "/dashboard/user/reviews",
   },
   {
     key: "totalSpent",
     label: "Total Spent",
-    description: "Across all paid invoices",
+    hint: "Across all paid invoices",
     icon: Wallet,
-    accent: "slate",
+    tone: "slate",
     href: "/dashboard/user/my-bookings",
     money: true,
   },
 ];
 
-function StatCard({ stat, value }: { stat: StatDef; value: number }) {
+/**
+ * One KPI tile. Mirrors `GuideStatCard` exactly — same rounded-xl panel, p-5
+ * inset, label-over-value-over-hint stack, 40px ringed icon tile top-right, and
+ * the same entrance stagger and hover lift — with the whole tile wrapped as a
+ * link, which the guide's version has no need for.
+ *
+ * `h-full` on the motion wrapper is what equalises the row: without it a tile
+ * whose hint wraps to two lines is taller than its neighbours.
+ */
+function StatCard({
+  stat,
+  value,
+  index,
+}: {
+  stat: StatDef;
+  value: number;
+  index: number;
+}) {
   const Icon = stat.icon;
   const display = stat.money
     ? formatCurrency(value)
@@ -115,64 +134,58 @@ function StatCard({ stat, value }: { stat: StatDef; value: number }) {
     <motion.div
       className={cn(
         "h-full",
-        // The money tile is the one that overflows, so it takes the extra column
-        // — which also squares the grid off (6 tiles + 1 double = 8 cells = two
-        // clean rows of four) instead of leaving an orphan gap at the end.
-        stat.money && "col-span-2 lg:col-span-2 2xl:col-span-1",
+        // The money tile takes the spare column so the grid squares off — 6
+        // tiles + 1 double = 8 cells, two clean rows of four — instead of
+        // leaving an orphan gap at the end. Never at base width, where the grid
+        // is a single column and a 2-column span would force an implicit second
+        // one and scroll the page sideways.
+        stat.money && "sm:col-span-2 xl:col-span-2",
       )}
-      variants={{
-        hidden: { opacity: 0, y: 20 },
-        visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: EASE_OUT } },
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        duration: 0.45,
+        delay: Math.min(index * 0.08, 0.4),
+        ease: EASE_OUT,
       }}
       whileHover={{ y: -4 }}
-      transition={{ type: "spring", stiffness: 400, damping: 30 }}
     >
-    <Link
-      href={stat.href}
-      // The whole tile is the control, so it gets one accessible name covering
-      // the number and what it counts — the visual label/description below are
-      // hidden from the reader to avoid announcing everything twice.
-      aria-label={`${stat.label}: ${display}. ${stat.description}`}
-      className={cn(
-        "group flex h-full flex-col justify-between gap-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:p-6",
-        "transition-colors duration-200 hover:border-teal-500/40 hover:shadow-md",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2",
-      )}
-    >
-      <span
-        aria-hidden="true"
+      <Link
+        href={stat.href}
+        // The whole tile is the control, so it gets one accessible name covering
+        // the number and what it counts — the visual label/hint below are hidden
+        // from the reader to avoid announcing everything twice.
+        aria-label={`${stat.label}: ${display}. ${stat.hint}`}
         className={cn(
-          "flex h-11 w-11 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-105",
-          ACCENTS[stat.accent],
+          "flex h-full items-start justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm",
+          "transition-shadow duration-200 hover:shadow-md",
+          "focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 focus-visible:outline-none",
         )}
       >
-        <Icon className="h-5 w-5" />
-      </span>
+        <div aria-hidden="true" className="min-w-0">
+          <p className="text-xs font-medium text-slate-400">{stat.label}</p>
+          {/* Already hidden from assistive tech (the Link carries the full
+              label), so counting up here never spams a screen reader. */}
+          <p className="mt-2 truncate text-2xl leading-none font-bold tracking-tight text-slate-900">
+            {stat.money ? (
+              <CountUp to={value} format={formatCurrency} />
+            ) : (
+              <CountUp to={value} locale="en-IN" />
+            )}
+          </p>
+          <p className="mt-2 text-xs text-slate-400">{stat.hint}</p>
+        </div>
 
-      {/* Already hidden from assistive tech (the Link carries the full label),
-          so counting up here never spams a screen reader. */}
-      <div aria-hidden="true" className="space-y-1">
-        <p
+        <span
+          aria-hidden="true"
           className={cn(
-            "font-bold tracking-tight text-gray-900",
-            // Money runs long ("₹1,20,000") — step it down so it never wraps.
-            stat.money ? "text-2xl lg:text-3xl" : "text-3xl",
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset",
+            STAT_TONES[stat.tone],
           )}
         >
-          {stat.money ? (
-            <CountUp to={value} format={formatCurrency} />
-          ) : (
-            <CountUp to={value} locale="en-IN" />
-          )}
-        </p>
-        <p className="text-sm font-medium leading-tight text-gray-700">
-          {stat.label}
-        </p>
-        <p className="text-xs leading-relaxed text-gray-500">
-          {stat.description}
-        </p>
-      </div>
-    </Link>
+          <Icon className="h-5 w-5" />
+        </span>
+      </Link>
     </motion.div>
   );
 }
@@ -183,16 +196,18 @@ export function StatsGrid({ stats }: { stats: TouristDashboardStats }) {
       <h2 id="stats-heading" className="sr-only">
         Your travel statistics
       </h2>
-      <motion.div
-        className="grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-6 2xl:grid-cols-7"
-        variants={staggerParent(0.06)}
-        initial="hidden"
-        animate="visible"
-      >
-        {STATS.map((stat) => (
-          <StatCard key={stat.key} stat={stat} value={stats[stat.key]} />
+      {/* One column on a phone, two on a tablet, four from xl — the guide
+          dashboard's stat row, breakpoint for breakpoint. */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {STATS.map((stat, index) => (
+          <StatCard
+            key={stat.key}
+            stat={stat}
+            value={stats[stat.key]}
+            index={index}
+          />
         ))}
-      </motion.div>
+      </div>
     </section>
   );
 }

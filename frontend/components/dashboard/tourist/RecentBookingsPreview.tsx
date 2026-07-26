@@ -6,7 +6,7 @@ import type { AdminBookingSummary } from "@/lib/data";
 import { SectionCard } from "./SectionCard";
 import { EmptyState } from "./EmptyState";
 import { formatDate } from "./format";
-import { ROW_PADDING } from "./ui";
+import { ROW_DIVIDER, ROW_HOVER, ROW_PADDING } from "./ui";
 
 // Mirrors the labels on the My Bookings page so a status doesn't change name
 // between the summary and the detail view.
@@ -34,18 +34,18 @@ const STATUS_VARIANT: Record<
 function BookingRow({ booking }: { booking: AdminBookingSummary }) {
   return (
     <li
-      className={`flex flex-col gap-4 transition-colors hover:bg-gray-50 sm:flex-row sm:items-center sm:justify-between ${ROW_PADDING}`}
+      className={`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between ${ROW_HOVER} ${ROW_PADDING}`}
     >
-      <div className="min-w-0 space-y-1.5">
+      <div className="min-w-0 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="truncate text-base font-semibold text-gray-900">
+          <p className="truncate text-sm font-semibold text-slate-900">
             {booking.travel_details.city}
           </p>
           <Badge variant={STATUS_VARIANT[booking.status] ?? "outline"}>
             {STATUS_LABEL[booking.status] ?? booking.status}
           </Badge>
         </div>
-        <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
+        <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400">
           <span className="flex items-center gap-1.5">
             <CalendarDays aria-hidden="true" className="h-4 w-4" />
             {formatDate(booking.travel_details.date)}
@@ -57,7 +57,7 @@ function BookingRow({ booking }: { booking: AdminBookingSummary }) {
       <Button
         asChild
         variant="outline"
-        className="h-9 shrink-0 self-start rounded-lg border-gray-200 text-gray-700 hover:bg-teal-500/10 hover:text-teal-700 sm:self-auto"
+        className="h-9 shrink-0 self-start rounded-lg border-slate-200 text-slate-700 hover:bg-teal-500/10 hover:text-teal-700 sm:self-auto"
       >
         <Link href={`/dashboard/user/my-bookings/${booking._id}`}>
           View Details
@@ -95,7 +95,7 @@ export function RecentBookingsPreview({
           action={{ label: "Explore Tours", href: "/services" }}
         />
       ) : (
-        <ul className="divide-y divide-gray-200">
+        <ul className={ROW_DIVIDER}>
           {bookings.map((booking) => (
             <BookingRow key={booking._id} booking={booking} />
           ))}

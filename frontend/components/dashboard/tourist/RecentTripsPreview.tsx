@@ -10,7 +10,7 @@ import type {
 import { SectionCard } from "./SectionCard";
 import { EmptyState } from "./EmptyState";
 import { formatDate } from "./format";
-import { ROW_PADDING } from "./ui";
+import { ROW_DIVIDER, ROW_HOVER, ROW_PADDING } from "./ui";
 
 // A trip's `booking` and `guide` are populated by the API but typed as
 // `string | Populated…`; a synthetic 'planned' trip has no guide at all.
@@ -28,16 +28,16 @@ function TripRow({ trip }: { trip: Trip }) {
 
   return (
     <li
-      className={`flex flex-col gap-4 transition-colors hover:bg-gray-50 sm:flex-row sm:items-center sm:justify-between ${ROW_PADDING}`}
+      className={`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between ${ROW_HOVER} ${ROW_PADDING}`}
     >
-      <div className="min-w-0 space-y-1.5">
+      <div className="min-w-0 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="truncate text-base font-semibold text-gray-900">
+          <p className="truncate text-sm font-semibold text-slate-900">
             {booking?.travel_details.city ?? "Trip"}
           </p>
           <TripStatusBadge status={trip.status} />
         </div>
-        <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
+        <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400">
           <span className="flex items-center gap-1.5">
             <CalendarDays aria-hidden="true" className="h-4 w-4" />
             {formatDate(booking?.travel_details.date)}
@@ -57,7 +57,7 @@ function TripRow({ trip }: { trip: Trip }) {
       <Button
         asChild
         variant="outline"
-        className="h-9 shrink-0 self-start rounded-lg border-gray-200 text-gray-700 hover:bg-teal-500/10 hover:text-teal-700 sm:self-auto"
+        className="h-9 shrink-0 self-start rounded-lg border-slate-200 text-slate-700 hover:bg-teal-500/10 hover:text-teal-700 sm:self-auto"
       >
         <Link href="/dashboard/user/trips">
           View Trip
@@ -87,7 +87,7 @@ export function RecentTripsPreview({ trips }: { trips: Trip[] }) {
           action={{ label: "Find a Guide", href: "/guide-availability" }}
         />
       ) : (
-        <ul className="divide-y divide-gray-200">
+        <ul className={ROW_DIVIDER}>
           {trips.map((trip) => (
             <TripRow key={trip._id} trip={trip} />
           ))}

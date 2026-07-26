@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { ArrowRight } from "lucide-react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CARD } from "./ui";
 
@@ -23,6 +22,14 @@ interface SectionCardProps {
  * chrome, heading level and "View all" link, so the sections stay visually and
  * structurally consistent as they're added to.
  *
+ * This is `GuidePanel` plus the panel header the guide dashboard puts on its
+ * "Recent bookings" card: same hairline rule, same px-5 py-4 band, same
+ * text-sm/text-xs pairing, same trailing arrow on the link — in teal. It renders
+ * a plain <div> rather than the shared <Card> primitive for the same reason the
+ * guide panel does: that primitive ships a 2xl radius, an emerald hover ring and
+ * a translate-on-hover that a static content card has to spend three classes
+ * undoing.
+ *
  * Each section titles itself with an <h2>; the page owns the single <h1>.
  *
  * The card must height itself to its content — no `h-full`. These stack inside a
@@ -41,21 +48,16 @@ export function SectionCard({
   contentClassName,
 }: SectionCardProps) {
   return (
-    <Card className={cn(CARD, "gap-0 overflow-hidden py-0", className)}>
-      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 border-b border-gray-200 bg-gray-50 px-6 py-5 lg:px-8">
-        <div className="flex min-w-0 items-center gap-3">
-          <span
-            aria-hidden="true"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-500/10 text-teal-600"
-          >
-            <Icon className="h-5 w-5" />
-          </span>
+    <div className={cn(CARD, "overflow-hidden", className)}>
+      <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" />
           <div className="min-w-0">
-            <h2 className="truncate text-lg font-semibold leading-tight text-gray-900">
+            <h2 className="truncate text-sm font-semibold text-slate-900">
               {title}
             </h2>
             {description && (
-              <p className="mt-0.5 truncate text-sm text-gray-500">
+              <p className="mt-0.5 truncate text-xs text-slate-400">
                 {description}
               </p>
             )}
@@ -67,22 +69,17 @@ export function SectionCard({
           {viewAll && (
             <Link
               href={viewAll.href}
-              className="group inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-teal-700 transition-colors hover:bg-teal-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+              className="inline-flex items-center gap-1 rounded-md text-xs font-semibold text-teal-600 transition-colors hover:text-teal-700 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 focus-visible:outline-none"
             >
               <span className="hidden sm:inline">{viewAll.label}</span>
               <span className="sm:hidden">All</span>
-              <ArrowRight
-                aria-hidden="true"
-                className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
-              />
+              <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
             </Link>
           )}
         </div>
-      </CardHeader>
+      </div>
 
-      <CardContent className={cn("p-0", contentClassName)}>
-        {children}
-      </CardContent>
-    </Card>
+      <div className={cn(contentClassName)}>{children}</div>
+    </div>
   );
 }

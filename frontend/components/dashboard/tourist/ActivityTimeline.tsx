@@ -55,13 +55,13 @@ function ActivityRow({
 
   const body = (
     <>
-      <p className="text-sm font-semibold leading-tight text-gray-900">
+      <p className="text-sm leading-tight font-semibold text-slate-900">
         {entry.title}
       </p>
-      <p className="text-sm leading-relaxed text-gray-700">
+      <p className="text-sm leading-relaxed text-slate-600">
         {entry.description}
       </p>
-      <time dateTime={entry.at} className="block text-xs text-gray-500">
+      <time dateTime={entry.at} className="block text-xs text-slate-400">
         {formatRelative(entry.at)}
       </time>
     </>
@@ -74,7 +74,7 @@ function ActivityRow({
       {!isLast && (
         <span
           aria-hidden="true"
-          className="absolute left-4.25 top-10 h-[calc(100%-1.75rem)] w-px bg-gray-200"
+          className="absolute top-10 left-4.25 h-[calc(100%-1.75rem)] w-px bg-slate-200"
         />
       )}
 

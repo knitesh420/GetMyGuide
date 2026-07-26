@@ -29,11 +29,13 @@ function Detail({
     <div className="flex items-start gap-3">
       <Icon
         aria-hidden="true"
-        className="mt-0.5 h-4 w-4 shrink-0 text-gray-400"
+        className="mt-0.5 h-4 w-4 shrink-0 text-slate-400"
       />
       <div className="min-w-0 space-y-0.5">
-        <dt className="text-xs text-gray-500">{label}</dt>
-        <dd className="truncate text-sm font-medium text-gray-900">{value}</dd>
+        <dt className="text-xs font-medium text-slate-400">{label}</dt>
+        <dd className="truncate text-sm font-semibold text-slate-900">
+          {value}
+        </dd>
       </div>
     </div>
   );
@@ -55,24 +57,24 @@ export function ProfileSummary({
       description="Travel preferences we use to match guides"
       contentClassName={CARD_PADDING}
     >
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Avatar className="h-12 w-12 shrink-0 ring-2 ring-teal-500/20">
-            <AvatarFallback className="bg-gradient-to-br from-teal-500 to-cyan-500 font-semibold text-white">
+      <div className="space-y-5">
+        <div className="flex items-center gap-3">
+          <Avatar className="h-10 w-10 shrink-0 ring-1 ring-teal-200">
+            <AvatarFallback className="bg-linear-to-br from-teal-500 to-cyan-500 text-sm font-semibold text-white">
               {initialsOf(profile.name)}
             </AvatarFallback>
           </Avatar>
-          <div className="min-w-0 space-y-0.5">
-            <p className="truncate text-base font-semibold text-gray-900">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-slate-900">
               {profile.name}
             </p>
-            <p className="truncate font-mono text-xs text-gray-500">
+            <p className="truncate font-mono text-xs text-slate-400">
               {profile.touristCode ?? "—"}
             </p>
           </div>
         </div>
 
-        <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Detail icon={Mail} label="Email" value={profile.email} />
           <Detail icon={Phone} label="Phone" value={phone} />
           <Detail
@@ -98,7 +100,7 @@ export function ProfileSummary({
         <Button
           asChild
           variant="outline"
-          className="h-10 w-full rounded-lg border-gray-200 text-gray-700 hover:bg-teal-500/10 hover:text-teal-700"
+          className="h-10 w-full rounded-lg border-slate-200 text-slate-700 hover:bg-teal-500/10 hover:text-teal-700"
         >
           <Link href="/tourist/onboarding?edit=1">
             <Pencil aria-hidden="true" className="mr-1.5 h-4 w-4" />

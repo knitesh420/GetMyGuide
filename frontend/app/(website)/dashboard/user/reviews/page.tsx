@@ -120,7 +120,7 @@ export default function UserReviewsPage() {
             description="No completed trips are awaiting a review. Once a trip wraps up, you'll be able to rate your guide here."
           />
         ) : (
-          <ul className="divide-y divide-gray-200">
+          <ul className="divide-y divide-slate-100">
             {eligibleTrips.map((trip) => {
               const id = bookingIdOf(trip.booking);
               const city =
@@ -131,9 +131,9 @@ export default function UserReviewsPage() {
               return (
                 <li
                   key={trip._id}
-                  className={`flex flex-col gap-4 transition-colors hover:bg-gray-50 sm:flex-row sm:items-center sm:justify-between ${ROW_PADDING}`}
+                  className={`flex flex-col gap-3 transition-colors hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between ${ROW_PADDING}`}
                 >
-                  <p className="min-w-0 truncate text-base font-semibold text-gray-900">
+                  <p className="min-w-0 truncate text-base font-semibold text-slate-900">
                     {city}
                   </p>
                   <Button

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  ArrowUpRight,
   Bell,
   BookOpen,
   MapPinned,
@@ -11,15 +12,12 @@ import {
 } from "lucide-react";
 import { SectionCard } from "./SectionCard";
 import { CARD_PADDING } from "./ui";
-import { cn } from "@/lib/utils";
 
 interface Action {
   label: string;
   description: string;
   href: string;
   icon: LucideIcon;
-  /** Spelled out in full — Tailwind can't resolve classes built at runtime. */
-  accent: string;
 }
 
 const ACTIONS: Action[] = [
@@ -28,51 +26,48 @@ const ACTIONS: Action[] = [
     description: "Browse certified local guides",
     href: "/guide-availability",
     icon: Search,
-    accent:
-      "bg-teal-500/10 text-teal-600 group-hover:bg-teal-500 group-hover:text-white",
   },
   {
     label: "Plan New Trip",
     description: "Explore our tour packages",
     href: "/services",
     icon: PlaneTakeoff,
-    accent:
-      "bg-sky-500/10 text-sky-600 group-hover:bg-sky-500 group-hover:text-white",
   },
   {
     label: "View Trips",
     description: "Track your journeys",
     href: "/dashboard/user/trips",
     icon: MapPinned,
-    accent:
-      "bg-emerald-500/10 text-emerald-600 group-hover:bg-emerald-500 group-hover:text-white",
   },
   {
     label: "Bookings",
     description: "Manage your bookings",
     href: "/dashboard/user/my-bookings",
     icon: BookOpen,
-    accent:
-      "bg-violet-500/10 text-violet-600 group-hover:bg-violet-500 group-hover:text-white",
   },
   {
     label: "Reviews",
     description: "Rate your guides",
     href: "/dashboard/user/reviews",
     icon: Star,
-    accent:
-      "bg-amber-500/10 text-amber-600 group-hover:bg-amber-500 group-hover:text-white",
   },
   {
     label: "Notifications",
     description: "See all your updates",
     href: "/dashboard/notifications",
     icon: Bell,
-    accent:
-      "bg-rose-500/10 text-rose-600 group-hover:bg-rose-500 group-hover:text-white",
   },
 ];
 
+/**
+ * The guide dashboard's quick-action tile (app/(website)/dashboard/guide/
+ * page.tsx), teal instead of green: 40px ringed icon badge, two-line label,
+ * trailing arrow that colours in on hover, and the same lift.
+ *
+ * The six tiles previously carried six different accent colours, which made a
+ * row of equal-weight shortcuts read as six unrelated things. One neutral
+ * resting state, one accent on hover — as the guide panel does it.
+ */
 export function QuickActions() {
   return (
     <SectionCard
@@ -81,31 +76,32 @@ export function QuickActions() {
       description="Jump straight to what you need"
       contentClassName={CARD_PADDING}
     >
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-        {ACTIONS.map(({ label, description, href, icon: Icon, accent }) => (
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {ACTIONS.map(({ label, description, href, icon: Icon }) => (
           <Link
             key={label}
             href={href}
             aria-label={`${label} — ${description}`}
-            className="group flex h-full flex-col gap-3 rounded-xl border border-gray-200 p-4 transition-all duration-200 hover:border-teal-500/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+            className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 focus-visible:outline-none"
           >
             <span
               aria-hidden="true"
-              className={cn(
-                "flex h-10 w-10 items-center justify-center rounded-lg transition-colors duration-200",
-                accent,
-              )}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-slate-500 ring-1 ring-inset ring-slate-200 transition group-hover:bg-teal-50 group-hover:text-teal-600 group-hover:ring-teal-200"
             >
               <Icon className="h-5 w-5" />
             </span>
-            <span aria-hidden="true" className="space-y-0.5">
-              <span className="block text-sm font-semibold leading-tight text-gray-900">
+            <span aria-hidden="true" className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-slate-900">
                 {label}
               </span>
-              <span className="block text-xs leading-relaxed text-gray-500">
+              <span className="block truncate text-xs text-slate-400">
                 {description}
               </span>
             </span>
+            <ArrowUpRight
+              aria-hidden="true"
+              className="ml-auto h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-teal-600"
+            />
           </Link>
         ))}
       </div>

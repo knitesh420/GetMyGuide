@@ -128,6 +128,38 @@
   --muted-foreground: oklch(0.556 0 0);
 }
 
+/*
+ * Tourist panel palette.
+ *
+ * The exact counterpart of `.guide-theme` above, on Tailwind's `teal` ramp
+ * instead of `green` — the tourist dashboard's own accent, already carried by
+ * every hand-written `teal-*` utility in components/dashboard/tourist. Without
+ * it those utilities sat next to shadcn primitives still painted the app's red
+ * brand: the profile Progress bar (`bg-primary`) rendered red inside a teal
+ * card, and every focus ring and default Button did the same.
+ *
+ * Contained to /dashboard/user, applied by that route's layout.tsx. Nothing
+ * outside that subtree — website, guide panel, admin panel — is reached.
+ */
+.tourist-theme {
+  --primary: oklch(0.704 0.14 182.503); /* teal-500 */
+  --primary-foreground: oklch(1 0 0);
+
+  --ring: oklch(0.704 0.14 182.503);
+
+  /* shadcn hover/selected surfaces (`hover:bg-accent`) — pale teal, not pink. */
+  --accent: oklch(0.984 0.014 180.72); /* teal-50 */
+  --accent-foreground: oklch(0.511 0.096 186.391); /* teal-700 */
+
+  /* The red brand `--muted` is pure white and `--card` is #f8f8f8, which
+     inverts every surface: `bg-muted` hovers become no-ops and white panels
+     render grey. Restore the light-grey bed / white panel relationship the
+     guide panel uses. */
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --card: oklch(1 0 0);
+}
+
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);

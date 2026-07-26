@@ -64,11 +64,11 @@ function Fact({
     <div className="flex items-start gap-3">
       <Icon
         aria-hidden="true"
-        className="mt-0.5 h-4 w-4 shrink-0 text-gray-400"
+        className="mt-0.5 h-4 w-4 shrink-0 text-slate-400"
       />
       <div className="min-w-0 space-y-0.5">
-        <p className="text-xs text-gray-500">{label}</p>
-        <p className="text-sm font-medium leading-relaxed text-gray-900">
+        <p className="text-xs text-slate-500">{label}</p>
+        <p className="text-sm font-medium leading-relaxed text-slate-900">
           {value}
         </p>
       </div>
@@ -82,16 +82,16 @@ function MyBookingCard({ booking }: { booking: AdminBookingSummary }) {
   return (
     // h-full + flex so two cards sharing a grid row come out the same height and
     // their prices sit on the same baseline.
-    <Card className={`${CARD} flex h-full flex-col gap-0 p-6 lg:p-8`}>
+    <Card className={`${CARD} flex h-full flex-col gap-0 p-5`}>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 space-y-1">
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-slate-500">
             Booked on {formatDate(booking.createdAt)}
           </p>
-          <h2 className="truncate text-xl font-semibold text-gray-900">
+          <h2 className="truncate text-base font-semibold text-slate-900">
             {travel_details.city}
           </h2>
-          <p className="truncate font-mono text-xs text-gray-500">
+          <p className="truncate font-mono text-xs text-slate-500">
             {booking.bookingCode ?? "—"}
           </p>
         </div>
@@ -103,7 +103,7 @@ function MyBookingCard({ booking }: { booking: AdminBookingSummary }) {
         </Badge>
       </div>
 
-      <dl className="mt-6 grid grid-cols-1 gap-5 border-t border-gray-200 pt-6 sm:grid-cols-2">
+      <dl className="mt-5 grid grid-cols-1 gap-4 border-t border-slate-200 pt-5 sm:grid-cols-2">
         <Fact
           icon={Calendar}
           label="Travel date"
@@ -133,17 +133,17 @@ function MyBookingCard({ booking }: { booking: AdminBookingSummary }) {
       </dl>
 
       {/* mt-auto pins the price row to the bottom of the tallest card in the row. */}
-      <div className="mt-auto flex flex-col gap-4 border-t border-gray-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mt-auto flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-0.5">
-          <p className="text-sm font-medium text-gray-500">Total</p>
-          <p className="text-2xl font-bold tracking-tight text-gray-900 lg:text-3xl">
+          <p className="text-xs font-medium text-slate-400">Total</p>
+          <p className="text-2xl font-bold tracking-tight text-slate-900">
             {formatCurrency(booking_configuration.price)}
           </p>
         </div>
         <Button
           asChild
           variant="outline"
-          className="h-10 rounded-lg border-gray-200 text-gray-700 hover:bg-teal-500/10 hover:text-teal-700"
+          className="h-10 rounded-lg border-slate-200 text-slate-700 hover:bg-teal-500/10 hover:text-teal-700"
         >
           <Link href={`/dashboard/user/my-bookings/${booking._id}`}>
             <ReceiptText aria-hidden="true" className="mr-1.5 h-4 w-4" />
@@ -159,7 +159,7 @@ function MyBookingCard({ booking }: { booking: AdminBookingSummary }) {
 /** Matches MyBookingCard's shape so the grid doesn't jump when bookings land. */
 function BookingCardSkeleton() {
   return (
-    <Card className={`${CARD} flex h-full flex-col gap-0 p-6 lg:p-8`}>
+    <Card className={`${CARD} flex h-full flex-col gap-0 p-5`}>
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
           <Skeleton className="h-3 w-28" />
@@ -168,12 +168,12 @@ function BookingCardSkeleton() {
         </div>
         <Skeleton className="h-6 w-24 rounded-md" />
       </div>
-      <div className="mt-6 grid grid-cols-1 gap-5 border-t border-gray-200 pt-6 sm:grid-cols-2">
+      <div className="mt-5 grid grid-cols-1 gap-4 border-t border-slate-200 pt-5 sm:grid-cols-2">
         {Array.from({ length: 4 }).map((_, i) => (
           <Skeleton key={i} className="h-10" />
         ))}
       </div>
-      <div className="mt-auto flex items-center justify-between border-t border-gray-200 pt-6">
+      <div className="mt-auto flex items-center justify-between border-t border-slate-200 pt-5">
         <Skeleton className="h-9 w-32" />
         <Skeleton className="h-10 w-32 rounded-lg" />
       </div>
@@ -198,7 +198,7 @@ export default function MyBookingsPage() {
           role="status"
           aria-busy="true"
           aria-live="polite"
-          className="grid gap-6 lg:gap-8 xl:grid-cols-2"
+          className="grid gap-6 xl:grid-cols-2"
         >
           <span className="sr-only">Loading your bookings…</span>
           <BookingCardSkeleton />
@@ -209,17 +209,17 @@ export default function MyBookingsPage() {
 
     if (error) {
       return (
-        <Card className={`${CARD} p-6 lg:p-8`}>
+        <Card className={`${CARD} p-5`}>
           <div className="flex flex-col items-center gap-4 py-8 text-center">
             <AlertCircle
               aria-hidden="true"
               className="h-12 w-12 text-red-600"
             />
             <div className="space-y-1.5">
-              <p className="text-lg font-semibold text-gray-900">
+              <p className="text-lg font-semibold text-slate-900">
                 Could not load your bookings
               </p>
-              <p className="mx-auto max-w-sm text-sm leading-relaxed text-gray-500">
+              <p className="mx-auto max-w-sm text-sm leading-relaxed text-slate-500">
                 {error}
               </p>
             </div>
@@ -248,7 +248,7 @@ export default function MyBookingsPage() {
     }
 
     return (
-      <div className="grid gap-6 lg:gap-8 xl:grid-cols-2">
+      <div className="grid gap-6 xl:grid-cols-2">
         {bookings.map((booking) => (
           <MyBookingCard key={booking._id} booking={booking} />
         ))}

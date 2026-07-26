@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+
 import { TripStatusBadge } from "@/components/trip/TripStatusBadge";
 import type { TouristUpcomingTrip } from "@/lib/data";
 import { EmptyState } from "./EmptyState";
@@ -65,21 +65,21 @@ function GuidePanel({
 export function UpcomingTripHero({ trip }: { trip: TouristUpcomingTrip | null }) {
   if (!trip) {
     return (
-      <Card className={`${CARD} border-dashed border-gray-300`}>
+      <div className={`${CARD} border-dashed border-slate-300`}>
         <EmptyState
           icon={Compass}
           title="No upcoming trips"
           description="You have no trips coming up. Find a certified local guide and plan your next journey."
           action={{ label: "Find a Guide", href: "/guide-availability" }}
         />
-      </Card>
+      </div>
     );
   }
 
   const countdown = formatCountdown(trip.travelDate);
 
   return (
-    <Card className="relative overflow-hidden rounded-2xl border-0 bg-gradient-to-br from-teal-600 via-teal-700 to-cyan-800 p-0 text-white shadow-md transition-shadow duration-200 before:hidden hover:translate-y-0 hover:shadow-lg">
+    <section className="relative overflow-hidden rounded-xl bg-linear-to-br from-teal-600 via-teal-700 to-cyan-800 text-white shadow-sm transition-shadow duration-200 hover:shadow-md">
       {/* Decorative depth — kept behind the content and out of the a11y tree. */}
       <div
         aria-hidden="true"
@@ -90,7 +90,7 @@ export function UpcomingTripHero({ trip }: { trip: TouristUpcomingTrip | null })
         className="pointer-events-none absolute -bottom-24 -left-10 h-56 w-56 rounded-full bg-cyan-300/10 blur-3xl"
       />
 
-      <div className="relative grid gap-6 p-6 lg:grid-cols-[1.5fr_1fr] lg:gap-8 lg:p-8">
+      <div className="relative grid gap-6 p-5 lg:grid-cols-[1.5fr_1fr] lg:p-6">
         <div className="min-w-0 space-y-6">
           <div className="flex flex-wrap items-center gap-2">
             <Badge className="border-0 bg-white/20 text-xs font-medium text-white hover:bg-white/25">
@@ -159,10 +159,13 @@ export function UpcomingTripHero({ trip }: { trip: TouristUpcomingTrip | null })
             </div>
           )}
 
-          <div className="flex flex-wrap gap-3">
+          {/* A grid, not a wrapping flex row: `flex-1` let two buttons share a
+              320px phone and crush their labels. One per row until there's
+              width for two, and every button the same size at every width. */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Button
               asChild
-              className="h-10 flex-1 rounded-lg bg-white font-medium text-teal-800 shadow-sm hover:bg-white/90"
+              className="h-11 w-full rounded-lg bg-white font-medium text-teal-800 shadow-sm hover:bg-white/90"
             >
               <Link href={`/dashboard/user/my-bookings/${trip.bookingId}`}>
                 <Ticket aria-hidden="true" className="mr-1.5 h-4 w-4" />
@@ -172,7 +175,7 @@ export function UpcomingTripHero({ trip }: { trip: TouristUpcomingTrip | null })
             <Button
               asChild
               variant="outline"
-              className="h-10 flex-1 rounded-lg border-white/40 bg-transparent font-medium text-white hover:bg-white/15 hover:text-white"
+              className="h-11 w-full rounded-lg border-white/40 bg-transparent font-medium text-white hover:bg-white/15 hover:text-white"
             >
               <Link href="/dashboard/user/trips">
                 <Compass aria-hidden="true" className="mr-1.5 h-4 w-4" />
@@ -184,7 +187,7 @@ export function UpcomingTripHero({ trip }: { trip: TouristUpcomingTrip | null })
               <Button
                 asChild
                 variant="outline"
-                className="h-10 w-full rounded-lg border-white/40 bg-transparent font-medium text-white hover:bg-white/15 hover:text-white"
+                className="h-11 w-full rounded-lg border-white/40 bg-transparent font-medium text-white hover:bg-white/15 hover:text-white sm:col-span-2"
               >
                 <a href={`tel:${trip.guide.phone}`}>
                   <MessageCircle aria-hidden="true" className="mr-1.5 h-4 w-4" />
@@ -195,6 +198,6 @@ export function UpcomingTripHero({ trip }: { trip: TouristUpcomingTrip | null })
           </div>
         </div>
       </div>
-    </Card>
+    </section>
   );
 }
