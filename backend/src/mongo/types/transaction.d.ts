@@ -53,6 +53,13 @@ export default interface ITransaction extends Document {
 	 * cannot be swapped between paying and redeeming.
 	 */
 	metadata?: Record<string, unknown>;
+	/**
+	 * Set once a guide-membership payment has had its 30-day window applied. The
+	 * atomic null→date flip is what serialises the browser confirm path against
+	 * the Razorpay webhook so the window, invoice and history row are applied
+	 * exactly once. Null/absent on every non-membership transaction.
+	 */
+	membershipAppliedAt?: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
 }

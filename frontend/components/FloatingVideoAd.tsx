@@ -10,7 +10,12 @@ const AD_DISPLAY_DELAY_MS = 3000;
 const SESSION_KEY = "gmg_ad_shown";
 const MINIMIZED_SIZE = 48;
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const PRODUCTION_API_URL = "https://api.getmyguide.in";
+// Fallback media source used only in local dev, where uploaded ad media doesn't
+// exist on the developer's machine: on a media load error we retry against this
+// host (see the onError handler below). It is a no-op in production, where
+// API_URL already equals this value. Overridable via env rather than hardcoded.
+const PRODUCTION_API_URL =
+  process.env.NEXT_PUBLIC_MEDIA_FALLBACK_URL || "https://api.getmyguide.in";
 
 interface Position {
   x: number;

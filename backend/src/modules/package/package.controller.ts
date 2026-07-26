@@ -1,7 +1,49 @@
 import { Request, Response, NextFunction } from 'express';
+import { Types } from 'mongoose';
 import Package from './package.schema';
 import uploadToCloudinary from '../../utils/cloudinaryUpload';
 import cloudinary from '../../config/cloudinary';
+
+/**
+ * These routes take `:id` straight off the URL with no IDValidator in front of
+ * them, so a non-ObjectId segment used to reach Mongoose and surface as a
+ * CastError — a 500 on what is really a client error. It also meant any path
+ * that fell through to `GET /package/:id` (e.g. a mistyped `/package/foo`)
+ * answered 500 rather than a 4xx.
+ *
+ * Returning null here lets each handler answer 400 for a malformed id and keep
+ * 404 for a well-formed one that matches nothing — the same split the shared
+ * IDValidator middleware produces everywhere else in this codebase.
+ */
+function toObjectId(input: string | string[] | undefined): Types.ObjectId | null {
+	// Express 5 types a route param as `string | string[]`. A repeated param is
+	// never a valid id, so reject the array form rather than coercing it.
+	const raw = typeof input === 'string' ? input : undefined;
+	if (!raw || !Types.ObjectId.isValid(raw)) return null;
+	// isValid() accepts any 12-byte string as well as 24-hex, so round-trip it to
+	// be sure the input really is the canonical id and not a coincidental match.
+	const id = new Types.ObjectId(raw);
+	return id.toString() === raw ? id : null;
+}
+
+/**
+ * A malformed id is a client error, not a missing resource — 400, matching what
+ * the shared IDValidator middleware returns for every other module's `:id`
+ * routes. Previously it reached Mongoose and came back as a CastError 500.
+ */
+function badId(res: Response) {
+	return res.status(400).json({
+		success: false,
+		message: 'Invalid ID',
+	});
+}
+
+function notFound(res: Response) {
+	return res.status(404).json({
+		success: false,
+		message: 'Package not found',
+	});
+}
 
 export class PackageController {
 	/*
@@ -56,9 +98,32 @@ export class PackageController {
   */
 	static async getPackages(req: Request, res: Response, next: NextFunction) {
 		try {
-			const packages = await Package.find({ status: 'active' }).sort({
-				createdAt: -1,
-			});
+			// The frontend has always sent `?featured=true&limit=N` here — the
+			// "Recommended tours" rail on /tours/[id] asks for 8 featured packages —
+			// but this handler ignored the query string entirely and answered with
+			// every active package. The rail therefore showed non-featured tours,
+			// and each tour-page view downloaded the whole catalogue (full
+			// description HTML for every package) to render at most eight cards.
+			//
+			// Both parameters are optional and the no-parameter response is byte-for-
+			// byte what it was before, so existing callers are unaffected.
+			const query: Record<string, unknown> = { status: 'active' };
+
+			if (req.query.featured === 'true') {
+				query.featured = true;
+			}
+
+			// Clamped rather than trusted: an unbounded client-supplied limit is a
+			// cheap way to force a full-collection scan and response.
+			const rawLimit = Number(req.query.limit);
+			const limit =
+				Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(Math.floor(rawLimit), 100) : 0;
+
+			let cursor = Package.find(query).sort({ createdAt: -1 });
+			if (limit > 0) {
+				cursor = cursor.limit(limit);
+			}
+			const packages = await cursor;
 
 			return res.status(200).json({
 				success: true,
@@ -97,14 +162,21 @@ export class PackageController {
   */
 	static async getPackageById(req: Request, res: Response, next: NextFunction) {
 		try {
-			const pkg = await Package.findById(req.params.id);
+			const packageId = toObjectId(req.params.id);
+			if (!packageId) return badId(res);
 
-			if (!pkg) {
-				return res.status(404).json({
-					success: false,
-					message: 'Package not found',
-				});
-			}
+			// This route is public (no VerifySession), so it must apply the same
+			// `status: 'active'` filter the public listing does. It previously ran a
+			// bare findById, which meant a package an admin had switched to
+			// 'inactive' — deliberately withdrawn from sale — stayed fully readable
+			// to anyone who knew or guessed its id, price and description included.
+			//
+			// Admin reads are unaffected: the admin panel loads packages from
+			// GET /package/admin/all and edits from that already-fetched row, so
+			// nothing authenticated depends on this handler returning inactive ones.
+			const pkg = await Package.findOne({ _id: packageId, status: 'active' });
+
+			if (!pkg) return notFound(res);
 
 			return res.status(200).json({
 				success: true,
@@ -122,16 +194,12 @@ export class PackageController {
   */
 	static async updatePackage(req: Request, res: Response, next: NextFunction) {
 		try {
-			const packageId = req.params.id;
+			const packageId = toObjectId(req.params.id);
+			if (!packageId) return badId(res);
 
 			const existingPackage = await Package.findById(packageId);
 
-			if (!existingPackage) {
-				return res.status(404).json({
-					success: false,
-					message: 'Package not found',
-				});
-			}
+			if (!existingPackage) return notFound(res);
 
 			const files = req.files as Express.Multer.File[];
 
@@ -181,25 +249,31 @@ export class PackageController {
   */
 	static async deletePackage(req: Request, res: Response, next: NextFunction) {
 		try {
-			const packageId = req.params.id;
+			const packageId = toObjectId(req.params.id);
+			if (!packageId) return badId(res);
 
 			const pkg = await Package.findById(packageId);
 
-			if (!pkg) {
-				return res.status(404).json({
-					success: false,
-					message: 'Package not found',
-				});
-			}
+			if (!pkg) return notFound(res);
 
-			/*
-       Delete Cloudinary Images
-      */
-			for (const image of pkg.images) {
-				await cloudinary.uploader.destroy(image.publicId);
-			}
-
+			// Delete the document first, then clean up its Cloudinary assets.
+			//
+			// The original order was the reverse, which made a Cloudinary outage
+			// destructive-but-incomplete: the images were destroyed, the destroy call
+			// for a later image threw, and the package document survived — leaving a
+			// live package whose images all 404. Removing the record first means the
+			// worst case is an orphaned Cloudinary asset (costs storage, breaks
+			// nothing) instead of a visibly broken package.
 			await Package.findByIdAndDelete(packageId);
+
+			for (const image of pkg.images) {
+				try {
+					await cloudinary.uploader.destroy(image.publicId);
+				} catch {
+					// Best-effort: the package is already gone, so a failed asset
+					// cleanup must not turn a successful delete into a 500.
+				}
+			}
 
 			return res.status(200).json({
 				success: true,

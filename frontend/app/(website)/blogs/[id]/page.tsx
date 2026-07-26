@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import Image from "next/image";
 import { AppDispatch, RootState } from "@/lib/store";
-import { fetchBlogs } from "@/lib/redux/thunks/blog/blogThunks";
-import { Blog } from "@/lib/data";
+import { fetchBlogById } from "@/lib/redux/thunks/blog/blogThunks";
+import { clearCurrentBlog } from "@/lib/redux/blogSlice";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Play } from "lucide-react";
 
@@ -16,25 +16,26 @@ export default function BlogDetailPage() {
   const params = useParams();
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
-  const { blogs, loading } = useSelector((state: RootState) => state.blogs);
-  const [blog, setBlog] = useState<Blog | null>(null);
+  // Fetch just this post by id (via GET /blog/:id) rather than pulling the whole
+  // list and finding it client-side — the old approach capped at 100 blogs and
+  // showed "not found" for anything past that.
+  const { currentBlog: blog, loading, error } = useSelector(
+    (state: RootState) => state.blogs,
+  );
 
   useEffect(() => {
-    // If blogs not loaded, fetch them
-    if (blogs.length === 0) {
-      dispatch(fetchBlogs({ limit: 100 }));
+    if (params.id) {
+      dispatch(fetchBlogById(String(params.id)));
     }
-  }, [dispatch, blogs.length]);
+    return () => {
+      dispatch(clearCurrentBlog());
+    };
+  }, [dispatch, params.id]);
 
-  useEffect(() => {
-    // Find the blog by id once blogs are loaded
-    if (blogs.length > 0 && params.id) {
-      const foundBlog = blogs.find((b) => b.id === params.id);
-      setBlog(foundBlog || null);
-    }
-  }, [blogs, params.id]);
-
-  if (loading) {
+  // Show the skeleton while the request is in flight, and also in the brief
+  // window before it is dispatched (no blog, no error yet) so the "not found"
+  // card never flashes on a valid post.
+  if (loading || (!blog && !error)) {
     return (
       <div className="bg-gray-50 min-h-screen py-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">

@@ -1,6 +1,7 @@
 import express from 'express';
 import idempotency from '../../middleware/idempotency';
 import IDValidator from '../../middleware/idValidator';
+import rateLimit from '../../middleware/rateLimiter';
 import VerifySession, { VerifyMinLevel } from '../../middleware/VerifySession';
 import Controller from './guide.controller';
 import {
@@ -20,6 +21,15 @@ import {
 } from './guide.validator';
 
 const router = express.Router();
+
+// Shared by the public contact-inquiry endpoint below. Same window and ceiling
+// as the lead module's limiter, kept as a separate bucket (`prefix`) so traffic
+// to one form cannot exhaust the other's allowance.
+const contactInquiryLimiter = rateLimit({
+	prefix: 'guide-contact-inquiry',
+	windowSeconds: 60 * 60,
+	max: 10,
+});
 
 // The `guides` collection is the sole source of guide data. The retired
 // GuideEnrollment model (anonymous enrol-and-pay flow) has been removed: its
@@ -144,7 +154,15 @@ router
 	.get(VerifySession, VerifyMinLevel('admin'), IDValidator, Controller.viewGuideIdentityDocument);
 
 // Contact inquiry routes
-router.route('/contact-inquiry').post(ContactInquiryValidator, Controller.createContactInquiry);
+//
+// Unauthenticated and write-capable, so it carries the same limiter as
+// POST /lead/contact for the same reason: one row per call with nothing to stop
+// a script inserting them without bound. Keyed on IP only — the body is entirely
+// attacker-supplied, so keying on any field in it would hand out a fresh bucket
+// per request.
+router
+	.route('/contact-inquiry')
+	.post(contactInquiryLimiter, ContactInquiryValidator, Controller.createContactInquiry);
 
 // Admin only - list all contact inquiries
 router

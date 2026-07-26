@@ -129,7 +129,6 @@ export const createTestimonial = createAsyncThunk(
       }
 
       const data = await response.json();
-      console.log("✅ Testimonial created:", data);
       return data;
     } catch (error: any) {
       console.error("❌ Create error:", error);
@@ -146,16 +145,6 @@ export const updateTestimonial = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      console.log("📤 Updating testimonial with FormData for ID:", id);
-      console.log("FormData entries:");
-      for (let pair of testimonialData.entries()) {
-        if (pair[1] instanceof File) {
-          console.log(`  ${pair[0]}: [File] ${pair[1].name} (${pair[1].size} bytes)`);
-        } else {
-          console.log(`  ${pair[0]}: ${pair[1]}`);
-        }
-      }
-
       const response = await fetch(`${API_BASE_URL}/testimonials/${id}`, {
         method: 'PUT',
         credentials: 'include',
@@ -172,7 +161,6 @@ export const updateTestimonial = createAsyncThunk(
       }
 
       const data = await response.json();
-      console.log("✅ Testimonial updated:", data);
       return data;
     } catch (error: any) {
       console.error("❌ Update error:", error);

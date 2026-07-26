@@ -48,7 +48,6 @@ const blogSlice = createSlice({
         state.error = null;
       })
       .addCase(fetchBlogs.fulfilled, (state, action) => {
-        console.log("action.payload", action.payload);
         state.loading = false;
         state.blogs = action.payload.data;
         state.totalPages = action.payload.totalPages ?? 1;

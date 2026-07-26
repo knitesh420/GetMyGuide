@@ -162,14 +162,14 @@ export function calculateBookingPrice(
 		);
 	}
 
-	// Extra allowance for tours exceeding 8 hours
-	if (config.outstation && Array.isArray(config.outstation.special_excursion)) {
-		config.outstation.special_excursion.forEach((type) => {
-			if (EXTRA_ALLOWANCE_EXCURSIONS.includes(type)) {
-				extraAllowance += 1100;
-			}
-		});
-	}
+	// NOTE: a second ₹1100-per-excursion loop used to live here, labelled "tours
+	// exceeding 8 hours" but actually re-testing the same EXTRA_ALLOWANCE_EXCURSIONS
+	// list already handled in the outstation-excursion block above. It double-
+	// charged every qualifying excursion. Removed so each excursion is counted
+	// once (in outstationExcursionAllowance, gated on distance > 100 alongside the
+	// other excursion allowances). If a genuinely separate >8h allowance is
+	// intended, reintroduce it keyed on trip duration/hours — not on the excursion
+	// list — so the two are not conflated again.
 
 	const total =
 		baseFee +

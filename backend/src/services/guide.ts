@@ -686,16 +686,26 @@ class GuideService {
 			throw new NotFoundError('Guide profile not found for this transaction');
 		}
 
-		// Only the first caller to observe a still-pending transaction performs
-		// the flip + membership extension — the webhook may win this race
-		// instead, in which case this call just reports the already-updated state.
-		const alreadyFinalized = transaction.status === 'success' || transaction.status === 'paid';
-		if (!alreadyFinalized) {
+		// Record the gateway payment id / status on the transaction. Best-effort
+		// and last-writer-wins — status here is only a record of the payment, no
+		// longer the guard against double-application (that moved onto
+		// membershipAppliedAt, claimed atomically inside finalize below).
+		if (transaction.status !== 'success' && transaction.status !== 'paid') {
 			transaction.razorpay_payment_id = razorpay_payment_id;
 			transaction.status = 'paid';
 			await transaction.save();
-			await this.finalizeMembershipPaymentByGuideId(guide._id.toString(), 'success');
 		}
+
+		// The membership window is applied exactly once per payment. The atomic
+		// claim inside finalize (null→now on the transaction's membershipAppliedAt)
+		// is what makes this safe against the Razorpay webhook reconciling the same
+		// payment at the same instant — whichever caller wins the flip opens the
+		// 30-day window; the loser is a no-op. Previously both could observe a
+		// still-'pending' status and each add a full period (60 days), with a
+		// duplicate membershipHistory row and a duplicate invoice.
+		await this.finalizeMembershipPaymentByGuideId(guide._id.toString(), 'success', {
+			transactionId: transaction._id.toString(),
+		});
 
 		const updatedGuide = await GuideDB.findById(guide._id);
 		return { message: 'Membership payment confirmed successfully.', guide: updatedGuide };
@@ -747,7 +757,11 @@ class GuideService {
 	 * An already-approved guide (the renewal case, and every legacy guide) is
 	 * unaffected: their window opens immediately, exactly as before.
 	 */
-	async finalizeMembershipPaymentByGuideId(guideId: string, status: 'success' | 'failed') {
+	async finalizeMembershipPaymentByGuideId(
+		guideId: string,
+		status: 'success' | 'failed',
+		opts: { transactionId?: string } = {}
+	) {
 		const guide = await GuideDB.findById(guideId);
 		if (!guide) {
 			logError('Guide membership finalize: guide not found', { guideId });
@@ -758,6 +772,27 @@ class GuideService {
 			guide.paymentStatus = 'failed';
 			await guide.save();
 			return guide;
+		}
+
+		// Atomic single-application guard. The browser confirm path and the
+		// Razorpay webhook both converge here for the same membership payment; only
+		// the caller that flips membershipAppliedAt from unset→now is allowed to
+		// open the window, append a history row and cut an invoice. The unique
+		// serialisation point is the conditional update itself — two concurrent
+		// callers cannot both match `{ membershipAppliedAt: null }`. Transactions
+		// created before this field existed are stored as null and so are claimable
+		// exactly once too. When no transactionId is supplied (e.g. a future
+		// internal caller) the guard is skipped and behaviour is unchanged.
+		if (opts.transactionId) {
+			const claimed = await TransactionDB.findOneAndUpdate(
+				{ _id: opts.transactionId, membershipAppliedAt: null },
+				{ $set: { membershipAppliedAt: new Date() } }
+			);
+			if (!claimed) {
+				// Another caller already applied this payment — nothing more to do;
+				// report the guide's current (already-updated) state.
+				return guide;
+			}
 		}
 
 		const now = new Date();

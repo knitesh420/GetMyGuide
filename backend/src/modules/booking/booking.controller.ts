@@ -29,22 +29,6 @@ async function createCustomisedBooking(req: Request, res: Response, next: NextFu
 	}
 }
 
-async function createGuestBooking(req: Request, res: Response, next: NextFunction) {
-	try {
-		const data = req.locals.data as CreateBookingValidationResult;
-
-		const result = await BookingService.createGuestBooking(data);
-
-		return Respond({
-			res,
-			status: 201,
-			data: result.data,
-		});
-	} catch (error) {
-		return next(error);
-	}
-}
-
 async function getMyBookings(req: Request, res: Response, next: NextFunction) {
 	try {
 		const user = req.locals.user as JWTPayload;
@@ -330,7 +314,6 @@ async function verifyBalancePayment(req: Request, res: Response, next: NextFunct
 
 const Controller = {
 	createCustomisedBooking,
-	createGuestBooking,
 	verifyAndCreateGuestBooking,
 	verifyAndCreateBooking,
 	createPackageBooking,

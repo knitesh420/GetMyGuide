@@ -293,10 +293,14 @@ class PaymentService {
 			try {
 				if (referenceType === 'guide_membership') {
 					// Recurring guide membership payment — reference_id is a Guide
-					// document id.
+					// document id. Pass this transaction's id so finalize claims the
+					// membership application atomically: if the browser confirm path
+					// already applied it, this webhook call is a no-op instead of a
+					// second 30-day extension.
 					await GuideService.finalizeMembershipPaymentByGuideId(
 						referenceId,
-						status === 'completed' ? 'success' : 'failed'
+						status === 'completed' ? 'success' : 'failed',
+						{ transactionId: transaction._id.toString() }
 					);
 				} else if (type === 'tourist') {
 					// Booking orders never reference an Account. A pending_* order

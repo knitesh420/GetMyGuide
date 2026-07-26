@@ -13,9 +13,15 @@ const router = express.Router();
 
 // Public routes
 router.route('/key').get(Controller.getRazorpayKey);
-router
-	.route('/guest-booking')
-	.post(CreateBookingValidator, idempotency, Controller.createGuestBooking);
+// NOTE: the unauthenticated order-creation endpoint (`POST /guest-booking`) was
+// removed. Booking now requires a signed-in tourist (see /customised-booking),
+// and leaving an open, un-rate-limited endpoint that minted Razorpay orders +
+// Transaction rows was an abuse/DoS surface with no legitimate caller. The
+// verify endpoint below is kept: it is signature-gated (a valid Razorpay
+// signature for an already-created order) and is used only as a rare safety net
+// when a session lapses in the seconds between paying and verifying — the order
+// it settles was created authenticated, so the resulting booking still links to
+// the tourist via the transaction's stored account.
 router.route('/verify-guest-booking').post(Controller.verifyAndCreateGuestBooking);
 
 // Tourist routes — exact-role gated so guides (who outrank tourists in the

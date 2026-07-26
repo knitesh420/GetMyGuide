@@ -29,6 +29,14 @@ interface SignupData {
 	email: string;
 	phone: string;
 	password: string;
+	/**
+	 * Role to seed. Optional and defaults to 'tourist'. This method is internal —
+	 * there is no public HTTP signup route (registration goes through the
+	 * OTP-verified flow), and nothing in src/ calls it — so honouring a role here
+	 * cannot let a public caller mint a privileged account. Integration suites use
+	 * it to seed admin/guide fixtures directly instead of signing up and promoting.
+	 */
+	role?: 'tourist' | 'guide' | 'admin';
 }
 
 interface RegisterSendOtpData {
@@ -107,7 +115,7 @@ class AuthService {
 			email: data.email.toLowerCase(),
 			phone: data.phone,
 			password: data.password,
-			role: 'tourist',
+			role: data.role ?? 'tourist',
 			status: 'non_verified',
 			isActive: true,
 		});

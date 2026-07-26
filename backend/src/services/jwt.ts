@@ -23,22 +23,41 @@ function normalizeExpire(value: string): string {
 	return value.replace('minutes', 'm').replace('minute', 'm');
 }
 
+/**
+ * Pin the signing algorithm on both sides.
+ *
+ * jsonwebtoken picks HS256 when signing with a string secret, but on the verify
+ * side it will accept whatever the token's own `alg` header claims as long as
+ * the key type fits. Naming the algorithm explicitly means the header is no
+ * longer an input to that decision — a token presented as `none`, or as an
+ * HMAC variant we never issue, is rejected on algorithm grounds before the
+ * signature is even considered.
+ *
+ * This is defence-in-depth rather than a fix for a live hole: the classic
+ * confusion attack needs an asymmetric public key sitting in the secret slot,
+ * and both secrets here are symmetric strings. It costs nothing and removes the
+ * failure mode entirely if a key type ever changes.
+ */
+const ALGORITHM = 'HS256' as const;
+
 class JWTService {
 	generateAccessToken(payload: JWTPayload): string {
 		return jwt.sign(payload, JWT_ACCESS_SECRET, {
 			expiresIn: normalizeExpire(String(JWT_ACCESS_EXPIRE)),
+			algorithm: ALGORITHM,
 		} as SignOptions);
 	}
 
 	generateRefreshToken(payload: RefreshPayload): string {
 		return jwt.sign(payload, JWT_REFRESH_SECRET, {
 			expiresIn: normalizeExpire(String(JWT_REFRESH_EXPIRE)),
+			algorithm: ALGORITHM,
 		} as SignOptions);
 	}
 
 	verifyAccessToken(token: string): JWTPayload | null {
 		try {
-			return jwt.verify(token, JWT_ACCESS_SECRET) as JWTPayload;
+			return jwt.verify(token, JWT_ACCESS_SECRET, { algorithms: [ALGORITHM] }) as JWTPayload;
 		} catch {
 			return null;
 		}
@@ -46,7 +65,7 @@ class JWTService {
 
 	verifyRefreshToken(token: string): RefreshPayload | null {
 		try {
-			return jwt.verify(token, JWT_REFRESH_SECRET) as RefreshPayload;
+			return jwt.verify(token, JWT_REFRESH_SECRET, { algorithms: [ALGORITHM] }) as RefreshPayload;
 		} catch {
 			return null;
 		}

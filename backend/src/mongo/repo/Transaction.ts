@@ -133,6 +133,18 @@ const TransactionSchema = new mongoose.Schema<ITransaction>(
 		metadata: {
 			type: mongoose.Schema.Types.Mixed,
 		},
+		// Single-application guard for guide-membership finalization. The browser
+		// confirm path (GuideService.confirmMembershipPayment) and the Razorpay
+		// webhook (services/payment.ts) both finalize the same membership payment;
+		// the caller that atomically flips this from null→now is the only one that
+		// opens the 30-day window, appends a membershipHistory row and cuts an
+		// invoice. Without it a webhook/browser race extended membership by 60 days
+		// and duplicated the history entry and invoice. Only meaningful for
+		// reference_type === 'guide_membership'; null on every other transaction.
+		membershipAppliedAt: {
+			type: Date,
+			default: null,
+		},
 	},
 	{
 		timestamps: true,
