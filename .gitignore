@@ -93,3 +93,4 @@ static/
 *.crt
 secrets/
 .nyc_output/
+logs/
