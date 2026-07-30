@@ -1,7 +1,7 @@
 import { BlogDB } from '@mongo';
 import { Types } from 'mongoose';
 import { BadRequestError, NotFoundError } from 'node-be-utilities';
-import Controller from '../../../../src/modules/blog/blog.controller';
+import Controller from '../../../../server/modules/blog/blog.controller';
 import {
 	createMockFile,
 	createMockNext,

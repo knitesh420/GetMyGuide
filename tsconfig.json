@@ -1,12 +1,8 @@
 {
   "compilerOptions": {
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
+    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
-    "target": "ES6",
+    "target": "ES2020",
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
@@ -17,15 +13,24 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
     "plugins": [
       {
         "name": "next"
       }
     ],
+    "typeRoots": ["./node_modules/@types", "./server/types", "./server/mongo/types"],
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"],
+      "@services/*": ["./server/services/*"],
+      "@config/*": ["./server/config/*"],
+      "@middleware/*": ["./server/middleware/*"],
+      "@modules/*": ["./server/modules/*"],
+      "@provider/*": ["./server/provider/*"],
+      "@utils/*": ["./server/utils/*"],
+      "@mongo": ["./server/mongo/index"],
+      "@mongo/*": ["./server/mongo/*"]
     }
   },
   "include": [
@@ -35,7 +40,6 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": [
-    "node_modules"
-  ]
+  // tests/ is compiled by tsconfig.server.json (Node/CommonJS), not by Next.
+  "exclude": ["node_modules", "backend", "frontend", "tests", "server/scripts", ".next", "build"]
 }

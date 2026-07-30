@@ -13,7 +13,7 @@ import axios from 'axios';
 import express from 'express';
 import { Readable } from 'stream';
 import request from 'supertest';
-import configServer from '../../src/server-config';
+import configServer from '../../server/server-config';
 import { clearDatabase, connectTestDB, disconnectTestDB } from '../setup/db.setup';
 
 jest.mock('@provider/email', () => ({

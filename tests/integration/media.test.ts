@@ -2,7 +2,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import request from 'supertest';
-import configServer from '../../src/server-config';
+import configServer from '../../server/server-config';
 import { createAuthedUser } from '../helpers/auth';
 import { connectTestDB, disconnectTestDB } from '../setup/db.setup';
 

@@ -1,4 +1,4 @@
-import Controller from '../../../../src/modules/guide/guide.controller';
+import Controller from '../../../../server/modules/guide/guide.controller';
 import {
 	createMockNext,
 	createMockRequest,

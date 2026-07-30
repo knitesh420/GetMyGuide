@@ -4,7 +4,7 @@ import { uploadMulterImage } from '@utils/cloudinaryUpload';
 import express from 'express';
 import mongoose from 'mongoose';
 import request from 'supertest';
-import configServer from '../../src/server-config';
+import configServer from '../../server/server-config';
 import { clearDatabase, connectTestDB, disconnectTestDB } from '../setup/db.setup';
 
 jest.mock('@provider/email', () => ({

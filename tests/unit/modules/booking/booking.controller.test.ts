@@ -1,7 +1,7 @@
 import BookingService from '@services/booking';
 import { Types } from 'mongoose';
 import { NotFoundError } from 'node-be-utilities';
-import BookingController from '../../../../src/modules/booking/booking.controller';
+import BookingController from '../../../../server/modules/booking/booking.controller';
 import {
 	createMockNext,
 	createMockRequest,

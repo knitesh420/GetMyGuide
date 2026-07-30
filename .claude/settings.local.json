@@ -15,7 +15,10 @@
       "Bash(curl -s \"https://res.cloudinary.com/dmpz3k4mb/image/upload/fl_getinfo/getmyguide/public/how-it-work.jpg\")",
       "Bash(node \"C:/Users/nites/AppData/Local/Temp/claude/c--Users-nites-OneDrive-Desktop-Tour/9d9dce70-9942-48a8-85ae-d7c4f101c44c/scratchpad/verify-anim.mjs\")",
       "Bash(npx tsc *)",
-      "Bash(echo \"EXIT_CODE=$?\")"
+      "Bash(echo \"EXIT_CODE=$?\")",
+      "Bash(pnpm install *)",
+      "Bash(git add *)",
+      "Bash(git commit -q -m ' *)"
     ]
   }
 }

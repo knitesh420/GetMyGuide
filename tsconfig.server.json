@@ -1,0 +1,45 @@
+{
+  // Server-side TypeScript config: the Node/CommonJS world (server/ + tests/).
+  //
+  // This exists separately from the root tsconfig.json because the two halves of
+  // the app now compile under genuinely different runtimes:
+  //
+  //   tsconfig.json         Next's bundler   module: esnext, moduleResolution: bundler
+  //   tsconfig.server.json  Node / jest      module: commonjs, moduleResolution: node
+  //
+  // Merging them is what broke the test suite during the migration: the root
+  // config pulls in Next's global types, which declare process.env.NODE_ENV as
+  // readonly, and every suite failed on tests/setup/jest.setup.ts assigning to
+  // it. Keeping the server's compile context free of Next's DOM/global types is
+  // the fix, and it is also just correct — this code never runs in a browser.
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "lib": ["es2020"],
+    "baseUrl": ".",
+    "paths": {
+      "@services/*": ["server/services/*"],
+      "@config/*": ["server/config/*"],
+      "@middleware/*": ["server/middleware/*"],
+      "@modules/*": ["server/modules/*"],
+      "@provider/*": ["server/provider/*"],
+      "@utils/*": ["server/utils/*"],
+      "@mongo": ["server/mongo/index"],
+      "@mongo/*": ["server/mongo/*"]
+    },
+    "typeRoots": ["./node_modules/@types", "./server/types", "./server/mongo/types"],
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "strictNullChecks": true,
+    "alwaysStrict": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "noEmit": true
+  },
+  "include": ["server/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["node_modules", "server/scripts", "backend", "frontend", ".next", "build"]
+}

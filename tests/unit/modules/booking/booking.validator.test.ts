@@ -2,7 +2,7 @@ import { BadRequestError } from 'node-be-utilities';
 import {
 	AllocateGuideValidator,
 	CreateBookingValidator,
-} from '../../../../src/modules/booking/booking.validator';
+} from '../../../../server/modules/booking/booking.validator';
 import {
 	createMockNext,
 	createMockRequest,

@@ -3,7 +3,7 @@ import {
 	CreatePackageValidator,
 	UpdatePackageValidator,
 	UpdateStatusValidator,
-} from '../../../../src/modules/package/package.validator';
+} from '../../../../server/modules/package/package.validator';
 import {
 	createMockNext,
 	createMockRequest,

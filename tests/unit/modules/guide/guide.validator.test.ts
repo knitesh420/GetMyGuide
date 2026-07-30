@@ -1,4 +1,4 @@
-import { GuideProfileValidator } from '../../../../src/modules/guide/guide.validator';
+import { GuideProfileValidator } from '../../../../server/modules/guide/guide.validator';
 import {
 	createMockNext,
 	createMockRequest,

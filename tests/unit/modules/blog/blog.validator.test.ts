@@ -1,5 +1,5 @@
 import { BadRequestError } from 'node-be-utilities';
-import { CreateBlogValidator } from '../../../../src/modules/blog/blog.validator';
+import { CreateBlogValidator } from '../../../../server/modules/blog/blog.validator';
 import {
 	createMockNext,
 	createMockRequest,

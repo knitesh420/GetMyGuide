@@ -3,7 +3,7 @@ import { AccountDB, BookingDB, InvoiceDB, NotificationDB, ReviewDB, TouristDB, T
 import express from 'express';
 import { Types } from 'mongoose';
 import request from 'supertest';
-import configServer from '../../src/server-config';
+import configServer from '../../server/server-config';
 import { testSignupData, testUser } from '../helpers/fixtures';
 import { clearDatabase, connectTestDB, disconnectTestDB } from '../setup/db.setup';
 

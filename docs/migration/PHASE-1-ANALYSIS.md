@@ -196,7 +196,27 @@ Options:
 Whichever you choose, the tick endpoint must be idempotent (it already is — dedupe
 is enforced by the `dedupeKey` unique index) and authenticated by a shared secret.
 
-### 🟠 B3. Local-disk media — needs a production DB audit
+### ✅ B3. Local-disk media — AUDITED 2026-07-30, effectively a non-issue
+
+**Read-only audit against production returned:**
+
+| Collection | Total | Disk-dependent | Verdict |
+| --- | --- | --- | --- |
+| Blog | 8 | **0** (`hasImage:true` = 0) | clean — all video-only |
+| Package | 5 | **0** (5/5 on Cloudinary) | clean |
+| Advertisement | 1 | **1** (active `.mp4`) | one file to move |
+
+The whole local-disk migration is **a single advertisement video**:
+`4884a6c5-3881-4f59-9530-8fc1e1dd85ac.mp4`. Copy it to Cloudinary, update one
+row, and the disk dependency is gone entirely.
+
+The `Blog.hasImage` upload path still exists in code and must be converted
+(multer disk → Cloudinary) so *future* uploads work on Vercel, but there is no
+back-fill and no 404 risk for existing content.
+
+Original analysis retained below for context.
+
+### 🟠 B3 (original analysis)
 
 Serverless filesystems are ephemeral and read-only outside `/tmp`. Affected:
 

@@ -80,3 +80,16 @@ test-results.xml
 *.orig
 *.rej
 *.map
+
+# ------------------------------------------------------------
+# Server (migrated from backend/)
+# ------------------------------------------------------------
+static/
+.pnpm-store/
+.eslintcache
+*.pem
+*.key
+*.cert
+*.crt
+secrets/
+.nyc_output/
