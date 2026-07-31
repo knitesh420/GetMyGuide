@@ -68,4 +68,22 @@ export const uploadMulterImage = async (
 	return result.secure_url;
 };
 
+/**
+ * Upload an in-memory file to Cloudinary and return its secure URL.
+ *
+ * The native Route Handlers parse multipart with the Web FormData API, which
+ * yields bytes rather than a temp file on disk — so there is nothing to write
+ * and nothing to unlink. Same Cloudinary options as `uploadMulterImage`,
+ * including `{ type: 'authenticated' }` for KYC assets, which makes them
+ * unreadable by bare URL and deliverable only through a server-signed one.
+ */
+export const uploadBuffer = async (
+	buffer: Buffer,
+	folder: string,
+	options: UploadApiOptions = {}
+): Promise<string> => {
+	const result = await uploadToCloudinary(buffer, folder, options);
+	return result.secure_url;
+};
+
 export default uploadToCloudinary;
