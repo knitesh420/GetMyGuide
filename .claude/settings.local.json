@@ -19,7 +19,9 @@
       "Bash(pnpm install *)",
       "Bash(git add *)",
       "Bash(git commit -q -m ' *)",
-      "Bash(echo \"\\(exit: $?\\)\")"
+      "Bash(echo \"\\(exit: $?\\)\")",
+      "Bash(git push *)",
+      "Bash(git ls-remote *)"
     ]
   }
 }
