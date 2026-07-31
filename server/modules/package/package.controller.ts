@@ -1,30 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import { Types } from 'mongoose';
 import Package from './package.schema';
+import { toPackageObjectId as toObjectId } from './package.input';
 import uploadToCloudinary from '../../utils/cloudinaryUpload';
 import cloudinary from '../../config/cloudinary';
-
-/**
- * These routes take `:id` straight off the URL with no IDValidator in front of
- * them, so a non-ObjectId segment used to reach Mongoose and surface as a
- * CastError — a 500 on what is really a client error. It also meant any path
- * that fell through to `GET /package/:id` (e.g. a mistyped `/package/foo`)
- * answered 500 rather than a 4xx.
- *
- * Returning null here lets each handler answer 400 for a malformed id and keep
- * 404 for a well-formed one that matches nothing — the same split the shared
- * IDValidator middleware produces everywhere else in this codebase.
- */
-function toObjectId(input: string | string[] | undefined): Types.ObjectId | null {
-	// Express 5 types a route param as `string | string[]`. A repeated param is
-	// never a valid id, so reject the array form rather than coercing it.
-	const raw = typeof input === 'string' ? input : undefined;
-	if (!raw || !Types.ObjectId.isValid(raw)) return null;
-	// isValid() accepts any 12-byte string as well as 24-hex, so round-trip it to
-	// be sure the input really is the canonical id and not a coincidental match.
-	const id = new Types.ObjectId(raw);
-	return id.toString() === raw ? id : null;
-}
 
 /**
  * A malformed id is a client error, not a missing resource — 400, matching what

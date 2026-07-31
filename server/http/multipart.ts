@@ -39,9 +39,14 @@ export interface ParsedForm {
 export interface FilePolicy {
 	/** Field name this policy applies to. */
 	field: string;
-	allowedMimeTypes: string[];
+	/**
+	 * Accepted MIME types. OMIT to accept anything — several multer parsers in
+	 * this app are configured with no `fileFilter` at all (location, package),
+	 * and inventing an allow-list for them would reject uploads that work today.
+	 */
+	allowedMimeTypes?: string[];
 	/** Human-readable rejection message, matching the multer fileFilter's. */
-	message: string;
+	message?: string;
 	maxCount?: number;
 	/** Bytes. Defaults to 10MB, matching the multer limits. */
 	maxSize?: number;
@@ -88,8 +93,8 @@ export async function parseMultipart(
 
 		const blob = value as File;
 
-		if (!policy.allowedMimeTypes.includes(blob.type)) {
-			throw new BadRequestError(policy.message);
+		if (policy.allowedMimeTypes && !policy.allowedMimeTypes.includes(blob.type)) {
+			throw new BadRequestError(policy.message ?? 'Unsupported file type');
 		}
 
 		const maxSize = policy.maxSize ?? DEFAULT_MAX_SIZE;
@@ -116,13 +121,47 @@ export async function parseMultipart(
 	return { fields, files };
 }
 
+/**
+ * Parse a request whose body may arrive as EITHER multipart or JSON.
+ *
+ * This is not a convenience — it is required for parity. In Express these routes
+ * sit behind both `express.json()` and a multer parser, and whichever one matches
+ * the Content-Type populates `req.body`; the validator downstream never knew or
+ * cared which. The admin panel posts multipart (it may attach an image) but the
+ * same endpoints accept a plain JSON body today, so a native handler that only
+ * understood multipart would reject requests the Express one accepts.
+ *
+ * Note the asymmetry that follows from Express's own behaviour: field values from
+ * a multipart body are always strings, so schemas fed by this helper must accept
+ * the string forms (see `multipartBoolean` in the location schema).
+ */
+export async function parseBodyWithFiles(
+	request: Request,
+	policies: FilePolicy[]
+): Promise<{ body: unknown; files: UploadedFile[] }> {
+	const contentType = request.headers.get('content-type') ?? '';
+
+	if (contentType.toLowerCase().includes('multipart/form-data')) {
+		const form = await parseMultipart(request, policies);
+		return { body: form.fields, files: form.files };
+	}
+
+	try {
+		return { body: await request.json(), files: [] };
+	} catch {
+		// Unparseable body reads as a validation failure downstream, not a 500 —
+		// the same 400 Express's json parser produced.
+		return { body: undefined, files: [] };
+	}
+}
+
 /** The single file for a field, or undefined. */
-export function fileFor(form: ParsedForm, field: string): UploadedFile | undefined {
+export function fileFor(form: { files: UploadedFile[] }, field: string): UploadedFile | undefined {
 	return form.files.find((file) => file.field === field);
 }
 
 /** Every file for a field, in arrival order. */
-export function filesFor(form: ParsedForm, field: string): UploadedFile[] {
+export function filesFor(form: { files: UploadedFile[] }, field: string): UploadedFile[] {
 	return form.files.filter((file) => file.field === field);
 }
 

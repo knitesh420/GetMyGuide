@@ -27,9 +27,15 @@ jest.mock('@provider/email', () => {
  * "should successfully create a package (admin)" family was red and looked like
  * an authorisation problem rather than a missing test double.
  */
+// The named exports matter as much as the default now: the native Route
+// Handlers upload in-memory buffers via `uploadBuffer`, and a factory that only
+// stubbed `default` left them resolving to undefined — every native upload would
+// die with "uploadBuffer is not a function" rather than being exercised.
 jest.mock('@utils/cloudinaryUpload', () => ({
 	__esModule: true,
 	default: jest.fn(),
+	uploadBuffer: jest.fn(),
+	uploadMulterImage: jest.fn(),
 }));
 
 jest.mock('@config/cloudinary', () => ({
@@ -82,7 +88,8 @@ const isMock = (fn: unknown): fn is jest.Mock =>
 
 beforeEach(() => {
 	/* eslint-disable @typescript-eslint/no-var-requires */
-	const uploadToCloudinary = require('@utils/cloudinaryUpload').default;
+	const cloudinaryUpload = require('@utils/cloudinaryUpload');
+	const uploadToCloudinary = cloudinaryUpload.default;
 	const cloudinary = require('@config/cloudinary').default;
 	/* eslint-enable @typescript-eslint/no-var-requires */
 
@@ -95,6 +102,18 @@ beforeEach(() => {
 				public_id: `${folder}/asset-${counter}`,
 			};
 		});
+	}
+
+	// Same URLs as the default export produces, so a native handler and its
+	// Express counterpart can be compared field-for-field.
+	for (const name of ['uploadBuffer', 'uploadMulterImage'] as const) {
+		const fn = cloudinaryUpload[name];
+		if (isMock(fn)) {
+			fn.mockImplementation(async (_file: unknown, folder: string) => {
+				counter += 1;
+				return `https://res.cloudinary.com/test/${folder}/asset-${counter}.jpg`;
+			});
+		}
 	}
 
 	if (isMock(cloudinary.uploader.destroy)) {

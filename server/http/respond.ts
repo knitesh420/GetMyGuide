@@ -99,6 +99,31 @@ export function respond({
 }
 
 /**
+ * A response body written verbatim — no envelope, nothing appended.
+ *
+ * Needed because the package module never adopted `Respond()`: its controller
+ * answers `res.status(400).json({ success: false, message: 'Invalid ID' })`
+ * directly. Passing that through `respond()` would append `success: true` and
+ * overwrite the `false` the client is meant to see, turning a rejection into an
+ * apparent success. Security headers and Content-Type still match, because the
+ * Express app set those globally for every reply.
+ */
+export function respondJson({
+	status = 200,
+	body,
+	headers,
+}: {
+	status?: number;
+	body: unknown;
+	headers?: Headers;
+}): Response {
+	const responseHeaders = withSecurityHeaders(headers ?? new Headers());
+	responseHeaders.set('Content-Type', 'application/json; charset=utf-8');
+
+	return new Response(JSON.stringify(body), { status, headers: responseHeaders });
+}
+
+/**
  * Error response. Reproduces node-be-utilities' errorHandler, including the
  * duplicated title/message at the root and inside `error`.
  *
