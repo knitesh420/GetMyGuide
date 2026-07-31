@@ -1,20 +1,22 @@
 import { handleValidation as handle } from '@utils/validate';
 import { NextFunction, Request, Response } from 'express';
-import { z } from 'zod';
 
-import { paymentVerifySchema } from './tourguide.schema';
+import {
+	cancelSchema,
+	createOrderSchema,
+	listQuerySchema,
+	paymentVerifySchema,
+	quoteSchema,
+	reassignSchema,
+	statusSchema,
+	verifyAndCreateSchema,
+} from './tourguide.schema';
 
-// Note there is deliberately no `totalPrice` here. The price is derived from the
-// guide's published rate on the server; accepting it from the client would let a
-// tourist name their own price.
-const directBookingShape = {
-	guideId: z.string().trim().min(1, 'guideId is required'),
-	location: z.string().trim().min(1, 'location is required').max(200),
-	language: z.string().trim().max(100).optional().default(''),
-	startDate: z.coerce.date(),
-	endDate: z.coerce.date(),
-	numberOfTravelers: z.coerce.number().int().positive().max(100).default(1),
-};
+/**
+ * The schemas themselves live in `tourguide.schema.ts`, shared with the native
+ * Route Handlers in `app/api/tourguide/`. These wrappers exist only to keep the
+ * Express middleware signature while both implementations are mounted.
+ */
 
 export type TourGuideCreateOrderValidationResult = {
 	guideId: string;
@@ -26,8 +28,7 @@ export type TourGuideCreateOrderValidationResult = {
 };
 
 export async function TourGuideCreateOrderValidator(req: Request, res: Response, next: NextFunction) {
-	const validator = z.object(directBookingShape);
-	return handle(validator.safeParse(req.body), req, next);
+	return handle(createOrderSchema.safeParse(req.body), req, next);
 }
 
 export type TourGuideQuoteValidationResult = {
@@ -37,13 +38,7 @@ export type TourGuideQuoteValidationResult = {
 };
 
 export async function TourGuideQuoteValidator(req: Request, res: Response, next: NextFunction) {
-	const validator = z.object({
-		guideId: z.string().trim().min(1, 'guideId is required'),
-		startDate: z.coerce.date(),
-		endDate: z.coerce.date(),
-	});
-
-	return handle(validator.safeParse(req.query), req, next);
+	return handle(quoteSchema.safeParse(req.query), req, next);
 }
 
 export type TourGuideVerifyValidationResult = {
@@ -54,14 +49,7 @@ export type TourGuideVerifyValidationResult = {
 };
 
 export async function TourGuideVerifyValidator(req: Request, res: Response, next: NextFunction) {
-	const validator = z.object({
-		razorpay_order_id: z.string().trim().min(1),
-		razorpay_payment_id: z.string().trim().min(1),
-		razorpay_signature: z.string().trim().min(1),
-		booking_data: z.string().trim().min(1),
-	});
-
-	return handle(validator.safeParse(req.body), req, next);
+	return handle(verifyAndCreateSchema.safeParse(req.body), req, next);
 }
 
 export type PaymentVerifyValidationResult = {
@@ -81,11 +69,7 @@ export type TourGuideStatusValidationResult = {
 };
 
 export async function TourGuideStatusValidator(req: Request, res: Response, next: NextFunction) {
-	const validator = z.object({
-		status: z.enum(['Upcoming', 'Completed']),
-	});
-
-	return handle(validator.safeParse(req.body), req, next);
+	return handle(statusSchema.safeParse(req.body), req, next);
 }
 
 export type TourGuideCancelValidationResult = {
@@ -93,11 +77,7 @@ export type TourGuideCancelValidationResult = {
 };
 
 export async function TourGuideCancelValidator(req: Request, res: Response, next: NextFunction) {
-	const validator = z.object({
-		reason: z.string().trim().min(5, 'Please give a reason of at least 5 characters').max(2000),
-	});
-
-	return handle(validator.safeParse(req.body), req, next);
+	return handle(cancelSchema.safeParse(req.body), req, next);
 }
 
 export type TourGuideReassignValidationResult = {
@@ -105,11 +85,7 @@ export type TourGuideReassignValidationResult = {
 };
 
 export async function TourGuideReassignValidator(req: Request, res: Response, next: NextFunction) {
-	const validator = z.object({
-		newGuideId: z.string().trim().min(1, 'newGuideId is required'),
-	});
-
-	return handle(validator.safeParse(req.body), req, next);
+	return handle(reassignSchema.safeParse(req.body), req, next);
 }
 
 export type TourGuideListQueryValidationResult = {
@@ -118,10 +94,5 @@ export type TourGuideListQueryValidationResult = {
 };
 
 export async function TourGuideListQueryValidator(req: Request, res: Response, next: NextFunction) {
-	const validator = z.object({
-		page: z.coerce.number().int().positive().default(1),
-		limit: z.coerce.number().int().positive().max(100).default(20),
-	});
-
-	return handle(validator.safeParse(req.query), req, next);
+	return handle(listQuerySchema.safeParse(req.query), req, next);
 }

@@ -5,7 +5,7 @@
 Branch: `feature/nextjs-migration` (pushed, in sync with origin)
 Repo: `knitesh420/GetMyGuide`
 `main`: untouched at `fe3c2b2` — production still deploys from it
-Last updated: 2026-07-31 (Phase 3.9)
+Last updated: 2026-07-31 (Phase 3.10)
 
 ---
 
@@ -23,11 +23,14 @@ Do not "create a Next.js project" — it exists, at the repo root.
 
 | Metric | Value |
 | --- | --- |
-| Endpoints native | **156 of 178** |
-| Endpoints on the Express adapter | 22 (all working) |
-| Tests | **798 passing, 55 suites** |
+| Endpoints native | **167 of 178** |
+| Endpoints on the Express adapter | 11 (all working, all BLOCKED on B1b) |
+| Tests | **855 passing, 56 suites** |
 | Typechecks | `tsc -p tsconfig.server.json` and `tsc` both clean |
-| Build | `next build` succeeds, 144 native route files |
+| Build | `next build` succeeds, 155 native route files |
+
+**Every unblocked module is now native.** What remains on the adapter is only
+`blog` and `advertisement`, both waiting on the disk-media decision in §6 B1b.
 
 ### Repo layout (post-merge)
 
@@ -244,24 +247,27 @@ These are inconsistent but are the contract the frontend receives:
   envelope would not throw — it would silently resolve fields to `undefined`.
   Bare arrays must be wrapped as `{ data: [...] }`.
 
-## 9. Remaining work (22 endpoints)
+## 9. Remaining work (11 endpoints — all blocked)
 
 | Module | Endpoints | Notes |
 | --- | --- | --- |
-| tourguide | 11 | direct booking flow; already shares `paymentVerifySchema` with booking |
 | advertisement | 7 | **BLOCKED** — disk-backed media, see §6 B1b |
 | blog | 4 | **BLOCKED** — disk-backed media, see §6 B1b |
 
-**`tourguide` is the last unblocked module.** Once it lands, the only things left
-on the adapter are the two disk-media modules, and the adapter cannot be retired
-until B1b is decided.
+**There is no unblocked work left.** The next step is not a port — it is the
+B1b product decision (direct-to-Cloudinary). Until that is made, these two
+modules stay on the adapter, and the adapter, `server/http/express-app.ts`,
+`server/http/express-adapter.ts` and the express/cors/cookie-parser/multer/
+supertest/node-be-utilities dependencies must all stay too. Porting either
+module first would faithfully reproduce a feature that is already broken on
+serverless.
 
 Plus `/upload-media` and `GET /media/:path/:filename` in `server/modules/index.ts`,
 which are the disk-backed pair the two blocked modules depend on.
 
 Done so far in Phase 3: session/auth, tourist, guide, dashboard, report, lead,
 assignment, payment, refund, cashPayment, earning, invoice, location, package,
-notification, message, booking, trip, review, user, guideAvailability.
+notification, message, booking, trip, review, user, guideAvailability, tourguide.
 
 ### What Phase 3.8 (booking) established — read before porting tourguide
 
@@ -318,13 +324,60 @@ The `/users` tree is six re-export files — Next reads `runtime`/`dynamic` off 
 route module itself, so the segment config is redeclared per file but the
 handlers are not duplicated.
 
-**Next up (Phase 3.10):** `tourguide` (11) — the last unblocked module. Its
-validators are still inline in `tourguide.validator.ts` except
-`paymentVerifySchema`, which already moved to `tourguide.schema.ts` in Phase 3.8;
-move the rest there as part of the port. Expect the direct-booking flow to have
-the same idempotency-and-ordering shape booking did.
+### What Phase 3.10 (tourguide) established
 
-Then: retire the adapter and drop the Express dependencies.
+tourguide is the direct-booking flow and did have booking's shape, plus one
+split of its own. All 11 endpoints are pinned in `tourguideNativeParity.test.ts`
+(57 cases). The remaining inline validators moved into `tourguide.schema.ts`
+alongside `paymentVerifySchema`, and `tourguide.validator.ts` is now wrappers.
+
+Three orderings are contract:
+
+- `/create-order` gates role → validate → idempotency. The role gate is the
+  EXACT `VerifyRole('tourist','admin')`, not min-level: a guide outranks a
+  tourist, and min-level would let one guide open bookings against another.
+- `/:id/create-final-order` validates the id BEFORE demanding the key, so a
+  malformed id says "Invalid ID" rather than naming the missing header.
+- `PATCH /:id/status` and `PATCH /:id/reassign-guide` check admin BEFORE the id;
+  `GET /:id`, `/:id/cancel`, `/:id/create-final-order` and
+  `/:id/verify-final-payment` have **no role gate at all**. The same non-admin
+  sending the same malformed id gets 403 from the first pair and 400 from the
+  rest. Three different services do the authorising instead
+  (`BalancePaymentService.assertOwner`, `RefundService.assertCanRequest`,
+  `TourGuideService.assertVisible`), and each admits a set a door-level role
+  check would lock out.
+
+Two more worth carrying forward:
+
+- `GET /tourguide/:id` answers **403** for a booking that exists but is not
+  yours, where `GET /booking/:id` answers **404**. booking scopes its lookup by
+  owner; tourguide finds the booking first and authorises after. Both are
+  pinned; do not harmonise them.
+- `/:id/cancel` does NOT cancel. It opens a request an admin decides on, even
+  when an admin calls it, so that every refund amount is set in one place. It
+  answers 201.
+
+`verify-and-create` requires `booking_data` (the base64 terms blob) where the
+balance-payment verify does not, which is why `verifyAndCreateSchema` and
+`paymentVerifySchema` are separate and must stay so.
+
+**🐛 Found, not fixed — the allocated guide cannot read their own direct booking.**
+`TourGuideService.assertVisible` means to admit them, and doesn't:
+`getById` runs `.populate('allocated_guide', …).lean()` before the check, so
+`booking.allocated_guide` is a plain object by then and `.toString()` yields
+`'[object Object]'`, which never equals a user id. `linked_to` is not populated,
+so the tourist path is fine. This is in `server/services/tourguide.ts:405-412`
+and **predates the migration** — both halves of the parity run agree on 403, so
+it is production behaviour today, not a port defect. It is pinned by a case in
+`tourguideNativeParity.test.ts` and deliberately left alone: fixing it is a
+behaviour change and belongs in its own commit, not in a port whose whole
+guarantee is that nothing changed. The guide dashboard reads through
+`/guide/my-bookings` (`getMyGuideBookingById`, which populates `linked_to`
+instead), which is probably why nobody has hit it.
+
+**Next up: nothing unblocked.** The B1b decision (§6) gates everything that is
+left. Once it is made: port blog + advertisement, then retire the adapter and
+drop the Express dependencies.
 
 ## 10. Environment notes
 
@@ -347,7 +400,7 @@ Then: retire the adapter and drop the Express dependencies.
 ```bash
 npx tsc --noEmit -p tsconfig.server.json   # server + tests
 npx tsc --noEmit                            # Next app
-npx jest --silent                           # 798 tests, 55 suites
+npx jest --silent                           # 855 tests, 56 suites
 cp .env.example .env.local && npx next build && rm -f .env.local
 ```
 
