@@ -5,7 +5,7 @@
 Branch: `feature/nextjs-migration` (pushed, in sync with origin)
 Repo: `knitesh420/GetMyGuide`
 `main`: untouched at `fe3c2b2` — production still deploys from it
-Last updated: 2026-07-31 (Phase 3.8)
+Last updated: 2026-07-31 (Phase 3.9)
 
 ---
 
@@ -23,11 +23,11 @@ Do not "create a Next.js project" — it exists, at the repo root.
 
 | Metric | Value |
 | --- | --- |
-| Endpoints native | **130 of 178** |
-| Endpoints on the Express adapter | 48 (all working) |
-| Tests | **740 passing, 54 suites** |
+| Endpoints native | **156 of 178** |
+| Endpoints on the Express adapter | 22 (all working) |
+| Tests | **798 passing, 55 suites** |
 | Typechecks | `tsc -p tsconfig.server.json` and `tsc` both clean |
-| Build | `next build` succeeds, 113 native route files |
+| Build | `next build` succeeds, 144 native route files |
 
 ### Repo layout (post-merge)
 
@@ -244,24 +244,24 @@ These are inconsistent but are the contract the frontend receives:
   envelope would not throw — it would silently resolve fields to `undefined`.
   Bare arrays must be wrapped as `{ data: [...] }`.
 
-## 9. Remaining work (48 endpoints)
+## 9. Remaining work (22 endpoints)
 
 | Module | Endpoints | Notes |
 | --- | --- | --- |
 | tourguide | 11 | direct booking flow; already shares `paymentVerifySchema` with booking |
-| trip | 7 | |
-| review | 7 | |
 | advertisement | 7 | **BLOCKED** — disk-backed media, see §6 B1b |
-| user | 6 | |
-| guideAvailability | 6 | |
 | blog | 4 | **BLOCKED** — disk-backed media, see §6 B1b |
+
+**`tourguide` is the last unblocked module.** Once it lands, the only things left
+on the adapter are the two disk-media modules, and the adapter cannot be retired
+until B1b is decided.
 
 Plus `/upload-media` and `GET /media/:path/:filename` in `server/modules/index.ts`,
 which are the disk-backed pair the two blocked modules depend on.
 
 Done so far in Phase 3: session/auth, tourist, guide, dashboard, report, lead,
 assignment, payment, refund, cashPayment, earning, invoice, location, package,
-notification, message, booking.
+notification, message, booking, trip, review, user, guideAvailability.
 
 ### What Phase 3.8 (booking) established — read before porting tourguide
 
@@ -292,9 +292,37 @@ Razorpay order, and a parity run executes the handler twice, so the second call
 lands in the idempotency replay branch instead of the code under test. Those
 paths stay covered against Express in `booking.test.ts`.
 
-**Next up (Phase 3.9):** `tourguide` (11), then the ordinary CRUD batch — `trip`
-(7), `review` (7), `user` (6), `guideAvailability` (6) — which can go in one or
-two commits.
+### What Phase 3.9 (trip, review, user, guideAvailability) established
+
+These four are ordinary CRUD, so the risk moved from ordering to **which gate
+sits on which route**. Several pairs are one word apart and gated differently;
+all are pinned in `crudNativeParity.test.ts`:
+
+- `/trip/my` is the GUIDE's trips, `/trip/mine` the TOURIST's.
+- `/review/my` is what a tourist WROTE, `/review/mine/guide` what a guide
+  RECEIVED, `/review/guide/:guideId` the PUBLIC list.
+- `POST /review` and `GET /review` share a path and NOT a gate — tourist writes,
+  admin reads.
+- `/trip/:id/start` and `/complete` are guide-level; `/cancel` is admin-only,
+  because cancelling triggers the refund path. Do not harmonise the three.
+- `/guide-availability/calendar/me` is the guide's own, `/calendar/:id` admin-only.
+
+**`user` has no zod validators and must not be given any.** Its controller reads
+pagination as `parseInt(x) || default`, which means `?limit=0` and `?limit=abc`
+fall back silently and `?limit=12abc` parses as 12. A schema would 400 the last
+two and accept the 0. The idiom is shared with the native handlers through
+`server/modules/user/user.query.ts`; three parity cases pin it.
+
+`user` is also mounted at BOTH `/user` and `/users`, like `location`/`locations`.
+The `/users` tree is six re-export files — Next reads `runtime`/`dynamic` off the
+route module itself, so the segment config is redeclared per file but the
+handlers are not duplicated.
+
+**Next up (Phase 3.10):** `tourguide` (11) — the last unblocked module. Its
+validators are still inline in `tourguide.validator.ts` except
+`paymentVerifySchema`, which already moved to `tourguide.schema.ts` in Phase 3.8;
+move the rest there as part of the port. Expect the direct-booking flow to have
+the same idempotency-and-ordering shape booking did.
 
 Then: retire the adapter and drop the Express dependencies.
 
@@ -319,7 +347,7 @@ Then: retire the adapter and drop the Express dependencies.
 ```bash
 npx tsc --noEmit -p tsconfig.server.json   # server + tests
 npx tsc --noEmit                            # Next app
-npx jest --silent                           # 740 tests, 54 suites
+npx jest --silent                           # 798 tests, 55 suites
 cp .env.example .env.local && npx next build && rm -f .env.local
 ```
 

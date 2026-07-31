@@ -1,6 +1,13 @@
+import { handleValidation as handle } from '@utils/validate';
 import { NextFunction, Request, Response } from 'express';
-import { BadRequestError } from 'node-be-utilities';
-import { z } from 'zod';
+
+import { createLeaveSchema, guidesAvailabilityQuerySchema } from './guideAvailability.schema';
+
+/**
+ * The schemas themselves live in `guideAvailability.schema.ts`, shared with the
+ * native Route Handlers in `app/api/guide-availability/`. These wrappers exist
+ * only to keep the Express middleware signature while both are mounted.
+ */
 
 export type CreateLeaveValidationResult = {
 	type: 'vacation' | 'emergency';
@@ -10,22 +17,7 @@ export type CreateLeaveValidationResult = {
 };
 
 export async function CreateLeaveValidator(req: Request, res: Response, next: NextFunction) {
-	const reqValidator = z.object({
-		type: z.enum(['vacation', 'emergency'], { message: 'Type must be vacation or emergency' }),
-		startDate: z.string().trim().min(1, 'Start date is required'),
-		endDate: z.string().trim().min(1, 'End date is required'),
-		reason: z.string().trim().optional(),
-	});
-
-	const reqValidatorResult = reqValidator.safeParse(req.body);
-
-	if (reqValidatorResult.success) {
-		req.locals.data = reqValidatorResult.data;
-		return next();
-	}
-
-	const message = reqValidatorResult.error.issues.map((err) => `${err.path.join('.')}: ${err.message}`).join(', ');
-	return next(new BadRequestError(message));
+	return handle(createLeaveSchema.safeParse(req.body), req, next);
 }
 
 export type GuidesAvailabilityQueryValidationResult = {
@@ -33,19 +25,10 @@ export type GuidesAvailabilityQueryValidationResult = {
 	endDate?: string;
 };
 
-export async function GuidesAvailabilityQueryValidator(req: Request, res: Response, next: NextFunction) {
-	const reqValidator = z.object({
-		startDate: z.string().trim().min(1, 'Start date is required'),
-		endDate: z.string().trim().optional(),
-	});
-
-	const reqValidatorResult = reqValidator.safeParse(req.query);
-
-	if (reqValidatorResult.success) {
-		req.locals.data = reqValidatorResult.data;
-		return next();
-	}
-
-	const message = reqValidatorResult.error.issues.map((err) => `${err.path.join('.')}: ${err.message}`).join(', ');
-	return next(new BadRequestError(message));
+export async function GuidesAvailabilityQueryValidator(
+	req: Request,
+	res: Response,
+	next: NextFunction
+) {
+	return handle(guidesAvailabilityQuerySchema.safeParse(req.query), req, next);
 }

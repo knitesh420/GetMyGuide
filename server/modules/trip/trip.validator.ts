@@ -1,25 +1,26 @@
+import { handleValidation as handle } from '@utils/validate';
 import { NextFunction, Request, Response } from 'express';
-import { BadRequestError } from 'node-be-utilities';
-import { z } from 'zod';
+
+import {
+	tripCancelSchema,
+	tripCompleteSchema,
+	tripListQuerySchema,
+	tripMyQuerySchema,
+	tripStartSchema,
+} from './trip.schema';
+
+/**
+ * The schemas themselves live in `trip.schema.ts`, shared with the native Route
+ * Handlers in `app/api/trip/`. These wrappers exist only to keep the Express
+ * middleware signature while both implementations are mounted.
+ */
 
 export type TripStartValidationResult = {
 	notes?: string;
 };
 
 export async function TripStartValidator(req: Request, res: Response, next: NextFunction) {
-	const reqValidator = z.object({
-		notes: z.string().trim().optional(),
-	});
-
-	const reqValidatorResult = reqValidator.safeParse(req.body);
-
-	if (reqValidatorResult.success) {
-		req.locals.data = reqValidatorResult.data;
-		return next();
-	}
-
-	const message = reqValidatorResult.error.issues.map((err) => `${err.path.join('.')}: ${err.message}`).join(', ');
-	return next(new BadRequestError(message));
+	return handle(tripStartSchema.safeParse(req.body), req, next);
 }
 
 export type TripCompleteValidationResult = {
@@ -27,19 +28,7 @@ export type TripCompleteValidationResult = {
 };
 
 export async function TripCompleteValidator(req: Request, res: Response, next: NextFunction) {
-	const reqValidator = z.object({
-		completionNotes: z.string().trim().optional(),
-	});
-
-	const reqValidatorResult = reqValidator.safeParse(req.body);
-
-	if (reqValidatorResult.success) {
-		req.locals.data = reqValidatorResult.data;
-		return next();
-	}
-
-	const message = reqValidatorResult.error.issues.map((err) => `${err.path.join('.')}: ${err.message}`).join(', ');
-	return next(new BadRequestError(message));
+	return handle(tripCompleteSchema.safeParse(req.body), req, next);
 }
 
 export type TripCancelValidationResult = {
@@ -47,19 +36,7 @@ export type TripCancelValidationResult = {
 };
 
 export async function TripCancelValidator(req: Request, res: Response, next: NextFunction) {
-	const reqValidator = z.object({
-		reason: z.string().trim().optional(),
-	});
-
-	const reqValidatorResult = reqValidator.safeParse(req.body);
-
-	if (reqValidatorResult.success) {
-		req.locals.data = reqValidatorResult.data;
-		return next();
-	}
-
-	const message = reqValidatorResult.error.issues.map((err) => `${err.path.join('.')}: ${err.message}`).join(', ');
-	return next(new BadRequestError(message));
+	return handle(tripCancelSchema.safeParse(req.body), req, next);
 }
 
 export type TripListQueryValidationResult = {
@@ -70,22 +47,7 @@ export type TripListQueryValidationResult = {
 };
 
 export async function TripListQueryValidator(req: Request, res: Response, next: NextFunction) {
-	const reqValidator = z.object({
-		page: z.coerce.number().int().positive().default(1),
-		limit: z.coerce.number().int().positive().max(100).default(20),
-		status: z.enum(['not-started', 'in-progress', 'completed', 'cancelled']).optional(),
-		guideId: z.string().trim().optional(),
-	});
-
-	const reqValidatorResult = reqValidator.safeParse(req.query);
-
-	if (reqValidatorResult.success) {
-		req.locals.data = reqValidatorResult.data;
-		return next();
-	}
-
-	const message = reqValidatorResult.error.issues.map((err) => `${err.path.join('.')}: ${err.message}`).join(', ');
-	return next(new BadRequestError(message));
+	return handle(tripListQuerySchema.safeParse(req.query), req, next);
 }
 
 export type TripMyQueryValidationResult = {
@@ -95,19 +57,5 @@ export type TripMyQueryValidationResult = {
 };
 
 export async function TripMyQueryValidator(req: Request, res: Response, next: NextFunction) {
-	const reqValidator = z.object({
-		page: z.coerce.number().int().positive().default(1),
-		limit: z.coerce.number().int().positive().max(100).default(20),
-		status: z.enum(['not-started', 'in-progress', 'completed', 'cancelled']).optional(),
-	});
-
-	const reqValidatorResult = reqValidator.safeParse(req.query);
-
-	if (reqValidatorResult.success) {
-		req.locals.data = reqValidatorResult.data;
-		return next();
-	}
-
-	const message = reqValidatorResult.error.issues.map((err) => `${err.path.join('.')}: ${err.message}`).join(', ');
-	return next(new BadRequestError(message));
+	return handle(tripMyQuerySchema.safeParse(req.query), req, next);
 }
