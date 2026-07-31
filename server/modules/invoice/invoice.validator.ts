@@ -1,6 +1,15 @@
 import { NextFunction, Request, Response } from 'express';
 import { BadRequestError } from 'node-be-utilities';
-import { z } from 'zod';
+import type { z } from 'zod';
+
+import { invoiceExportQuerySchema, invoiceListQuerySchema } from './invoice.schema';
+
+/**
+ * Express validator middleware for the invoice module.
+ *
+ * The schemas now live in ./invoice.schema.ts so the native Route Handlers
+ * validate against the same objects. Behaviour unchanged.
+ */
 
 export type InvoiceListQueryValidationResult = {
 	page: number;
@@ -12,51 +21,26 @@ export type InvoiceListQueryValidationResult = {
 	to?: string;
 };
 
-export async function InvoiceListQueryValidator(req: Request, res: Response, next: NextFunction) {
-	const reqValidator = z.object({
-		page: z.coerce.number().int().positive().default(1),
-		limit: z.coerce.number().int().positive().max(100).default(20),
-		invoiceType: z.enum(['booking', 'guide_membership', 'trip_completion']).optional(),
-		status: z.enum(['paid', 'refunded', 'cancelled']).optional(),
-		search: z.string().trim().optional(),
-		from: z.string().trim().optional(),
-		to: z.string().trim().optional(),
-	});
-
-	const reqValidatorResult = reqValidator.safeParse(req.query);
-
-	if (reqValidatorResult.success) {
-		req.locals.data = reqValidatorResult.data;
-		return next();
-	}
-
-	const message = reqValidatorResult.error.issues.map((err) => `${err.path.join('.')}: ${err.message}`).join(', ');
-	return next(new BadRequestError(message));
-}
-
 export type InvoiceExportQueryValidationResult = InvoiceListQueryValidationResult & {
 	format: 'csv' | 'excel';
 };
 
-export async function InvoiceExportQueryValidator(req: Request, res: Response, next: NextFunction) {
-	const reqValidator = z.object({
-		page: z.coerce.number().int().positive().default(1),
-		limit: z.coerce.number().int().positive().max(100).default(20),
-		invoiceType: z.enum(['booking', 'guide_membership', 'trip_completion']).optional(),
-		status: z.enum(['paid', 'refunded', 'cancelled']).optional(),
-		search: z.string().trim().optional(),
-		from: z.string().trim().optional(),
-		to: z.string().trim().optional(),
-		format: z.enum(['csv', 'excel']).default('csv'),
-	});
+function validateQuery<T>(schema: z.ZodType<T>) {
+	return async function validator(req: Request, _res: Response, next: NextFunction) {
+		const result = schema.safeParse(req.query);
 
-	const reqValidatorResult = reqValidator.safeParse(req.query);
+		if (result.success) {
+			req.locals.data = result.data as object;
+			return next();
+		}
 
-	if (reqValidatorResult.success) {
-		req.locals.data = reqValidatorResult.data;
-		return next();
-	}
+		const message = result.error.issues
+			.map((err) => `${err.path.join('.')}: ${err.message}`)
+			.join(', ');
 
-	const message = reqValidatorResult.error.issues.map((err) => `${err.path.join('.')}: ${err.message}`).join(', ');
-	return next(new BadRequestError(message));
+		return next(new BadRequestError(message));
+	};
 }
+
+export const InvoiceListQueryValidator = validateQuery(invoiceListQuerySchema);
+export const InvoiceExportQueryValidator = validateQuery(invoiceExportQuerySchema);
