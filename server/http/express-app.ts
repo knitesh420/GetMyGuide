@@ -49,8 +49,11 @@ function buildApp(): Express {
 	// returns a 500 "File upload failed". Verified: uploads were broken until
 	// this was added.
 	//
-	// Phase 3.6 replaces diskStorage with in-memory buffers, at which point this
-	// can go away entirely.
+	// Still needed after Phase 3.6. Peeling location and package removed two
+	// consumers, but they were the memoryStorage ones; the remaining diskStorage
+	// parsers (blog, advertisement, utils/files/FileUpload, and the guide
+	// middleware the adapter still uses) are exactly the ones blocked on the
+	// direct-to-Cloudinary decision. This goes away when they do.
 	for (const dir of ['static/misc', 'static/blogs', 'static/packages', 'static/advertisements']) {
 		try {
 			fs.mkdirSync(path.join(global.__basedir, dir), { recursive: true });

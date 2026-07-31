@@ -1,8 +1,16 @@
 # BLOCKER — Vercel's 4.5 MB request body limit breaks every upload
 
 **Found:** 2026-07-31, while porting the advertisement module (Phase 3.4b)
-**Status:** needs a decision before Phase 3.6 (Uploads) can proceed
+**Status:** open — needs a decision before `blog` or `advertisement` can be
+ported, and before any upload path is usable in production
 **Severity:** high — affects every upload path in the application
+
+**Update (Phase 3.6):** `location` and `package` were ported anyway. Their multer
+parsers already used `memoryStorage` and pushed bytes to Cloudinary, so the port
+neither helps nor hurts here — the 4.5 MB ceiling applied to them through the
+adapter and applies to them natively. What is still blocked is the pair that
+stores media on **local disk**: see "Why advertisement is worse" below, which
+now also covers `blog`.
 
 ---
 
@@ -45,20 +53,37 @@ still applies.
 are correct and fully tested, but on Vercel they will reject files over 4.5 MB.
 They are not wrong; the transport underneath them is inadequate.
 
-## Why advertisement is worse than the rest
+## Why advertisement and blog are worse than the rest
 
-Advertisement is the only module that still stores media on **server-local
-disk**: `Advertisement.videoFilename` holds a bare filename, and the file lives
-at `static/advertisements/<filename>`, served by the `/media/:path/:filename`
-route.
+These two store media on **server-local disk** rather than Cloudinary:
+
+| Module | Field | Written by | Read by |
+| --- | --- | --- | --- |
+| advertisement | `videoFilename` | `advertisement.middleware.ts` (`multer.diskStorage`) | `/media/advertisements/<file>` |
+| blog | `imageFilename` | `blog.middleware.ts` (`multer.diskStorage`) | `/media/blogs/<file>` |
+
+Both are served by `GET /media/:path/:filename` in `server/modules/index.ts`,
+which `fs.createReadStream`s off `<__basedir>/static`.
 
 Serverless cannot do this at all, regardless of file size. Upload and playback
 are separate invocations on separate containers, and `/tmp` does not persist
-between them. So advertisement needs BOTH a transport fix and a storage move to
-Cloudinary.
+between them — so **through the adapter today, a blog image uploaded on Vercel
+is already lost.** The same applies to `POST /upload-media`, which returns a
+filename for a file nothing can read back.
+
+So both modules need BOTH a transport fix and a storage move to Cloudinary,
+plus a frontend change where the filename is currently interpolated into a
+`/media/...` URL:
+
+- `app/(website)/blogs/page.tsx`
+- `app/(website)/blogs/[id]/page.tsx`
 
 The production audit (Phase 1, B3) found exactly **one** advertisement row, so
-the data migration itself is trivial. The code and frontend changes are not.
+that data migration is trivial. The code and frontend changes are not.
+
+**This is why neither module has been ported.** A faithful native port would
+reproduce a feature that is already broken on the target platform, which is
+worse than leaving them visibly unported on the adapter.
 
 ## The standard fix: direct-to-Cloudinary signed uploads
 

@@ -5,7 +5,7 @@
 Branch: `feature/nextjs-migration` (pushed, in sync with origin)
 Repo: `knitesh420/GetMyGuide`
 `main`: untouched at `fe3c2b2` — production still deploys from it
-Last updated: 2026-07-31
+Last updated: 2026-07-31 (Phase 3.7)
 
 ---
 
@@ -23,11 +23,11 @@ Do not "create a Next.js project" — it exists, at the repo root.
 
 | Metric | Value |
 | --- | --- |
-| Endpoints native | **92 of 178** |
-| Endpoints on the Express adapter | 86 (all working) |
-| Tests | **617 passing, 50 suites** |
+| Endpoints native | **115 of 178** |
+| Endpoints on the Express adapter | 63 (all working) |
+| Tests | **688 passing, 53 suites** |
 | Typechecks | `tsc -p tsconfig.server.json` and `tsc` both clean |
-| Build | `next build` succeeds, 81 native route files |
+| Build | `next build` succeeds, 100 native route files |
 
 ### Repo layout (post-merge)
 
@@ -83,6 +83,22 @@ All in `server/http/`:
 | `documents.ts` | the KYC document streamer |
 | `route.ts` | `createHandler`, `parseBody`, `parseQuery`, `readJsonBody`, `validateBody` |
 
+Two of these have subtleties worth knowing before you reach for them:
+
+- **`parseBodyWithFiles()`** (in `multipart.ts`) — use this, not `parseMultipart`,
+  wherever the Express route had a multer parser. Those routes sit behind BOTH
+  `express.json()` and multer, and whichever matched the Content-Type populated
+  `req.body`. A handler that only understands multipart rejects requests the
+  Express one accepts.
+- **`respondJson()`** (in `respond.ts`) — writes a body verbatim, no envelope.
+  Only the `package` module needs it, because it never adopted `Respond()`:
+  it answers `{ success: false, message }` directly, and `respond()` would append
+  `success: true` and overwrite the `false`.
+
+`FilePolicy.allowedMimeTypes` is optional. Omit it when the multer parser you
+are replacing had no `fileFilter` (location, package) — inventing an allow-list
+there rejects uploads that work today.
+
 ### The per-module recipe
 
 1. Read `<module>.route.ts` — note the middleware chain and its ORDER.
@@ -110,8 +126,19 @@ the second half fails with "Account not available" — which looks exactly like 
 real parity failure. Generated ids are masked by `maskVolatile()` instead, so
 most cases need neither hook.
 
-For a `[id]` route, call the handler directly with
-`{ params: Promise.resolve({ id }) } as never` as the second argument.
+For a `[id]` route, wrap the handler so it still takes a single `Request` and
+`expectParity` can drive both sides — the Express half derives its own params
+from the URL:
+
+```ts
+await expectParity(`/api/package/${id}`, { token }, (request) =>
+  GET(request, { params: Promise.resolve({ id }) } as never)
+);
+```
+
+Calling the handler directly with that second argument (and no `expectParity`)
+is still fine when you are asserting something Express cannot be compared on —
+a successful write, say, which would run twice and conflict.
 
 ## 6. Open blockers — READ BEFORE PORTING UPLOADS
 
@@ -126,9 +153,32 @@ to the adapter and to native handlers.
 straight to Cloudinary, posts back the URL). Touches ~6 frontend forms, so it
 needs a decision — the brief asks to keep the UI identical unless necessary.
 
-**`advertisement` (7 endpoints) is deliberately NOT ported** because of this: it
-is also the only module still storing media on server-local disk, which
-serverless cannot do at any size.
+Phase 3.6 did NOT unblock this. It ported the two upload modules whose multer
+parsers already used `memoryStorage` and pushed bytes to Cloudinary
+(`location`, `package`); their 4.5 MB ceiling is unchanged, because the limit is
+the platform's and applies to the adapter and to native handlers alike.
+
+### 🔴 B1b. Media on server-local disk — `advertisement` AND `blog`
+
+**Correction to the earlier note here:** advertisement is *not* the only module
+storing media on server-local disk. `blog` does too, and it is worse, because it
+never reaches Cloudinary at all:
+
+- `blog.middleware.ts` uses `multer.diskStorage`, and `blog.controller.ts` stores
+  the generated **filename** (`imageFilename`), not a URL.
+- The frontend renders it as `${API_URL}/media/blogs/${blog.imageFilename}`,
+  served by `GET /media/:path/:filename` in `server/modules/index.ts`, which
+  `fs.createReadStream`s off local disk.
+- On serverless the write lands in a per-invocation `/tmp` and the read is a
+  different invocation, so **blog images are already lost today** through the
+  adapter. Same for `POST /upload-media`.
+
+So `blog` (4 endpoints) and `advertisement` (7) are one bucket, not two, and
+neither is ported. Porting either means choosing the Cloudinary fix above and
+changing `imageFilename` to a URL — a frontend change in
+`app/(website)/blogs/page.tsx` and `app/(website)/blogs/[id]/page.tsx`. Porting
+them *without* that would faithfully reproduce a broken feature, which is worse
+than leaving them visibly unported.
 
 ### 🟠 B2. Hosting / commercial use
 Vercel Hobby forbids commercial use. Decision was **Hobby as staging only**;
@@ -159,6 +209,18 @@ directly.
    Express. `Max-Age` takes precedence in browsers, so adding it would be a real
    behavioural change.
 
+3. **Uploads to `location` / `package` cap at 10 MB.** Their multer parsers set
+   no `limits`, so Express accepted any size; `parseMultipart` applies its 10 MB
+   default. Unobservable on the migration target — Vercel rejects bodies over
+   4.5 MB before the function runs — and the alternative is an unbounded
+   in-memory buffer in a serverless function. Left as-is deliberately.
+
+4. **`> 10` files on `POST /package` is a 400, not a 500.** multer's
+   `LIMIT_UNEXPECTED_FILE` is a `MulterError`, which the Express error handler
+   does not recognise, so it produced the HTML-and-stack-trace 500 described in
+   divergence 1. The native handler answers `400 Too many files for field
+   images`. Same class of fix as divergence 1.
+
 ## 8. Preserved oddities (also do NOT "fix")
 
 These are inconsistent but are the contract the frontend receives:
@@ -173,22 +235,32 @@ These are inconsistent but are the contract the frontend receives:
   envelope would not throw — it would silently resolve fields to `undefined`.
   Bare arrays must be wrapped as `{ data: [...] }`.
 
-## 9. Remaining work (86 endpoints)
+## 9. Remaining work (63 endpoints)
 
 | Module | Endpoints | Notes |
 | --- | --- | --- |
 | booking | 15 | largest remaining; money-adjacent |
 | tourguide | 11 | direct booking flow |
-| location | 7 | has multer (memoryStorage already) |
 | trip | 7 | |
 | review | 7 | |
-| advertisement | 7 | **BLOCKED** — see §6 B1 |
-| package | 6 | has multer (memoryStorage already) |
+| advertisement | 7 | **BLOCKED** — disk-backed media, see §6 B1b |
 | user | 6 | |
 | guideAvailability | 6 | |
-| notification | 5 | |
-| message | 5 | |
-| blog | 4 | has multer (disk) |
+| blog | 4 | **BLOCKED** — disk-backed media, see §6 B1b |
+
+Plus `/upload-media` and `GET /media/:path/:filename` in `server/modules/index.ts`,
+which are the disk-backed pair the two blocked modules depend on.
+
+Done so far in Phase 3: session/auth, tourist, guide, dashboard, report, lead,
+assignment, payment, refund, cashPayment, earning, invoice, location, package,
+notification, message.
+
+**Next up (Phase 3.8):** `booking`. It is the largest and the most
+money-adjacent, so budget for it accordingly — read `booking.route.ts`'s
+middleware order carefully, and expect the fulfilment paths documented in
+`project_tour_booking_fulfillment_fix` to matter. `trip`, `review`, `user` and
+`guideAvailability` are all ordinary CRUD by comparison and can follow in one or
+two batches.
 
 Then: retire the adapter and drop the Express dependencies.
 
@@ -213,7 +285,7 @@ Then: retire the adapter and drop the Express dependencies.
 ```bash
 npx tsc --noEmit -p tsconfig.server.json   # server + tests
 npx tsc --noEmit                            # Next app
-npx jest --silent                           # 617 tests, 50 suites
+npx jest --silent                           # 688 tests, 53 suites
 cp .env.example .env.local && npx next build && rm -f .env.local
 ```
 
