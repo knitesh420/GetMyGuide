@@ -1,47 +1,34 @@
 import { handleValidation as handle } from '@utils/validate';
 import { NextFunction, Request, Response } from 'express';
-import { z } from 'zod';
+
+import {
+	refundApproveSchema,
+	refundListQuerySchema,
+	refundRejectSchema,
+	refundRequestSchema,
+} from './refund.schema';
+
+/**
+ * Express validator middleware for the refund module.
+ *
+ * The schemas now live in ./refund.schema.ts so the native Route Handlers
+ * validate against the same objects. Behaviour unchanged — still the shared
+ * handleValidation tail, so the error format is the path-prefixed one.
+ */
 
 export type RefundRequestValidationResult = {
 	bookingId: string;
 	reason: string;
 };
 
-export async function RefundRequestValidator(req: Request, res: Response, next: NextFunction) {
-	const validator = z.object({
-		bookingId: z.string().trim().min(1, 'bookingId is required'),
-		reason: z.string().trim().min(5, 'Please give a reason of at least 5 characters').max(2000),
-	});
-
-	return handle(validator.safeParse(req.body), req, next);
-}
-
 export type RefundApproveValidationResult = {
 	approvedAmount: number;
 	adminNote?: string;
 };
 
-export async function RefundApproveValidator(req: Request, res: Response, next: NextFunction) {
-	const validator = z.object({
-		// 0 is legitimate: cancel the booking, refund nothing.
-		approvedAmount: z.coerce.number().min(0, 'Refund amount cannot be negative'),
-		adminNote: z.string().trim().max(2000).optional(),
-	});
-
-	return handle(validator.safeParse(req.body), req, next);
-}
-
 export type RefundRejectValidationResult = {
 	adminNote: string;
 };
-
-export async function RefundRejectValidator(req: Request, res: Response, next: NextFunction) {
-	const validator = z.object({
-		adminNote: z.string().trim().min(5, 'Tell the tourist why the request was declined').max(2000),
-	});
-
-	return handle(validator.safeParse(req.body), req, next);
-}
 
 export type RefundListQueryValidationResult = {
 	page: number;
@@ -49,12 +36,18 @@ export type RefundListQueryValidationResult = {
 	status?: 'pending' | 'processed' | 'rejected' | 'failed';
 };
 
-export async function RefundListQueryValidator(req: Request, res: Response, next: NextFunction) {
-	const validator = z.object({
-		page: z.coerce.number().int().positive().default(1),
-		limit: z.coerce.number().int().positive().max(100).default(20),
-		status: z.enum(['pending', 'processed', 'rejected', 'failed']).optional(),
-	});
+export async function RefundRequestValidator(req: Request, _res: Response, next: NextFunction) {
+	return handle(refundRequestSchema.safeParse(req.body), req, next);
+}
 
-	return handle(validator.safeParse(req.query), req, next);
+export async function RefundApproveValidator(req: Request, _res: Response, next: NextFunction) {
+	return handle(refundApproveSchema.safeParse(req.body), req, next);
+}
+
+export async function RefundRejectValidator(req: Request, _res: Response, next: NextFunction) {
+	return handle(refundRejectSchema.safeParse(req.body), req, next);
+}
+
+export async function RefundListQueryValidator(req: Request, _res: Response, next: NextFunction) {
+	return handle(refundListQuerySchema.safeParse(req.query), req, next);
 }

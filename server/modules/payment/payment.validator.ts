@@ -1,25 +1,23 @@
 import { NextFunction, Request, Response } from 'express';
 import { BadRequestError } from 'node-be-utilities';
-import { z } from 'zod';
 
-// --- Webhook payload validator ---
+import { failedPaymentQuerySchema, webhookSchema } from './payment.schema';
 
-const WebhookSchema = z.object({
-	event: z.string().min(1, 'Event type is required'),
-	payload: z.object({
-		payment: z.object({
-			entity: z.object({
-				id: z.string().min(1),
-				order_id: z.string().min(1),
-			}),
-		}),
-	}),
-});
+export type { FailedPaymentQueryValidationResult, WebhookPayload } from './payment.schema';
 
-export type WebhookPayload = z.infer<typeof WebhookSchema>;
+/**
+ * Express validator middleware for the payment module.
+ *
+ * The schemas now live in ./payment.schema.ts so the native Route Handlers
+ * validate against the same objects. Behaviour unchanged — including the fact
+ * that these two flatten zod issues DIFFERENTLY: the webhook joins bare
+ * messages, the failed-payment query prefixes each with its field path. That
+ * asymmetry is preserved rather than tidied, because the strings are what the
+ * caller sees.
+ */
 
 export async function WebhookValidator(req: Request, _res: Response, next: NextFunction) {
-	const result = WebhookSchema.safeParse(req.body);
+	const result = webhookSchema.safeParse(req.body);
 
 	if (!result.success) {
 		const message = result.error.issues.map((i) => i.message).join(', ');
@@ -30,22 +28,8 @@ export async function WebhookValidator(req: Request, _res: Response, next: NextF
 	return next();
 }
 
-// --- Admin failed-payments list ---
-
-const FailedPaymentQuerySchema = z.object({
-	page: z.coerce.number().int().positive().default(1),
-	limit: z.coerce.number().int().positive().max(100).default(20),
-	status: z.enum(['failed', 'pending_verification']).optional(),
-	referenceType: z.string().trim().min(1).optional(),
-	search: z.string().trim().optional(),
-	from: z.string().trim().optional(),
-	to: z.string().trim().optional(),
-});
-
-export type FailedPaymentQueryValidationResult = z.infer<typeof FailedPaymentQuerySchema>;
-
 export async function FailedPaymentQueryValidator(req: Request, _res: Response, next: NextFunction) {
-	const result = FailedPaymentQuerySchema.safeParse(req.query);
+	const result = failedPaymentQuerySchema.safeParse(req.query);
 
 	if (!result.success) {
 		const message = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(', ');

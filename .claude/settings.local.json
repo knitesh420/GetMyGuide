@@ -21,7 +21,11 @@
       "Bash(git commit -q -m ' *)",
       "Bash(echo \"\\(exit: $?\\)\")",
       "Bash(git push *)",
-      "Bash(git ls-remote *)"
+      "Bash(git ls-remote *)",
+      "Bash(cd \"c:/Users/nites/OneDrive/Desktop/Tour\" && mkdir -p \"app/api/refund/request\" \"app/api/refund/my\" \"app/api/refund/[id]/approve\" \"app/api/refund/[id]/reject\" \"app/api/refund/[id]/retry\" && echo ok)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\nites\\OneDrive\\Desktop\\Tour\\app\\api\\refund\\[id]"
     ]
   }
 }
