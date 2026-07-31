@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { BadRequestError } from 'node-be-utilities';
-import { z } from 'zod';
+
+import { touristProfileSchema } from './tourist.schema';
 
 export type TouristProfileValidationResult = {
 	nationality: string;
@@ -12,30 +13,22 @@ export type TouristProfileValidationResult = {
 	about: string;
 };
 
-export async function TouristProfileValidator(req: Request, res: Response, next: NextFunction) {
-	const reqValidator = z.object({
-		nationality: z.string().trim().min(1, 'Nationality is required'),
-		preferredLanguages: z.array(z.string().trim().min(1)).default([]),
-		travelInterests: z.array(z.string().trim().min(1)).default([]),
-		budget: z.string().trim().min(1, 'Budget is required'),
-		travelDates: z
-			.object({
-				startDate: z.string().trim().optional(),
-				endDate: z.string().trim().optional(),
-			})
-			.optional(),
-		numberOfTravelers: z.coerce.number().int().positive('Number of travelers must be at least 1'),
-		about: z.string().trim().min(1, 'About is required'),
-	});
+/**
+ * Express validator for the tourist profile.
+ *
+ * The schema itself now lives in ./tourist.schema.ts so the native Next Route
+ * Handler validates against the same object during the migration. Behaviour is
+ * unchanged.
+ */
+export async function TouristProfileValidator(req: Request, _res: Response, next: NextFunction) {
+	const result = touristProfileSchema.safeParse(req.body);
 
-	const reqValidatorResult = reqValidator.safeParse(req.body);
-
-	if (reqValidatorResult.success) {
-		req.locals.data = reqValidatorResult.data;
+	if (result.success) {
+		req.locals.data = result.data;
 		return next();
 	}
 
-	const message = reqValidatorResult.error.issues
+	const message = result.error.issues
 		.map((err) => `${err.path.join('.')}: ${err.message}`)
 		.join(', ');
 

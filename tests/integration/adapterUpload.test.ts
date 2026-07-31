@@ -26,6 +26,13 @@ const PNG_BASE64 =
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
 describe('multipart uploads through the adapter', () => {
+	// This suite spins up mongodb-memory-server AND does real disk I/O through
+	// multer, so under parallel load it can exceed the global 30s timeout on a
+	// cold binary cache — it flaked exactly once that way. The work is genuinely
+	// slow rather than stuck, so give it room instead of leaving a flaky test in
+	// the suite.
+	jest.setTimeout(120_000);
+
 	beforeAll(async () => {
 		process.env.DATABASE_URL = await connectTestDB();
 	});
