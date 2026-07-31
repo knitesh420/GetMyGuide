@@ -1,46 +1,28 @@
 import { NextFunction, Request, Response } from 'express';
 import { BadRequestError } from 'node-be-utilities';
-import { z } from 'zod';
+import type { z } from 'zod';
+
+import {
+	activityLogQuerySchema,
+	bookingsTrendSchema,
+	guidePerformanceSchema,
+} from './report.schema';
+
+/**
+ * Express validator middleware for the report module.
+ *
+ * The schemas now live in ./report.schema.ts so the native Next Route Handlers
+ * validate against the same objects. Note these parse req.QUERY, not req.body —
+ * every report endpoint is a GET.
+ */
 
 export type BookingsTrendValidationResult = {
 	range: '7d' | '30d' | '90d';
 };
 
-export async function BookingsTrendValidator(req: Request, res: Response, next: NextFunction) {
-	const reqValidator = z.object({
-		range: z.enum(['7d', '30d', '90d']).default('30d'),
-	});
-
-	const reqValidatorResult = reqValidator.safeParse(req.query);
-
-	if (reqValidatorResult.success) {
-		req.locals.data = reqValidatorResult.data;
-		return next();
-	}
-
-	const message = reqValidatorResult.error.issues.map((err) => `${err.path.join('.')}: ${err.message}`).join(', ');
-	return next(new BadRequestError(message));
-}
-
 export type GuidePerformanceValidationResult = {
 	limit: number;
 };
-
-export async function GuidePerformanceValidator(req: Request, res: Response, next: NextFunction) {
-	const reqValidator = z.object({
-		limit: z.coerce.number().int().positive().max(100).default(10),
-	});
-
-	const reqValidatorResult = reqValidator.safeParse(req.query);
-
-	if (reqValidatorResult.success) {
-		req.locals.data = reqValidatorResult.data;
-		return next();
-	}
-
-	const message = reqValidatorResult.error.issues.map((err) => `${err.path.join('.')}: ${err.message}`).join(', ');
-	return next(new BadRequestError(message));
-}
 
 export type ActivityLogQueryValidationResult = {
 	page: number;
@@ -51,23 +33,23 @@ export type ActivityLogQueryValidationResult = {
 	to?: string;
 };
 
-export async function ActivityLogQueryValidator(req: Request, res: Response, next: NextFunction) {
-	const reqValidator = z.object({
-		page: z.coerce.number().int().positive().default(1),
-		limit: z.coerce.number().int().positive().max(100).default(20),
-		action: z.string().trim().optional(),
-		actorType: z.enum(['user', 'system']).optional(),
-		from: z.string().trim().optional(),
-		to: z.string().trim().optional(),
-	});
+function validateQuery<T>(schema: z.ZodType<T>) {
+	return async function validator(req: Request, _res: Response, next: NextFunction) {
+		const result = schema.safeParse(req.query);
 
-	const reqValidatorResult = reqValidator.safeParse(req.query);
+		if (result.success) {
+			req.locals.data = result.data as object;
+			return next();
+		}
 
-	if (reqValidatorResult.success) {
-		req.locals.data = reqValidatorResult.data;
-		return next();
-	}
+		const message = result.error.issues
+			.map((err) => `${err.path.join('.')}: ${err.message}`)
+			.join(', ');
 
-	const message = reqValidatorResult.error.issues.map((err) => `${err.path.join('.')}: ${err.message}`).join(', ');
-	return next(new BadRequestError(message));
+		return next(new BadRequestError(message));
+	};
 }
+
+export const BookingsTrendValidator = validateQuery(bookingsTrendSchema);
+export const GuidePerformanceValidator = validateQuery(guidePerformanceSchema);
+export const ActivityLogQueryValidator = validateQuery(activityLogQuerySchema);
