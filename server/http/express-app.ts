@@ -1,5 +1,6 @@
 import cookieParser from 'cookie-parser';
 import express, { Express, NextFunction, Request, Response } from 'express';
+import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { errorHandler } from 'node-be-utilities';
@@ -36,6 +37,31 @@ function buildApp(): Express {
 	// writing here any more (uploads go straight to Cloudinary), but the media
 	// route still reads the global and would throw on undefined.
 	global.__basedir = path.join(os.tmpdir(), 'getmyguide');
+
+	// The upload staging directories MUST exist before any request arrives.
+	//
+	// Every multer diskStorage in the app writes to `<__basedir>/static/misc`
+	// (blog and advertisement middlewares use their own subdirectories), then
+	// pushes the bytes to Cloudinary and unlinks the temp file. server-config.ts
+	// creates these at boot via createDir(); this app deliberately skips that
+	// because the deployment bundle is read-only — but /tmp is writable, and
+	// without these directories multer fails with ENOENT and every upload
+	// returns a 500 "File upload failed". Verified: uploads were broken until
+	// this was added.
+	//
+	// Phase 3.6 replaces diskStorage with in-memory buffers, at which point this
+	// can go away entirely.
+	for (const dir of ['static/misc', 'static/blogs', 'static/packages', 'static/advertisements']) {
+		try {
+			fs.mkdirSync(path.join(global.__basedir, dir), { recursive: true });
+		} catch (err) {
+			// Never let this stop the app booting: if the filesystem really is
+			// read-only, uploads fail loudly per-request, which is far better than
+			// the whole API failing to start.
+			// eslint-disable-next-line no-console
+			console.error(`Could not create upload staging directory ${dir}`, err);
+		}
+	}
 
 	const app = express();
 
