@@ -5,6 +5,7 @@ import { NextFunction, Request, Response } from 'express';
 import { Types } from 'mongoose';
 import { Respond } from '@utils/respond';
 import { PaymentVerifyValidationResult } from '../tourguide/tourguide.validator';
+import { MISSING_PAYMENT_DETAILS, readVerifyPayload } from './booking.payload';
 import {
 	AllocateGuideValidationResult,
 	CreateBookingValidationResult,
@@ -159,14 +160,16 @@ async function getRazorpayKey(req: Request, res: Response, next: NextFunction) {
 
 async function verifyAndCreateGuestBooking(req: Request, res: Response, next: NextFunction) {
 	try {
-		const { razorpay_order_id, razorpay_payment_id, razorpay_signature, booking_data } = req.body;
+		const payload = readVerifyPayload(req.body);
 
-		if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !booking_data) {
+		if (!payload) {
 			return res.status(400).json({
 				success: false,
-				message: 'Missing required payment details',
+				message: MISSING_PAYMENT_DETAILS,
 			});
 		}
+
+		const { razorpay_order_id, razorpay_payment_id, razorpay_signature, booking_data } = payload;
 
 		// `user_id` is deliberately NOT read from the body. This route is
 		// unauthenticated, so a caller-supplied account id is an identity claim
@@ -210,20 +213,17 @@ async function deleteBooking(req: Request, res: Response, next: NextFunction) {
 async function verifyAndCreateBooking(req: Request, res: Response, next: NextFunction) {
 	try {
 		const user = req.locals.user as JWTPayload;
-		const { razorpay_order_id, razorpay_payment_id, razorpay_signature, booking_data } = req.body;
+		const payload = readVerifyPayload(req.body);
 
-		if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !booking_data) {
+		if (!payload) {
 			return res.status(400).json({
 				success: false,
-				message: 'Missing required payment details',
+				message: MISSING_PAYMENT_DETAILS,
 			});
 		}
 
 		const booking = await BookingService.verifyAndCreateBooking({
-			razorpay_order_id,
-			razorpay_payment_id,
-			razorpay_signature,
-			booking_data,
+			...payload,
 			user_id: user.userId,
 		});
 
@@ -260,20 +260,17 @@ async function createPackageBooking(req: Request, res: Response, next: NextFunct
 async function verifyPackageBooking(req: Request, res: Response, next: NextFunction) {
 	try {
 		const user = req.locals.user as JWTPayload;
-		const { razorpay_order_id, razorpay_payment_id, razorpay_signature, booking_data } = req.body;
+		const payload = readVerifyPayload(req.body);
 
-		if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !booking_data) {
+		if (!payload) {
 			return res.status(400).json({
 				success: false,
-				message: 'Missing required payment details',
+				message: MISSING_PAYMENT_DETAILS,
 			});
 		}
 
 		const booking = await BookingService.verifyAndCreatePackageBooking({
-			razorpay_order_id,
-			razorpay_payment_id,
-			razorpay_signature,
-			booking_data,
+			...payload,
 			user_id: user.userId,
 		});
 

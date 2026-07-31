@@ -5,7 +5,7 @@
 Branch: `feature/nextjs-migration` (pushed, in sync with origin)
 Repo: `knitesh420/GetMyGuide`
 `main`: untouched at `fe3c2b2` — production still deploys from it
-Last updated: 2026-07-31 (Phase 3.7)
+Last updated: 2026-07-31 (Phase 3.8)
 
 ---
 
@@ -23,11 +23,11 @@ Do not "create a Next.js project" — it exists, at the repo root.
 
 | Metric | Value |
 | --- | --- |
-| Endpoints native | **115 of 178** |
-| Endpoints on the Express adapter | 63 (all working) |
-| Tests | **688 passing, 53 suites** |
+| Endpoints native | **130 of 178** |
+| Endpoints on the Express adapter | 48 (all working) |
+| Tests | **740 passing, 54 suites** |
 | Typechecks | `tsc -p tsconfig.server.json` and `tsc` both clean |
-| Build | `next build` succeeds, 100 native route files |
+| Build | `next build` succeeds, 113 native route files |
 
 ### Repo layout (post-merge)
 
@@ -91,9 +91,13 @@ Two of these have subtleties worth knowing before you reach for them:
   `req.body`. A handler that only understands multipart rejects requests the
   Express one accepts.
 - **`respondJson()`** (in `respond.ts`) — writes a body verbatim, no envelope.
-  Only the `package` module needs it, because it never adopted `Respond()`:
-  it answers `{ success: false, message }` directly, and `respond()` would append
-  `success: true` and overwrite the `false`.
+  Needed wherever a controller answers `{ success: false, message }` directly
+  instead of going through `Respond()`, because `respond()` would append
+  `success: true` and overwrite the `false` — turning a rejection into an
+  apparent success. Two places need it: the whole `package` module, and
+  `booking`'s three verify endpoints (`/verify-guest-booking`, `/verify-booking`,
+  `/package/verify`), whose "Missing required payment details" reply is what the
+  checkout page reads.
 
 `FilePolicy.allowedMimeTypes` is optional. Omit it when the multer parser you
 are replacing had no `fileFilter` (location, package) — inventing an allow-list
@@ -205,6 +209,11 @@ directly.
    the JSON error envelope with a generic message. Pinned by a test in
    `paymentNativeParity.test.ts`.
 
+   A malformed JSON body is in this family and was measured during Phase 3.8:
+   both sides answer **400**, so only the format differs — Express emits the
+   HTML-and-stack-trace page, the native handler a JSON body. The status code is
+   unchanged, which is why this is one divergence and not two.
+
 2. **`clearCookie` emits no `Max-Age`** — only `Expires` at the epoch, matching
    Express. `Max-Age` takes precedence in browsers, so adding it would be a real
    behavioural change.
@@ -235,12 +244,11 @@ These are inconsistent but are the contract the frontend receives:
   envelope would not throw — it would silently resolve fields to `undefined`.
   Bare arrays must be wrapped as `{ data: [...] }`.
 
-## 9. Remaining work (63 endpoints)
+## 9. Remaining work (48 endpoints)
 
 | Module | Endpoints | Notes |
 | --- | --- | --- |
-| booking | 15 | largest remaining; money-adjacent |
-| tourguide | 11 | direct booking flow |
+| tourguide | 11 | direct booking flow; already shares `paymentVerifySchema` with booking |
 | trip | 7 | |
 | review | 7 | |
 | advertisement | 7 | **BLOCKED** — disk-backed media, see §6 B1b |
@@ -253,14 +261,40 @@ which are the disk-backed pair the two blocked modules depend on.
 
 Done so far in Phase 3: session/auth, tourist, guide, dashboard, report, lead,
 assignment, payment, refund, cashPayment, earning, invoice, location, package,
-notification, message.
+notification, message, booking.
 
-**Next up (Phase 3.8):** `booking`. It is the largest and the most
-money-adjacent, so budget for it accordingly — read `booking.route.ts`'s
-middleware order carefully, and expect the fulfilment paths documented in
-`project_tour_booking_fulfillment_fix` to matter. `trip`, `review`, `user` and
-`guideAvailability` are all ordinary CRUD by comparison and can follow in one or
-two batches.
+### What Phase 3.8 (booking) established — read before porting tourguide
+
+booking had four routes whose middleware ORDER changes the status code, and each
+is now pinned by a case in `bookingNativeParity.test.ts`. Expect the same class
+of thing in tourguide:
+
+- `DELETE /booking/:id` checks admin **before** the id; `GET /booking/:id` has no
+  role gate at all. The same tourist sending the same malformed id gets 403 from
+  one and 400 from the other. That difference is contract.
+- `/customised-booking` and `/package/create-order` validate **before** reserving
+  the idempotency key, so a client retrying after fixing a typo isn't told its key
+  was already used with a different body.
+- `/:id/balance/create-order` validates the id **before** demanding the key, and
+  has no role gate — ownership, not rank, decides who may settle a balance
+  (`BalancePaymentService.assertOwner`). A guide is *not* refused at the door here.
+- `/:id/balance/verify` checks the id **before** the payload.
+
+Two module-local files came out of it, both worth reusing rather than re-deriving:
+`server/modules/booking/booking.payload.ts` (the shared falsy-based check behind
+the three verify endpoints, used by the Express controller *and* the native
+handlers) and `server/modules/tourguide/tourguide.schema.ts`, which currently
+holds only `paymentVerifySchema` because booking borrows it — the rest of
+tourguide's validators are still inline and should move there when it is ported.
+
+Order-creation SUCCESS paths are deliberately not parity-tested: they mint a real
+Razorpay order, and a parity run executes the handler twice, so the second call
+lands in the idempotency replay branch instead of the code under test. Those
+paths stay covered against Express in `booking.test.ts`.
+
+**Next up (Phase 3.9):** `tourguide` (11), then the ordinary CRUD batch — `trip`
+(7), `review` (7), `user` (6), `guideAvailability` (6) — which can go in one or
+two commits.
 
 Then: retire the adapter and drop the Express dependencies.
 
@@ -285,7 +319,7 @@ Then: retire the adapter and drop the Express dependencies.
 ```bash
 npx tsc --noEmit -p tsconfig.server.json   # server + tests
 npx tsc --noEmit                            # Next app
-npx jest --silent                           # 688 tests, 53 suites
+npx jest --silent                           # 740 tests, 54 suites
 cp .env.example .env.local && npx next build && rm -f .env.local
 ```
 

@@ -2,6 +2,8 @@ import { handleValidation as handle } from '@utils/validate';
 import { NextFunction, Request, Response } from 'express';
 import { z } from 'zod';
 
+import { paymentVerifySchema } from './tourguide.schema';
+
 // Note there is deliberately no `totalPrice` here. The price is derived from the
 // guide's published rate on the server; accepting it from the client would let a
 // tourist name their own price.
@@ -69,13 +71,9 @@ export type PaymentVerifyValidationResult = {
 };
 
 export async function PaymentVerifyValidator(req: Request, res: Response, next: NextFunction) {
-	const validator = z.object({
-		razorpay_order_id: z.string().trim().min(1),
-		razorpay_payment_id: z.string().trim().min(1),
-		razorpay_signature: z.string().trim().min(1),
-	});
-
-	return handle(validator.safeParse(req.body), req, next);
+	// Shared with POST /booking/:id/balance/verify, which mounts this middleware
+	// directly — hence the schema lives in tourguide.schema.ts rather than here.
+	return handle(paymentVerifySchema.safeParse(req.body), req, next);
 }
 
 export type TourGuideStatusValidationResult = {
