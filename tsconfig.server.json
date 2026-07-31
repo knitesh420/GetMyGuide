@@ -19,6 +19,7 @@
     "lib": ["es2020"],
     "baseUrl": ".",
     "paths": {
+      "@/*": ["./*"],
       "@services/*": ["server/services/*"],
       "@config/*": ["server/config/*"],
       "@middleware/*": ["server/middleware/*"],

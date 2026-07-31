@@ -173,6 +173,29 @@ async function remindOutstandingBalances() {
 }
 
 /**
+ * One pass of the watcher's work.
+ *
+ * Extracted from `startNotificationWatcher` so it can be invoked directly. The
+ * setInterval loop below still drives it on the long-lived Express process, but
+ * serverless has no such process, so the Next.js deployment calls this from
+ * POST /api/cron/tick on the same 5-minute cadence, driven by an external
+ * scheduler. Both callers run identical work.
+ *
+ * Safe to call concurrently or repeatedly: notification dedup is enforced by
+ * Notification's unique `dedupeKey` index, and the fulfil* methods no-op once
+ * their booking exists.
+ */
+export async function runWatcherTick(
+	intervalMs = Number(process.env.NOTIFICATION_WATCHER_INTERVAL_MS) || 5 * 60_000
+): Promise<void> {
+	await reconcileOrphanedBookingPayments();
+	await scanPaymentSuccesses(intervalMs);
+	await scanMembershipExpiring();
+	await promoteMaturedEarnings();
+	await remindOutstandingBalances();
+}
+
+/**
  * Background poller for notification types whose source events live inside
  * protected modules (payment success, membership expiry) this codebase must
  * not modify. Dedup is enforced entirely by Notification's unique
@@ -186,11 +209,7 @@ export function startNotificationWatcher(
 ) {
 	const tick = async () => {
 		try {
-			await reconcileOrphanedBookingPayments();
-			await scanPaymentSuccesses(intervalMs);
-			await scanMembershipExpiring();
-			await promoteMaturedEarnings();
-			await remindOutstandingBalances();
+			await runWatcherTick(intervalMs);
 		} catch (err) {
 			logError('notificationWatcher: tick failed', err);
 		}

@@ -27,6 +27,8 @@ module.exports = {
 		],
 	},
 	moduleNameMapper: {
+		// Next's app alias, so tests can import Route Handlers from app/.
+		'^@/(.*)$': '<rootDir>/$1',
 		'^@services/(.*)$': '<rootDir>/server/services/$1',
 		'^@config/(.*)$': '<rootDir>/server/config/$1',
 		'^@middleware/(.*)$': '<rootDir>/server/middleware/$1',

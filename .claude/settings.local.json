@@ -18,7 +18,8 @@
       "Bash(echo \"EXIT_CODE=$?\")",
       "Bash(pnpm install *)",
       "Bash(git add *)",
-      "Bash(git commit -q -m ' *)"
+      "Bash(git commit -q -m ' *)",
+      "Bash(echo \"\\(exit: $?\\)\")"
     ]
   }
 }

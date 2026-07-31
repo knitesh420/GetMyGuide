@@ -103,7 +103,10 @@ const MultiFileUpload = (
 
 export default { SingleFileUpload, MultiFileUpload };
 
-export { MultipleFileUploadOptions as FileUploadOptions, ResolvedFile };
+// `export type` (not a bare re-export): these are types, and Next compiles this
+// file under isolatedModules, where the transpiler cannot tell a type-only
+// re-export from a value one without the keyword.
+export type { MultipleFileUploadOptions as FileUploadOptions, ResolvedFile };
 
 const ALLOWED_MEDIA_MIMETYPES = new Set([
 	'image/png',
