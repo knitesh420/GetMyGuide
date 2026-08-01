@@ -361,19 +361,30 @@ Two more worth carrying forward:
 balance-payment verify does not, which is why `verifyAndCreateSchema` and
 `paymentVerifySchema` are separate and must stay so.
 
-**🐛 Found, not fixed — the allocated guide cannot read their own direct booking.**
-`TourGuideService.assertVisible` means to admit them, and doesn't:
-`getById` runs `.populate('allocated_guide', …).lean()` before the check, so
-`booking.allocated_guide` is a plain object by then and `.toString()` yields
-`'[object Object]'`, which never equals a user id. `linked_to` is not populated,
-so the tourist path is fine. This is in `server/services/tourguide.ts:405-412`
-and **predates the migration** — both halves of the parity run agree on 403, so
-it is production behaviour today, not a port defect. It is pinned by a case in
-`tourguideNativeParity.test.ts` and deliberately left alone: fixing it is a
-behaviour change and belongs in its own commit, not in a port whose whole
-guarantee is that nothing changed. The guide dashboard reads through
-`/guide/my-bookings` (`getMyGuideBookingById`, which populates `linked_to`
-instead), which is probably why nobody has hit it.
+**🐛 Found here, FIXED in the follow-up commit — the allocated guide could not
+read their own direct booking.** `TourGuideService.assertVisible` meant to admit
+them and didn't: `getById` runs `.populate('allocated_guide', …).lean()` before
+the check, so `booking.allocated_guide` was a document by then and `.toString()`
+yielded `'[object Object]'`, which never equals a user id. `linked_to` is not
+populated, which is why only the guide half broke.
+
+It **predated the migration** — both parity halves agreed on 403, so it was live
+behaviour, not a port defect. That is why it was pinned first and fixed second,
+in its own commit: a port whose guarantee is "nothing changed" must not also
+change something.
+
+The fix is `server/utils/refId.ts` (`refId` / `refEquals`), which reads the id
+off a reference whether or not it is populated. **Reach for it instead of
+`.toString()` in any guard that compares a ref**, because the guard cannot know
+how its caller fetched the document — that distance is what created the bug.
+An audit of the other 10 ref comparisons in `server/services/` found no second
+instance: they all run on un-populated `findById` results, and `trip.ts:301`
+already uses the correct `._id.toString()` for its populated `guide`. Those were
+left alone rather than churned.
+
+Note the failure mode. The guard read "admit if equal", so the slip denied
+everyone; had it read "deny if equal", the same slip would have admitted
+everyone, silently. Nothing errored either way.
 
 **Next up: nothing unblocked.** The B1b decision (§6) gates everything that is
 left. Once it is made: port blog + advertisement, then retire the adapter and
@@ -389,6 +400,10 @@ drop the Express dependencies.
   the Vercel URL.
 - `pnpm lint` is unusable repo-wide (CRLF vs `endOfLine:lf`, ~29k errors).
   **`tsc` and `jest` are the real gates.**
+- `jest` prints "A worker process has failed to exit gracefully" on every full
+  run. It is **pre-existing and not a failure** — it reproduces at the 798-test
+  Phase 3.9 baseline with any newer test files excluded. Almost certainly
+  mongodb-memory-server teardown. Don't chase it as if a recent change caused it.
 - `mongoose` is pinned to exactly `9.1.3` — production's version. Re-resolving
   to 9.9.0 broke a suite via tightened `create()` typing. Don't bump it as a
   side effect.

@@ -5,6 +5,7 @@ import ITransaction from '@mongo/types/transaction';
 import { JWTPayload } from '@services/jwt';
 import { getBookingOccupiedRange } from '@utils/bookingOccupiedRange';
 import { isMembershipActive } from '@utils/guideMembership';
+import { refEquals } from '@utils/refId';
 import { verifyRazorpaySignature } from '@utils/paymentVerify';
 import { randomBytes } from 'crypto';
 import { Types } from 'mongoose';
@@ -402,10 +403,21 @@ class TourGuideService {
 
 	// ---- Reads ---------------------------------------------------------------
 
+	/**
+	 * Who may see a direct booking: an admin, the tourist who booked it, or the
+	 * guide allocated to it.
+	 *
+	 * Compared through `refEquals` rather than `.toString()` because `getById`
+	 * populates `allocated_guide` before calling this. A populated field is a
+	 * document, and `document.toString()` is '[object Object]', so the plain
+	 * comparison never matched and the allocated guide was refused their own
+	 * booking. `linked_to` is not populated, which is why only the guide half was
+	 * affected. See server/utils/refId.ts.
+	 */
 	private assertVisible(booking: IBooking, user: JWTPayload) {
 		if (user.role === 'admin') return;
-		const isTourist = booking.linked_to?.toString() === user.userId;
-		const isGuide = booking.allocated_guide?.toString() === user.userId;
+		const isTourist = refEquals(booking.linked_to, user.userId);
+		const isGuide = refEquals(booking.allocated_guide, user.userId);
 		if (!isTourist && !isGuide) {
 			throw new ForbiddenError('You do not have access to this booking');
 		}

@@ -855,7 +855,7 @@ describe('tourguide routes — native vs Express parity', () => {
 			expect(result.status).toBe(200);
 		});
 
-		it('the allocated guide is refused — a PRE-EXISTING bug, reproduced deliberately', async () => {
+		it('the allocated guide reads it too — REGRESSION GUARD, see refId.ts', async () => {
 			const tourist = await createAuthedUser('tourist');
 			const guide = await createAuthedUser('guide');
 
@@ -869,17 +869,17 @@ describe('tourguide routes — native vs Express parity', () => {
 				GET(request, { params: Promise.resolve({ id }) } as never)
 			);
 
-			// `assertVisible` intends to admit the allocated guide, and does not:
-			// `getById` runs `.populate('allocated_guide', …).lean()` first, so by the
-			// time the check runs `booking.allocated_guide` is a plain object and
-			// `.toString()` yields '[object Object]', which never equals a user id.
-			// `linked_to` is not populated, which is why the tourist path works.
+			// This answered 403 until the refId fix. `getById` runs
+			// `.populate('allocated_guide', …).lean()`, so by the time assertVisible
+			// ran, `booking.allocated_guide` was a document and `.toString()` gave
+			// '[object Object]' — which never equals a user id, so the guide was
+			// refused their own booking. `linked_to` is not populated, which is why
+			// only the guide half broke.
 			//
-			// This predates the migration and lives in server/services/tourguide.ts,
-			// not in the port — both halves of this parity run agree on 403. It is
-			// pinned here rather than fixed so the port stays behaviour-preserving;
-			// fixing it is a separate, deliberate change.
-			expect(result.status).toBe(403);
+			// Both halves of this parity run exercise the same service, so this case
+			// is a regression guard rather than a native-vs-Express comparison:
+			// re-introducing the populate-then-toString slip fails it on both sides.
+			expect(result.status).toBe(200);
 		});
 
 		it('an admin reads anyone’s', async () => {
