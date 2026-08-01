@@ -5,7 +5,7 @@
 Branch: `feature/nextjs-migration` (pushed, in sync with origin)
 Repo: `knitesh420/GetMyGuide`
 `main`: untouched at `fe3c2b2` — production still deploys from it
-Last updated: 2026-07-31 (Phase 3.10)
+Last updated: 2026-08-01 (Phase 3.10 + first real run)
 
 ---
 
@@ -25,9 +25,10 @@ Do not "create a Next.js project" — it exists, at the repo root.
 | --- | --- |
 | Endpoints native | **167 of 178** |
 | Endpoints on the Express adapter | 11 (all working, all BLOCKED on B1b) |
-| Tests | **855 passing, 56 suites** |
+| Tests | **864 passing, 57 suites** |
 | Typechecks | `tsc -p tsconfig.server.json` and `tsc` both clean |
 | Build | `next build` succeeds, 155 native route files |
+| Runtime | **Smoke-tested for real** — see §9b |
 
 **Every unblocked module is now native.** What remains on the adapter is only
 `blog` and `advertisement`, both waiting on the disk-media decision in §6 B1b.
@@ -198,11 +199,14 @@ by an **external cron pinger** (decided) every 5 min, authenticated by
 `reconcileOrphanedBookingPayments()` is what turns a captured payment into a
 booking. Without it a customer can pay and receive nothing.
 
-### 🟡 R5 — unmeasured
-Invoice PDF (pdfkit + QR) and Excel export duration on Vercel. Both routes carry
-`maxDuration = 60`. Needs a staging deploy to measure. **Nothing has ever run on
-Vercel or in a browser** — all verification so far is Jest importing handlers
-directly.
+### ✅ R5 — MEASURED (2026-08-01), no longer a concern
+Invoice PDF ~**27 ms** warm (280 ms cold), CSV export ~**12 ms**, measured
+against a built app on a throwaway in-memory Mongo. Both routes carry
+`maxDuration = 60`, so the margin is ~3 orders of magnitude. Timings are local,
+so Vercel will differ — but not by 60 seconds.
+
+Note the "Excel export" is really **CSV** (`text/csv`, `invoices.csv`). There is
+no xlsx generator to worry about.
 
 ## 7. Deliberate divergences (do NOT "fix" these)
 
@@ -390,6 +394,74 @@ everyone, silently. Nothing errored either way.
 left. Once it is made: port blog + advertisement, then retire the adapter and
 drop the Express dependencies.
 
+## 9b. The first real run (2026-08-01) — READ THIS BEFORE DEPLOYING
+
+Until this point **nothing had ever run outside Jest.** The app was built with
+`next build` and started with `next start` against a *throwaway in-memory Mongo*
+(never the production cluster), and driven over real HTTP with curl.
+
+It found a **deploy blocker that 864 green tests and a clean build all missed**:
+
+> `GET /api/invoice/:id/download` 500'd on every request.
+> `ENOENT … pdfkit/js/data/Helvetica.afm`, resolved under a placeholder root.
+> pdfkit reads its font metrics off disk at runtime via its own `__dirname`, and
+> bundling rewrites `__dirname`. Fixed in `next.config.mjs` with
+> `serverExternalPackages: ["pdfkit"]` **plus** an `outputFileTracingIncludes`
+> entry — external alone fixes the path, tracing alone ships the files, and both
+> are needed. Under Jest the same code reads real `node_modules` and passes,
+> which is exactly why no test caught it.
+
+**The lesson generalises: any dependency that touches the filesystem at runtime
+is invisible to this test suite.** If a future module reaches for one, run the
+built app before believing it works.
+
+What was verified working end-to-end over real HTTP:
+
+| Area | Result |
+| --- | --- |
+| Native routes, public + authed | 200/400/401/403 all correct, envelope intact |
+| Login → cookie → authed request → refresh → logout | full round trip |
+| `clearCookie` on logout | `Expires` at epoch, **no `Max-Age`** — §7 divergence 2 confirmed on the wire |
+| Cookie attributes | `HttpOnly; Secure; SameSite=Lax; Path=/` |
+| Role gates | tourist hitting `/tourguide/all` → 403 |
+| SSR pages (`/`, `/guides`, `/blogs`, `/signin`, `/dashboard/user`) | all 200 |
+| Express adapter (`/api/blog`, `/api/advertisement`) | still 200 through the catch-all |
+| `POST /api/cron/tick` | 401 without `CRON_SECRET`, 200 with it |
+| Invoice PDF + CSV export | see R5 above |
+
+**How to re-run it** (never point this at production):
+
+```bash
+# 1. throwaway mongo on 47017 (mongodb-memory-server), NOT Atlas
+# 2. cp .env.example .env.local, fill in fake secrets
+# 3. npx next build
+# 4. DATABASE_URL="mongodb://127.0.0.1:47017/smoketest" npx next start -p 3123
+# 5. curl away; rm -f .env.local afterwards
+```
+
+Two gotchas that cost time and will again:
+
+- **Jest does not read `.env.local`.** A token minted in a Jest process is
+  signed with the *dev default* `JWT_ACCESS_SECRET` and the running server
+  rejects it as invalid. Pass the same `JWT_ACCESS_SECRET` to both, or log in
+  over HTTP instead of minting a token.
+- **A fake `RESEND_API_KEY` makes `register/send-otp` 500**, so the signup flow
+  cannot be walked end-to-end without a real key. Seed the account directly
+  instead. The 500 is a clean JSON envelope, not an HTML stack trace, which is
+  itself worth knowing.
+
+### ⚠️ Stale production credentials on disk
+
+`backend/.env` and `frontend/.env` survive from the pre-merge layout, and
+`backend/.env` still holds a **live `mongodb+srv://` Atlas string**.
+
+Checked: both are gitignored and untracked, so **they were never committed** —
+the exposure is local-only. Next also reads env files only from the repo root,
+so they are inert for this app. Nothing is leaking. But they are live production
+credentials sitting in a working tree for directories that no longer exist, and
+the safe move is to delete them once you are sure nothing local still needs
+them. Left in place rather than deleted unilaterally.
+
 ## 10. Environment notes
 
 - `.env` points at the **LIVE production Atlas cluster**. There is no staging DB.
@@ -415,7 +487,7 @@ drop the Express dependencies.
 ```bash
 npx tsc --noEmit -p tsconfig.server.json   # server + tests
 npx tsc --noEmit                            # Next app
-npx jest --silent                           # 855 tests, 56 suites
+npx jest --silent                           # 864 tests, 57 suites
 cp .env.example .env.local && npx next build && rm -f .env.local
 ```
 
