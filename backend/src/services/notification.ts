@@ -12,6 +12,7 @@ interface CreateNotificationParams {
 	message: string;
 	relatedEntity?: { kind: string; id: string };
 	dedupeKey: string;
+	emailStatus?: 'pending' | 'sending' | 'sent' | 'failed';
 }
 
 interface PageParams {
@@ -35,6 +36,7 @@ class NotificationService {
 				message: params.message,
 				relatedEntity: params.relatedEntity,
 				dedupeKey: params.dedupeKey,
+				...(params.emailStatus ? { emailStatus: params.emailStatus } : {}),
 			});
 		} catch (err: any) {
 			if (err?.code === MONGO_DUPLICATE_KEY_ERROR_CODE) {
@@ -42,6 +44,61 @@ class NotificationService {
 			}
 			logError('Failed to create notification', err);
 			return null;
+		}
+	}
+
+	async getOrCreateMembershipReminder(params: Omit<CreateNotificationParams, 'emailStatus'>) {
+		const created = await this.create({ ...params, emailStatus: 'pending' });
+		if (created) return created;
+		return NotificationDB.findOne({ dedupeKey: params.dedupeKey });
+	}
+
+	async deliverEmailOnce(
+		notificationId: Types.ObjectId,
+		send: (notification: { _id: Types.ObjectId }) => Promise<boolean>
+	): Promise<void> {
+		const now = new Date();
+		const staleSendingBefore = new Date(now.getTime() - 15 * 60_000);
+		const notification = await NotificationDB.findOneAndUpdate(
+			{
+				_id: notificationId,
+				$or: [
+					{ emailStatus: 'pending' },
+					{ emailStatus: 'failed' },
+					{ emailStatus: 'sending', emailAttemptedAt: { $lt: staleSendingBefore } },
+				],
+			},
+			{
+				$set: { emailStatus: 'sending', emailAttemptedAt: now },
+				$inc: { emailAttemptCount: 1 },
+				$unset: { emailLastError: 1 },
+			},
+			{ new: true }
+		);
+		if (!notification) return;
+
+		try {
+			const sent = await send(notification);
+			if (!sent) throw new Error('Email provider did not confirm delivery');
+			await NotificationDB.updateOne(
+				{ _id: notification._id, emailStatus: 'sending', emailAttemptedAt: now },
+				{ $set: { emailStatus: 'sent', emailSentAt: new Date() } }
+			);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : 'Unknown email delivery failure';
+			await NotificationDB.updateOne(
+				{ _id: notification._id, emailStatus: 'sending', emailAttemptedAt: now },
+				{
+					$set: {
+						emailStatus: 'failed',
+						emailLastError: message.slice(0, 2000),
+					},
+				}
+			);
+			logError('Failed to deliver membership reminder email', {
+				notificationId: notification._id.toString(),
+				error: err,
+			});
 		}
 	}
 

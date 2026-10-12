@@ -1,5 +1,5 @@
 import { RAZORPAY_API_SECRET } from '@config/const';
-import { BookingDB, TransactionDB } from '@mongo';
+import { AccountDB, BookingDB, GuideDB, TransactionDB } from '@mongo';
 import WebhookEventDB from '@mongo/repo/WebhookEvent';
 import PaymentService from '@services/payment';
 import crypto from 'crypto';
@@ -216,6 +216,59 @@ describe('Payment integrity', () => {
 
 			expect(other.message).not.toMatch(/already processed/);
 			expect(await WebhookEventDB.countDocuments({})).toBe(2);
+		});
+
+		it('does not activate a membership when a captured payment uses an old price', async () => {
+			const account = await AccountDB.create({
+				name: 'Guide',
+				email: 'guide-price@example.com',
+				phone: '+911234567890',
+				password: 'Password@123',
+				role: 'guide',
+			});
+			const guide = await GuideDB.create({
+				accountId: account._id,
+				registrationCompleted: true,
+				approvalStatus: 'approved',
+			});
+			const orderId = 'order_legacy_membership';
+			const paymentId = 'pay_legacy_membership';
+			await TransactionDB.create({
+				reference_id: guide._id.toString(),
+				reference_type: 'guide_membership',
+				type: 'guide',
+				account: account._id,
+				razorpay_order_id: orderId,
+				razorpay_customer_id: 'cust_test',
+				transaction_id: 'txn_legacy_membership',
+				status: 'pending',
+				amount: 500,
+				currency: 'INR',
+			});
+
+			await PaymentService.handleWebhookEvent(
+				{
+					event: 'payment.captured',
+					payload: {
+						payment: {
+							entity: {
+								id: paymentId,
+								order_id: orderId,
+								amount: 50000,
+								currency: 'INR',
+							},
+						},
+					},
+				},
+				'evt_legacy_membership'
+			);
+
+			const transaction = await TransactionDB.findOne({ razorpay_order_id: orderId });
+			const unchangedGuide = await GuideDB.findById(guide._id);
+			expect(transaction!.status).toBe('pending_verification');
+			expect(transaction!.razorpay_payment_id).toBe(paymentId);
+			expect(unchangedGuide!.membershipExpiryDate).toBeNull();
+			expect(unchangedGuide!.isVisible).toBe(false);
 		});
 
 		it('rejects a webhook with no signature header', async () => {

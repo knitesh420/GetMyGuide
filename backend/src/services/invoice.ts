@@ -96,7 +96,7 @@ class InvoiceService {
 	 * .finalizeMembershipPaymentByGuideId, which is the single point both the
 	 * synchronous confirm-payment call and the Razorpay webhook converge on.
 	 */
-	async createMembershipInvoice(guide: IGuide) {
+	async createMembershipInvoice(guide: IGuide, transactionId?: string) {
 		const account = await AccountDB.findById(guide.accountId);
 		if (!account) {
 			logError('InvoiceService: guide account not found for membership invoice', {
@@ -105,10 +105,12 @@ class InvoiceService {
 			return null;
 		}
 
-		const transaction = await TransactionService.getTransactionByReference(
-			guide._id.toString(),
-			'guide_membership'
-		);
+		const transaction = transactionId
+			? await TransactionDB.findById(transactionId)
+			: await TransactionService.getTransactionByReference(
+					guide._id.toString(),
+					'guide_membership'
+				);
 		if (!transaction) {
 			logError('InvoiceService: no transaction found for membership invoice', {
 				guideId: guide._id.toString(),

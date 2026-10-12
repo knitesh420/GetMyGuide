@@ -10,3 +10,4 @@ export { default as GuideAcceptedTemplate } from './guideAccepted';
 export { default as TripStartedTemplate } from './tripStarted';
 export { default as TripCompletedTemplate } from './tripCompleted';
 export { default as InvoiceEmailTemplate } from './invoice';
+export { default as GuideMembershipReminderTemplate } from './guideMembershipReminder';

@@ -1,10 +1,16 @@
-import { GUIDE_MEMBERSHIP_DURATION_DAYS, GUIDE_MEMBERSHIP_FEE } from '@config/const';
+import {
+	GUIDE_MEMBERSHIP_DURATION_DAYS,
+	GUIDE_MEMBERSHIP_FEE,
+	GUIDE_MEMBERSHIP_TRIAL_DAYS,
+	RAZORPAY_API_KEY,
+	RAZORPAY_CURRENCY,
+} from '@config/const';
 import { AccountDB, ContactInquiryDB, GuideDB, InvoiceDB, TransactionDB } from '@mongo';
 import IGuide, { GuideIdentityDocument, GuideIdentityDocumentType } from '@mongo/types/guide';
 import ITransaction from '@mongo/types/transaction';
 import { displayApprovalStatus, isGuideApproved } from '@utils/guideApproval';
 import { describeGuideDocuments } from '@utils/guideDocuments';
-import { activeMembershipFilter } from '@utils/guideMembership';
+import { activeMembershipFilter, isMembershipActive } from '@utils/guideMembership';
 import { verifyRazorpaySignature } from '@utils/paymentVerify';
 import { Types } from 'mongoose';
 import {
@@ -274,10 +280,18 @@ class GuideService {
 			// Membership
 			registrationCompleted: guide?.registrationCompleted || false,
 			paymentStatus: guide?.paymentStatus || 'pending',
-			isVisible: guide?.isVisible || false,
+			isVisible: account.isActive && isMembershipActive(guide, now),
 			membershipStartDate: guide?.membershipStartDate || null,
 			membershipExpiryDate: guide?.membershipExpiryDate || null,
 			membershipExpired,
+			membershipPlan: guide?.membershipPlan ?? (guide?.membershipExpiryDate ? 'paid' : null),
+			membershipFee: GUIDE_MEMBERSHIP_FEE,
+			membershipDurationDays: GUIDE_MEMBERSHIP_DURATION_DAYS,
+			membershipTrialDays: GUIDE_MEMBERSHIP_TRIAL_DAYS,
+			trialStartDate: guide?.trialStartDate ?? null,
+			trialExpiryDate: guide?.trialExpiryDate ?? null,
+			trialUsedAt: guide?.trialUsedAt ?? null,
+			approvalStatus: displayApprovalStatus(guide),
 			// Paid, but the subscription has not started because review is still
 			// pending. The dashboard needs this to explain why a guide who has paid
 			// is not live yet — without it they look simply broken.
@@ -298,7 +312,6 @@ class GuideService {
 			profileComplete: !!guide?.registrationCompleted,
 			// KYC review. The guide needs to see where they stand — and why, if
 			// they were rejected — not just find themselves silently unlisted.
-			approvalStatus: displayApprovalStatus(guide),
 			rejectionReason: guide?.rejectionReason ?? '',
 			approvedAt: guide?.approvedAt ?? null,
 			// Own-profile read, so the payout destination is safe to return here.
@@ -324,6 +337,9 @@ class GuideService {
 		const account = await AccountDB.findOne({ _id: accountId, role: 'guide' });
 		if (!account) {
 			throw new NotFoundError('Guide account not found');
+		}
+		if (!account.emailVerified) {
+			throw new BadRequestError('Please verify your email before completing guide registration');
 		}
 
 		const existing = await GuideDB.findOne({ accountId: account._id });
@@ -351,7 +367,11 @@ class GuideService {
 		if (existing) {
 			await GuideDB.findOneAndUpdate({ accountId: account._id }, { $set: update });
 		} else {
-			await GuideDB.create({ accountId: account._id, ...update });
+			await GuideDB.create({
+				accountId: account._id,
+				trialEligible: account.guideTrialEligible === true,
+				...update,
+			});
 		}
 
 		if (phone && phone !== account.phone) {
@@ -544,9 +564,23 @@ class GuideService {
 		const successAsc = [...transactions]
 			.filter((t) => t.status === 'paid' || t.status === 'success')
 			.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-		const windowByTxnId = new Map<string, { startDate?: Date; expiryDate?: Date }>();
-		successAsc.forEach((t, i) => {
-			if (windows[i]) windowByTxnId.set(t._id.toString(), windows[i]);
+		const windowByTxnId = new Map<
+			string,
+			{ startDate?: Date; expiryDate?: Date; plan?: string }
+		>();
+		for (const window of windows) {
+			if (window.transaction) {
+				windowByTxnId.set(window.transaction.toString(), window);
+			}
+		}
+		const legacyWindows = windows.filter(
+			(window) => !window.transaction && window.plan !== '40-day free trial'
+		);
+		const legacySuccess = successAsc.filter((transaction) => !windowByTxnId.has(transaction._id.toString()));
+		legacySuccess.forEach((transaction, index) => {
+			if (legacyWindows[index]) {
+				windowByTxnId.set(transaction._id.toString(), legacyWindows[index]);
+			}
 		});
 
 		const refundedTxnId =
@@ -587,7 +621,7 @@ class GuideService {
 
 			return {
 				id: t._id.toString(),
-				plan: `${GUIDE_MEMBERSHIP_DURATION_DAYS}-day membership`,
+				plan: window?.plan ?? `${GUIDE_MEMBERSHIP_DURATION_DAYS}-day membership`,
 				purchaseDate: t.createdAt,
 				activationDate: activation,
 				expiryDate: expiry,
@@ -610,7 +644,38 @@ class GuideService {
 			};
 		});
 
-		return { data };
+		const trialRecords = windows
+			.filter((window) => window.plan === '40-day free trial')
+			.map((window) => {
+				const activation = new Date(window.startDate!);
+				const expiry = window.expiryDate ? new Date(window.expiryDate) : null;
+				return {
+					id: `trial:${guide._id.toString()}:${activation.getTime()}`,
+					plan: '40-day free trial',
+					purchaseDate: activation,
+					activationDate: activation,
+					expiryDate: expiry,
+					durationDays: expiry
+						? Math.round((expiry.getTime() - activation.getTime()) / DAY_MS)
+						: GUIDE_MEMBERSHIP_TRIAL_DAYS,
+					amount: 0,
+					currency: RAZORPAY_CURRENCY,
+					paymentMethod: null,
+					paymentStatus: 'not_required',
+					failureReason: null,
+					transactionId: '—',
+					razorpayPaymentId: null,
+					status: expiry && expiry > now ? 'Active' as const : 'Expired' as const,
+					invoiceId: null,
+					invoiceNumber: null,
+				};
+			});
+
+		return {
+			data: [...data, ...trialRecords].sort(
+				(a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime()
+			),
+		};
 	}
 
 	/**
@@ -627,6 +692,42 @@ class GuideService {
 		const guide = await GuideDB.findOne({ accountId: account._id });
 		if (!guide || !guide.registrationCompleted) {
 			throw new BadRequestError('Please complete your guide profile before paying for membership');
+		}
+		if (guide.approvalStatus !== 'approved') {
+			throw new BadRequestError('Your guide application must be approved before paying for membership');
+		}
+		if (
+			guide.membershipPlan === 'trial' &&
+			guide.membershipExpiryDate &&
+			guide.membershipExpiryDate > new Date()
+		) {
+			throw new BadRequestError('Your free trial is active; you can renew after it expires');
+		}
+
+		const pendingTransaction = await TransactionDB.findOne({
+			reference_id: guide._id.toString(),
+			reference_type: 'guide_membership',
+			status: 'pending',
+			amount: GUIDE_MEMBERSHIP_FEE,
+			currency: RAZORPAY_CURRENCY,
+		}).sort({ createdAt: -1 });
+		if (pendingTransaction) {
+			return {
+				transaction_id: pendingTransaction.transaction_id,
+				razorpay_options: {
+					description: `${GUIDE_MEMBERSHIP_DURATION_DAYS}-day guide membership`,
+					currency: pendingTransaction.currency,
+					amount: pendingTransaction.amount * 100,
+					name: 'Get My Guide',
+					order_id: pendingTransaction.razorpay_order_id,
+					prefill: {
+						name: account.name,
+						contact: account.phone,
+						email: account.email,
+					},
+					key: RAZORPAY_API_KEY,
+				},
+			};
 		}
 
 		return TransactionService.createTransaction(
@@ -680,16 +781,35 @@ class GuideService {
 		if (transaction.reference_type !== 'guide_membership') {
 			throw new ServerError('Transaction is not a guide membership payment');
 		}
+		if (transaction.account && transaction.account.toString() !== accountId) {
+			throw new NotFoundError('Guide membership transaction not found');
+		}
 
 		const guide = await GuideDB.findOne({ accountId });
 		if (!guide || guide._id.toString() !== transaction.reference_id) {
 			throw new NotFoundError('Guide profile not found for this transaction');
+		}
+		if (
+			(transaction.amount !== GUIDE_MEMBERSHIP_FEE ||
+				transaction.currency !== RAZORPAY_CURRENCY) &&
+			!transaction.membershipAppliedAt
+		) {
+			throw new ConflictError(
+				`This order does not match the current ₹${GUIDE_MEMBERSHIP_FEE} membership price`
+			);
 		}
 
 		// Record the gateway payment id / status on the transaction. Best-effort
 		// and last-writer-wins — status here is only a record of the payment, no
 		// longer the guard against double-application (that moved onto
 		// membershipAppliedAt, claimed atomically inside finalize below).
+		if (
+			(transaction.status === 'success' || transaction.status === 'paid') &&
+			transaction.razorpay_payment_id &&
+			transaction.razorpay_payment_id !== razorpay_payment_id
+		) {
+			throw new ConflictError('This membership order was confirmed with a different payment');
+		}
 		if (transaction.status !== 'success' && transaction.status !== 'paid') {
 			transaction.razorpay_payment_id = razorpay_payment_id;
 			transaction.status = 'paid';
@@ -721,20 +841,32 @@ class GuideService {
 	 *
 	 * Mutates but does not save; the caller decides when to persist.
 	 */
-	private openMembershipWindow(guide: IGuide, from: Date) {
+	private openMembershipWindow(
+		guide: IGuide,
+		from: Date,
+		plan: 'trial' | 'paid',
+		transactionId?: string
+	) {
 		const base =
 			guide.membershipExpiryDate && guide.membershipExpiryDate > from
 				? guide.membershipExpiryDate
 				: from;
-		const expiry = new Date(base.getTime() + GUIDE_MEMBERSHIP_DURATION_DAYS * DAY_MS);
+		const durationDays = plan === 'trial' ? GUIDE_MEMBERSHIP_TRIAL_DAYS : GUIDE_MEMBERSHIP_DURATION_DAYS;
+		const expiry = new Date(base.getTime() + durationDays * DAY_MS);
 
 		if (!guide.membershipStartDate) {
 			guide.membershipStartDate = from;
 		}
 		guide.membershipExpiryDate = expiry;
+		guide.membershipPlan = plan;
 		guide.membershipHistory = [
 			...(guide.membershipHistory ?? []),
-			{ startDate: base, expiryDate: expiry },
+			{
+				plan: plan === 'trial' ? `${durationDays}-day free trial` : `${durationDays}-day membership`,
+				startDate: base,
+				expiryDate: expiry,
+				...(transactionId ? { transaction: new Types.ObjectId(transactionId) } : {}),
+			},
 		];
 		guide.membershipPendingActivation = false;
 		guide.isVisible = true;
@@ -785,7 +917,13 @@ class GuideService {
 		// internal caller) the guard is skipped and behaviour is unchanged.
 		if (opts.transactionId) {
 			const claimed = await TransactionDB.findOneAndUpdate(
-				{ _id: opts.transactionId, membershipAppliedAt: null },
+				{
+					_id: opts.transactionId,
+					reference_type: 'guide_membership',
+					reference_id: guideId,
+					status: { $in: ['success', 'paid'] },
+					membershipAppliedAt: null,
+				},
 				{ $set: { membershipAppliedAt: new Date() } }
 			);
 			if (!claimed) {
@@ -801,7 +939,7 @@ class GuideService {
 		guide.membershipPaidAt = now;
 
 		if (isGuideApproved(guide)) {
-			this.openMembershipWindow(guide, now);
+			this.openMembershipWindow(guide, now, 'paid', opts.transactionId);
 		} else {
 			// Paid, but the clock does not start until review passes. Nothing about
 			// membershipStartDate / membershipExpiryDate is touched here — an
@@ -817,7 +955,7 @@ class GuideService {
 		// both converge here. The invoice is for the payment, which happened
 		// regardless of whether the subscription window has opened yet.
 		try {
-			await InvoiceService.createMembershipInvoice(guide);
+			await InvoiceService.createMembershipInvoice(guide, opts.transactionId);
 		} catch (invoiceError) {
 			logError('Guide membership finalize: invoice generation failed', { guideId, error: invoiceError });
 		}
@@ -955,7 +1093,7 @@ class GuideService {
 
 		const guide = await GuideDB.findOne({ accountId: account._id });
 		const now = new Date();
-		const isVisible = !!guide?.isVisible && !!guide?.membershipExpiryDate && guide.membershipExpiryDate > now;
+		const isVisible = account.isActive && isMembershipActive(guide, now);
 
 		return {
 			_id: account._id.toString(),
@@ -971,7 +1109,11 @@ class GuideService {
 			isCertified: guide?.type === 'escort',
 			unavailableDates: account.unavailableDates || [],
 			pricing: guide?.pricing ?? null,
-			bookable: isGuideApproved(guide) && !!guide?.pricing?.fullDay && guide.pricing.fullDay > 0,
+			bookable:
+				account.isActive &&
+				isMembershipActive(guide, now) &&
+				!!guide?.pricing?.fullDay &&
+				guide.pricing.fullDay > 0,
 		};
 	}
 
@@ -990,7 +1132,7 @@ class GuideService {
 
 		const profiles = await GuideDB.find({ accountId: { $in: accountIds } })
 			.select(
-				'accountId guideCode city languages type pan isVisible registrationCompleted paymentStatus membershipStartDate membershipExpiryDate membershipPendingActivation membershipPaidAt membershipRefund adminNotes pricing approvalStatus rejectionReason approvedAt profileImage identityProofs updatedAt'
+				'accountId guideCode city languages type pan isVisible registrationCompleted paymentStatus membershipStartDate membershipExpiryDate membershipPlan trialStartDate trialExpiryDate trialUsedAt membershipPendingActivation membershipPaidAt membershipRefund adminNotes pricing approvalStatus rejectionReason approvedAt profileImage identityProofs updatedAt'
 			)
 			.lean();
 		const profileByAccountId = new Map(profiles.map((p) => [p.accountId.toString(), p]));
@@ -998,10 +1140,7 @@ class GuideService {
 		const now = new Date();
 		return accounts.map((account) => {
 			const profile = profileByAccountId.get(account._id.toString());
-			const membershipActive =
-				!!profile?.isVisible &&
-				!!profile?.membershipExpiryDate &&
-				new Date(profile.membershipExpiryDate) > now;
+			const membershipActive = account.isActive && isMembershipActive(profile, now);
 			return {
 				accountId: account._id.toString(),
 				guideCode: profile?.guideCode ?? null,
@@ -1020,6 +1159,10 @@ class GuideService {
 				membershipActive,
 				membershipStartDate: profile?.membershipStartDate ?? null,
 				membershipExpiryDate: profile?.membershipExpiryDate ?? null,
+				membershipPlan: profile?.membershipPlan ?? null,
+				trialStartDate: profile?.trialStartDate ?? null,
+				trialExpiryDate: profile?.trialExpiryDate ?? null,
+				trialUsedAt: profile?.trialUsedAt ?? null,
 				// Paid, but waiting on this admin to approve before the clock starts.
 				membershipPendingActivation: !!profile?.membershipPendingActivation,
 				membershipPaidAt: profile?.membershipPaidAt ?? null,
@@ -1066,8 +1209,7 @@ class GuideService {
 		const guide = await GuideDB.findOne({ accountId: account._id }).lean();
 
 		const now = new Date();
-		const membershipActive =
-			!!guide?.isVisible && !!guide?.membershipExpiryDate && new Date(guide.membershipExpiryDate) > now;
+		const membershipActive = account.isActive && isMembershipActive(guide, now);
 
 		// Every membership fee this guide has ever been charged, newest first.
 		const transactions = guide
@@ -1118,6 +1260,10 @@ class GuideService {
 			membershipExpiryDate: guide?.membershipExpiryDate ?? null,
 			membershipPaidAt: guide?.membershipPaidAt ?? null,
 			membershipPendingActivation: !!guide?.membershipPendingActivation,
+			membershipPlan: guide?.membershipPlan ?? null,
+			trialStartDate: guide?.trialStartDate ?? null,
+			trialExpiryDate: guide?.trialExpiryDate ?? null,
+			trialUsedAt: guide?.trialUsedAt ?? null,
 			membershipHistory: guide?.membershipHistory ?? [],
 
 			// ---- Documents (admin-only links) ----
@@ -1293,7 +1439,7 @@ class GuideService {
 			throw new NotFoundError('Guide account not found');
 		}
 
-		const guide = await GuideDB.findOne({ accountId: account._id });
+		let guide = await GuideDB.findOne({ accountId: account._id });
 		if (!guide) {
 			throw new NotFoundError('Guide profile not found');
 		}
@@ -1305,21 +1451,82 @@ class GuideService {
 		}
 
 		const approvedAt = new Date();
+		let approvalSaved = false;
 
-		guide.approvalStatus = 'approved';
-		guide.approvedBy = new Types.ObjectId(adminUserId);
-		guide.approvedAt = approvedAt;
-		guide.rejectionReason = undefined;
+		if (
+			account.isActive &&
+			!guide.membershipPendingActivation &&
+			guide.trialEligible === true &&
+			!guide.trialUsedAt &&
+			!guide.membershipExpiryDate &&
+			(guide.membershipHistory ?? []).length === 0 &&
+			!(await this.paidMembershipTransaction(guide._id))
+		) {
+			const trialExpiry = new Date(approvedAt.getTime() + GUIDE_MEMBERSHIP_TRIAL_DAYS * DAY_MS);
+			const approvalCondition = guide.approvalStatus
+				? { approvalStatus: guide.approvalStatus }
+				: { approvalStatus: { $exists: false } };
+			const activated = await GuideDB.findOneAndUpdate(
+				{
+					_id: guide._id,
+					...approvalCondition,
+					trialEligible: true,
+					trialUsedAt: null,
+					membershipExpiryDate: null,
+					membershipHistory: [],
+				},
+				{
+					$set: {
+						approvalStatus: 'approved',
+						approvedBy: new Types.ObjectId(adminUserId),
+						approvedAt,
+						rejectionReason: null,
+						membershipPlan: 'trial',
+						trialUsedAt: approvedAt,
+						trialStartDate: approvedAt,
+						trialExpiryDate: trialExpiry,
+						membershipStartDate: approvedAt,
+						membershipExpiryDate: trialExpiry,
+						membershipPendingActivation: false,
+						isVisible: true,
+					},
+					$push: {
+						membershipHistory: {
+							plan: `${GUIDE_MEMBERSHIP_TRIAL_DAYS}-day free trial`,
+							startDate: approvedAt,
+							expiryDate: trialExpiry,
+						},
+					},
+				},
+				{ new: true }
+			);
+			if (!activated) {
+				throw new ConflictError('This guide has already been approved or had their trial activated');
+			}
+			guide = activated;
+			approvalSaved = true;
+		} else {
+			guide.approvalStatus = 'approved';
+			guide.approvedBy = new Types.ObjectId(adminUserId);
+			guide.approvedAt = approvedAt;
+			guide.rejectionReason = undefined;
+		}
 
-		if (guide.membershipPendingActivation) {
-			this.openMembershipWindow(guide, approvedAt);
+		if (approvalSaved) {
+			// Trial and approval state were claimed together above so concurrent
+			// approval requests cannot consume or extend a second trial.
+		} else if (guide.membershipPendingActivation) {
+			this.openMembershipWindow(guide, approvedAt, 'paid');
 		} else {
 			// No parked payment: either a legacy guide with a window already running,
 			// or someone who has not paid at all. Both are answered by the same test.
-			guide.isVisible = !!guide.membershipExpiryDate && guide.membershipExpiryDate > approvedAt;
+			guide.isVisible =
+				account.isActive &&
+				!!guide.membershipExpiryDate &&
+				guide.membershipExpiryDate > approvedAt;
 		}
 
-		await guide.save();
+		if (!approvalSaved) await guide.save();
 
 		const listedImmediately = guide.isVisible;
 
@@ -1342,8 +1549,10 @@ class GuideService {
 			type: 'guide_approved',
 			title: 'Your profile has been approved',
 			message: listedImmediately
-				? `Your documents have been verified and your profile is now live. Your ${GUIDE_MEMBERSHIP_DURATION_DAYS}-day subscription starts today and runs until ${guide.membershipExpiryDate?.toLocaleDateString('en-IN')}. Tourists can find and book you.`
-				: 'Your documents have been verified. Pay for your membership to go live and start receiving bookings.',
+				? guide.membershipPlan === 'trial'
+					? `Your documents have been verified and your profile is now live. Your ${GUIDE_MEMBERSHIP_TRIAL_DAYS}-day free trial runs until ${guide.membershipExpiryDate?.toLocaleDateString('en-IN')}.`
+					: `Your documents have been verified and your profile is now live. Your ${GUIDE_MEMBERSHIP_DURATION_DAYS}-day membership runs until ${guide.membershipExpiryDate?.toLocaleDateString('en-IN')}.`
+				: 'Your documents have been verified. Complete the membership step in your dashboard to become eligible for public listings.',
 			relatedEntity: { kind: 'Guide', id: guide._id.toString() },
 			dedupeKey: `guide_approved:${guide._id.toString()}:${approvedAt.getTime()}`,
 		});
@@ -1578,7 +1787,7 @@ class GuideService {
 		}
 
 		const guide = await GuideDB.findOne({ accountId: account._id }).lean();
-		const approved = isGuideApproved(guide);
+		const approved = account.isActive && isMembershipActive(guide);
 		const hasRates = !!guide?.pricing?.fullDay && guide.pricing.fullDay > 0;
 
 		return {

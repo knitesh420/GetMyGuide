@@ -37,6 +37,7 @@ import {
 } from "@/components/guide";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const GUIDE_MEMBERSHIP_FEE = 399;
 
 const rupees = (amount: number) => `₹${(amount ?? 0).toLocaleString("en-IN")}`;
 
@@ -145,7 +146,7 @@ function SubscriptionHistorySection({
         <GuideEmptyState
           icon={History}
           title="No subscriptions yet"
-          description="Once you pay your membership fee, every payment and renewal will appear here."
+          description="Your free trial and every paid membership renewal appear here."
         />
       ) : (
         <>
@@ -363,6 +364,9 @@ export default function GuideMembershipPage() {
   const { myProfile: profile, loading } = useSelector(
     (state: RootState) => state.guide,
   );
+  const membershipFee = profile?.membershipFee ?? GUIDE_MEMBERSHIP_FEE;
+  const membershipDurationDays = profile?.membershipDurationDays ?? 30;
+  const membershipTrialDays = profile?.membershipTrialDays ?? 40;
   const [processing, setProcessing] = useState(false);
   // Bumped after a successful payment so the history section refetches.
   const [historyReload, setHistoryReload] = useState(0);
@@ -379,6 +383,7 @@ export default function GuideMembershipPage() {
     profile?.isVisible &&
     !profile?.membershipExpired &&
     !!profile?.membershipExpiryDate;
+  const trialActive = isActive && profile?.membershipPlan === "trial";
   /**
    * Paid, but the 30-day clock has not started: the guide is waiting on the
    * admin's verification, and their subscription begins the moment it lands.
@@ -387,7 +392,9 @@ export default function GuideMembershipPage() {
    * both have no expiry date — and would push a guide who has already paid to
    * pay a second time.
    */
-  const awaitingApproval = !!profile?.membershipPendingActivation;
+  const paidAwaitingApproval = !!profile?.membershipPendingActivation;
+  const awaitingApproval =
+    paidAwaitingApproval || profile?.approvalStatus === "pending";
   const expiryDate = profile?.membershipExpiryDate
     ? new Date(profile.membershipExpiryDate).toLocaleDateString("en-IN", {
         year: "numeric",
@@ -487,12 +494,18 @@ export default function GuideMembershipPage() {
   const ctaLabel = processing
     ? "Processing..."
     : isActive
-      ? "Renew Early (+30 days)"
+      ? trialActive
+        ? "Free Trial Active"
+        : `Renew Early ₹${membershipFee} (+${membershipDurationDays} days)`
       : awaitingApproval
-        ? "Awaiting Verification"
+        ? paidAwaitingApproval
+          ? "Payment Awaiting Verification"
+          : "Application Under Review"
         : profile?.membershipStartDate
-          ? "Renew Membership"
-          : "Pay Membership Fee";
+          ? `Renew for ₹${membershipFee}`
+          : profile?.approvalStatus === "rejected"
+            ? "Application Rejected"
+            : `Membership ₹${membershipFee}`;
 
   return (
     <>
@@ -509,7 +522,7 @@ export default function GuideMembershipPage() {
         viewLabel="View Membership"
         dashboardHref="/dashboard/guide"
         // Paying does not necessarily list them any more: an unverified guide's
-        // 30 days start when an admin approves, not now. Promising visibility
+        // membership starts when an admin approves, not now. Promising visibility
         // here would be a lie for exactly the guides who most need the truth.
         successMessage={
           profile?.approvalStatus === "approved"
@@ -523,7 +536,7 @@ export default function GuideMembershipPage() {
       <div className="space-y-6">
         <GuidePageHeader
           title="Guide Membership"
-          description="A 30-day membership keeps your profile listed and bookable on Get My Guide."
+          description={`Eligible, approved new guides get a ${membershipTrialDays}-day free trial. Paid membership is ₹${membershipFee} for ${membershipDurationDays} days; no automatic charges.`}
         />
 
         <GuidePanel>
@@ -541,10 +554,18 @@ export default function GuideMembershipPage() {
                   isActive
                     ? "Expires On"
                     : awaitingApproval
-                      ? "Fee Paid On"
-                      : "Expired On"
+                        ? paidAwaitingApproval
+                          ? "Fee Paid On"
+                          : "Application Status"
+                        : "Expired On"
                 }
-                value={(awaitingApproval ? paidOn : expiryDate) ?? "—"}
+                value={
+                    paidAwaitingApproval
+                      ? paidOn ?? "—"
+                      : awaitingApproval
+                        ? "Under review"
+                        : expiryDate ?? "—"
+                }
               />
               <GuideStat
                 icon={ShieldCheck}
@@ -586,7 +607,9 @@ export default function GuideMembershipPage() {
                   {isActive
                     ? "Membership active"
                     : awaitingApproval
-                      ? "Payment received — awaiting verification"
+                      ? paidAwaitingApproval
+                        ? "Payment received — awaiting verification"
+                        : "Application under review"
                       : profile?.membershipStartDate
                         ? "Membership expired"
                         : "No active membership"}
@@ -601,12 +624,16 @@ export default function GuideMembershipPage() {
                   }`}
                 >
                   {isActive
-                    ? "Your profile is currently visible to travellers."
-                    : awaitingApproval
-                      ? "Your membership fee is paid. Our team is checking your documents — your 30 days start the moment you're approved, so nothing is lost while you wait. There is nothing more to pay."
-                      : profile?.membershipStartDate
-                        ? "Your listing is currently hidden from travellers."
-                        : "Pay the membership fee to appear in public guide search."}
+                    ? trialActive
+                      ? `Your profile is visible during your free trial. It ends on ${expiryDate}; renew for ₹${membershipFee} for the next ${membershipDurationDays} days.`
+                      : `Your profile is currently visible to travellers. Your membership expires on ${expiryDate}.`
+                    : paidAwaitingApproval
+                      ? "Your membership fee is paid. Our team is checking your documents — your 30-day membership starts when approved. There is nothing more to pay."
+                      : awaitingApproval
+                        ? `Your application is under review. If approved, your eligible account's ${membershipTrialDays}-day trial starts then. You do not need to pay during review.`
+                        : profile?.membershipStartDate
+                          ? `Your listing is hidden until you renew for ₹${membershipFee}.`
+                          : `After approval, eligible new guides receive a ${membershipTrialDays}-day free trial. Paid membership is ₹${membershipFee} per ${membershipDurationDays} days.`}
                 </p>
               </div>
             </div>
@@ -631,7 +658,9 @@ export default function GuideMembershipPage() {
                 processing ||
                 loading ||
                 !profile?.registrationCompleted ||
-                awaitingApproval
+                awaitingApproval ||
+                trialActive ||
+                profile?.approvalStatus === "rejected"
               }
               className="mt-5 w-full"
               size="lg"
@@ -646,8 +675,14 @@ export default function GuideMembershipPage() {
             )}
             {awaitingApproval && (
               <p className="mt-2 text-center text-xs text-slate-500">
-                No further payment is needed. We&apos;ll email you when your
-                profile is verified.
+                {paidAwaitingApproval
+                  ? "No further payment is needed. We&apos;ll email you when your profile is verified."
+                  : "No payment is due while your application is under review."}
+              </p>
+            )}
+            {trialActive && (
+              <p className="mt-2 text-center text-xs text-slate-500">
+                Your trial is free. The ₹{membershipFee} payment option becomes available after it expires.
               </p>
             )}
           </div>
@@ -659,7 +694,11 @@ export default function GuideMembershipPage() {
           // Renewing is only meaningful for a registered guide who is not mid-payment
           // and is not already parked awaiting verification (they've paid already).
           canRenew={
-            !!profile?.registrationCompleted && !awaitingApproval && !processing
+            !!profile?.registrationCompleted &&
+            profile?.approvalStatus === "approved" &&
+            !awaitingApproval &&
+            !trialActive &&
+            !processing
           }
         />
       </div>

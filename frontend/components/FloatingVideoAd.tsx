@@ -7,7 +7,6 @@ import { fetchAdvertisements } from "@/lib/redux/advertisementSlice";
 import { getAdvertisementById } from "@/lib/service/advertisementService";
 
 const AD_DISPLAY_DELAY_MS = 3000;
-const SESSION_KEY = "gmg_ad_shown";
 const MINIMIZED_SIZE = 48;
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 // Fallback media source used only in local dev, where uploaded ad media doesn't
@@ -35,6 +34,7 @@ const FloatingVideoAd: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState<Position>({ x: 0, y: 0 });
   const [useProductionUrl, setUseProductionUrl] = useState(false);
+  const [failedAdIds, setFailedAdIds] = useState<string[]>([]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -49,9 +49,6 @@ const FloatingVideoAd: React.FC = () => {
   useEffect(() => {
     if (advertisements.length === 0 || hasInitialized.current) return;
 
-    // Check if ad was already shown this session
-    if (sessionStorage.getItem(SESSION_KEY)) return;
-
     hasInitialized.current = true;
 
     const timer = setTimeout(() => {
@@ -60,7 +57,6 @@ const FloatingVideoAd: React.FC = () => {
       const y = window.innerHeight - 240;
       setPosition({ x: Math.max(16, x), y: Math.max(16, y) });
       setVisible(true);
-      sessionStorage.setItem(SESSION_KEY, "true");
     }, AD_DISPLAY_DELAY_MS);
 
     return () => clearTimeout(timer);
@@ -84,6 +80,36 @@ const FloatingVideoAd: React.FC = () => {
 
     return () => clearInterval(timer);
   }, [advertisements.length]);
+
+  useEffect(() => {
+    setUseProductionUrl(false);
+  }, [currentAdIndex]);
+
+  const handleVideoError = useCallback(() => {
+    const failedAd = advertisements[currentAdIndex];
+    if (!failedAd) return;
+
+    setFailedAdIds((previous) => {
+      if (previous.includes(failedAd.id)) return previous;
+
+      const nextFailedAdIds = [...previous, failedAd.id];
+      const nextAdIndex = advertisements.findIndex(
+        (ad, index) =>
+          index > currentAdIndex && !nextFailedAdIds.includes(ad.id),
+      );
+      const fallbackAdIndex = advertisements.findIndex(
+        (ad) => !nextFailedAdIds.includes(ad.id),
+      );
+
+      if (fallbackAdIndex === -1) {
+        setVisible(false);
+      } else {
+        setCurrentAdIndex(nextAdIndex === -1 ? fallbackAdIndex : nextAdIndex);
+      }
+
+      return nextFailedAdIds;
+    });
+  }, [advertisements, currentAdIndex]);
 
   // --- Drag handlers (mouse + touch) ---
 
@@ -141,8 +167,7 @@ const FloatingVideoAd: React.FC = () => {
   useEffect(() => {
     if (!isDragging) return;
 
-    const onMouseMove = (e: MouseEvent) =>
-      handleDragMove(e.clientX, e.clientY);
+    const onMouseMove = (e: MouseEvent) => handleDragMove(e.clientX, e.clientY);
     const onTouchMove = (e: TouchEvent) => {
       const touch = e.touches[0];
       handleDragMove(touch.clientX, touch.clientY);
@@ -287,7 +312,9 @@ const FloatingVideoAd: React.FC = () => {
             // If local URL fails, try production URL as fallback
             if (!useProductionUrl && API_URL !== PRODUCTION_API_URL) {
               setUseProductionUrl(true);
+              return;
             }
+            handleVideoError();
           }}
         />
 

@@ -3,15 +3,16 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import Script from "next/script";
 import { useRouter } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "sonner";
 
 import { AppDispatch, RootState } from "@/lib/store";
 import {
-  confirmGuideMembershipPayment,
-  createGuideMembershipOrder,
+  sendRegistrationOtp as sendRegistrationOtpThunk,
+  verifyRegistrationOtp as verifyRegistrationOtpThunk,
+} from "@/lib/redux/authSlice";
+import {
   getMyGuideProfile,
   patchMyGuideProfile,
   updateMyGuideProfile,
@@ -32,21 +33,20 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
-declare global {
-  interface Window {
-    Razorpay: any;
-  }
-}
+const COUNTRY_CODES = [
+  { code: "+91", label: "India (+91)" },
+  { code: "+1", label: "USA/Canada (+1)" },
+  { code: "+44", label: "United Kingdom (+44)" },
+  { code: "+61", label: "Australia (+61)" },
+  { code: "+971", label: "UAE (+971)" },
+  { code: "+65", label: "Singapore (+65)" },
+  { code: "+49", label: "Germany (+49)" },
+  { code: "+33", label: "France (+33)" },
+  { code: "+81", label: "Japan (+81)" },
+  { code: "+86", label: "China (+86)" },
+];
 
-const RAZORPAY_THEME_COLOR = "#22C55E";
-
-/**
- * An anonymous visitor may fill this form, but registration is account-first —
- * the fields have no Guide record to write to until they have an account. Stash
- * what they typed (tab-scoped) while they go through signup, and restore it when
- * they land back here from their dashboard. Files can't survive the trip, so
- * only the text fields are kept.
- */
+/** Keep a pre-authentication profile draft recoverable within this browser tab. */
 const DRAFT_KEY = "guideRegistrationDraft";
 
 interface RegistrationDraft {
@@ -104,12 +104,19 @@ const FormSection = ({
 function BecomeGuidePage() {
   const dispatch: AppDispatch = useDispatch();
   const router = useRouter();
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { isAuthenticated, loading: authLoading, user } = useAuth();
 
   const { myProfile, loading } = useSelector((state: RootState) => state.guide);
 
   const registered = !!myProfile?.registrationCompleted;
 
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [countryCode, setCountryCode] = useState("+91");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
   const [phone, setPhone] = useState("");
   const [city, setCity] = useState("");
   const [pan, setPan] = useState("");
@@ -146,6 +153,8 @@ function BecomeGuidePage() {
   // guide, the saved Guide fields for one coming back to edit.
   useEffect(() => {
     if (!myProfile) return;
+    setName((n) => n || myProfile.name || "");
+    setEmail((e) => e || myProfile.email || "");
     setPhone((p) => p || myProfile.mobile || "");
     setCity((c) => c || myProfile.city || "");
     setPan((p) => p || myProfile.pan || "");
@@ -186,10 +195,8 @@ function BecomeGuidePage() {
   };
 
   /**
-   * First-time registration: write the KYC profile, then take the first 30-day
-   * membership payment. The profile is persisted before checkout opens, so a
-   * guide who abandons payment keeps their registration and can pay later from
-   * the dashboard.
+   * First-time registration submits the KYC application. Membership starts only
+   * after admin approval, when an eligible new guide receives the free trial.
    */
   const submitRegistration = async () => {
     const submission = new FormData();
@@ -209,72 +216,76 @@ function BecomeGuidePage() {
       return;
     }
 
-    const orderResult = await dispatch(createGuideMembershipOrder());
-    if (createGuideMembershipOrder.rejected.match(orderResult)) {
-      toast.error(
-        "You're registered, but payment could not start. You can pay from your dashboard.",
-      );
-      router.push("/dashboard/guide/buy-subscription");
+    toast.success("Your application has been submitted for review.");
+    setSubmitting(false);
+    router.push("/dashboard/guide");
+  };
+
+  const sendVerificationCode = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!name.trim()) return setFormError("Full name is required.");
+    if (!/\S+@\S+\.\S+/.test(normalizedEmail)) {
+      return setFormError("Please enter a valid email address.");
+    }
+    if (phone.length !== 10) return setFormError("Phone number must be exactly 10 digits.");
+    if (password.length < 8 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
+      return setFormError("Password must be at least 8 characters and include uppercase, lowercase, and a number.");
+    }
+    if (password !== confirmPassword) return setFormError("Passwords do not match.");
+
+    setSubmitting(true);
+    const result = await dispatch(
+      sendRegistrationOtpThunk({
+        name: name.trim(),
+        email: normalizedEmail,
+        phone,
+        countryCode,
+        password,
+        confirmPassword,
+        accountType: "guide",
+      }),
+    );
+    setSubmitting(false);
+    if (sendRegistrationOtpThunk.fulfilled.match(result)) {
+      setOtpSent(true);
+      setFormError("");
+      toast.success("Verification code sent to your email.");
+    } else {
+      setFormError((result.payload as string) || "Could not send the verification code.");
+    }
+  };
+
+  const verifyEmail = async () => {
+    if (!/^\d{6}$/.test(otp)) {
+      setFormError("Enter the 6-digit verification code.");
       return;
     }
-
-    const { transaction_id, razorpay_options } = orderResult.payload;
-
-    const rzp = new window.Razorpay({
-      key: razorpay_options.key,
-      amount: razorpay_options.amount,
-      currency: razorpay_options.currency,
-      name: razorpay_options.name,
-      description: razorpay_options.description,
-      order_id: razorpay_options.order_id,
-      prefill: razorpay_options.prefill,
-      theme: { color: RAZORPAY_THEME_COLOR },
-      handler: async (response: any) => {
-        const confirmed = await dispatch(
-          confirmGuideMembershipPayment({
-            transaction_id,
-            razorpay_order_id: response.razorpay_order_id,
-            razorpay_payment_id: response.razorpay_payment_id,
-            razorpay_signature: response.razorpay_signature,
-          }),
-        );
-
-        if (confirmGuideMembershipPayment.fulfilled.match(confirmed)) {
-          toast.success("You're registered and listed. Welcome aboard!");
-        } else {
-          toast.error(
-            "Payment succeeded but confirmation failed — please contact support.",
-          );
-        }
-        setSubmitting(false);
-        router.push("/dashboard/guide");
-      },
-    });
-
-    rzp.on("payment.failed", (response: any) => {
-      toast.error(
-        `Payment failed: ${response.error?.description || "please try again"}`,
-      );
-      setSubmitting(false);
-      router.push("/dashboard/guide/buy-subscription");
-    });
-    rzp.open();
+    setSubmitting(true);
+    const result = await dispatch(
+      verifyRegistrationOtpThunk({ email: email.trim().toLowerCase(), otp }),
+    );
+    setSubmitting(false);
+    if (verifyRegistrationOtpThunk.fulfilled.match(result)) {
+      setFormError("");
+      setOtpSent(false);
+      setPassword("");
+      setConfirmPassword("");
+      toast.success("Email verified. Complete and submit your guide application.");
+    } else {
+      setFormError((result.payload as string) || "Invalid or expired verification code.");
+    }
   };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormError("");
 
-    // Anonymous visitors get the full form, but registration and the membership
-    // payment both need a guide account behind them — send them to sign up, and
-    // carry their answers across so they don't retype them.
     if (!isAuthenticated) {
-      sessionStorage.setItem(
-        DRAFT_KEY,
-        JSON.stringify({ phone, city, pan, guideType, languages }),
-      );
-      toast.info("Create your guide account to finish registering and pay.");
-      router.push("/signup?role=guide");
+      if (otpSent) {
+        setFormError("Verify your email using the code sent to you before submitting.");
+        return;
+      }
+      await sendVerificationCode();
       return;
     }
 
@@ -337,8 +348,6 @@ function BecomeGuidePage() {
 
   return (
     <>
-      <Script id="razorpay-checkout-js" src="https://checkout.razorpay.com/v1/checkout.js" />
-
       <div className="mx-auto max-w-3xl space-y-4 px-4 py-10">
         <header>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">
@@ -347,20 +356,9 @@ function BecomeGuidePage() {
           <p className="mt-1 text-sm text-slate-500">
             {registered
               ? "Your phone, city, guide type and languages stay editable. Everything else was fixed at registration."
-              : "A one-time registration, followed by your first 30-day membership payment."}
+              : "Create your account, verify your email, and submit your guide profile in one place. Eligible approved guides receive a 40-day free trial."}
           </p>
         </header>
-
-        {!isAuthenticated && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            You can fill this in now. When you submit, we&apos;ll ask you to
-            create a guide account — your answers will be waiting for you.{" "}
-            <Link href="/signin" className="font-semibold underline">
-              Already have one? Sign in
-            </Link>
-            .
-          </div>
-        )}
 
         <form onSubmit={handleSubmit}>
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -368,8 +366,8 @@ function BecomeGuidePage() {
               title="Account"
               description={
                 isAuthenticated
-                  ? "Managed by your login — not editable here."
-                  : "Set when you create your guide account."
+                  ? "Managed by your verified guide account."
+                  : "Create your guide account and verify your email here."
               }
             >
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -377,9 +375,11 @@ function BecomeGuidePage() {
                   <Label htmlFor="name">Name</Label>
                   <Input
                     id="name"
-                    value={myProfile?.name || ""}
-                    placeholder={isAuthenticated ? "" : "From your account"}
-                    disabled
+                    value={user?.name || name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Your full name"
+                    disabled={!!isAuthenticated || submitting}
+                    required={!isAuthenticated}
                   />
                 </div>
                 <div>
@@ -387,12 +387,82 @@ function BecomeGuidePage() {
                   <Input
                     id="email"
                     type="email"
-                    value={myProfile?.email || ""}
-                    placeholder={isAuthenticated ? "" : "From your account"}
-                    disabled
+                    value={user?.email || email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    disabled={!!isAuthenticated || submitting || otpSent}
+                    required={!isAuthenticated}
                   />
                 </div>
+                {!isAuthenticated && (
+                  <>
+                    <div>
+                      <Label htmlFor="countryCode">Country Code</Label>
+                      <Select value={countryCode} onValueChange={setCountryCode} disabled={otpSent || submitting}>
+                        <SelectTrigger id="countryCode" className="bg-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {COUNTRY_CODES.map((item) => (
+                            <SelectItem key={item.code} value={item.code}>{item.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="accountPassword">Password</Label>
+                      <Input
+                        id="accountPassword"
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        disabled={otpSent || submitting}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="confirmPassword">Confirm Password</Label>
+                      <Input
+                        id="confirmPassword"
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        disabled={otpSent || submitting}
+                        required
+                      />
+                    </div>
+                  </>
+                )}
+                {!isAuthenticated && (
+                  <div className="md:col-span-2">
+                    <p className="text-sm text-slate-600">
+                      Already registered? <Link href="/signin" className="font-semibold underline">Sign in</Link> to continue.
+                    </p>
+                  </div>
+                )}
               </div>
+              {!isAuthenticated && otpSent && (
+                <div className="mt-5 flex flex-col gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 sm:flex-row sm:items-end">
+                  <div className="flex-1">
+                    <Label htmlFor="registrationOtp">Email verification code</Label>
+                    <Input
+                      id="registrationOtp"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      placeholder="6-digit code"
+                    />
+                  </div>
+                  <Button type="button" disabled={submitting} onClick={verifyEmail}>
+                    Verify Email
+                  </Button>
+                  <Button type="button" variant="outline" disabled={submitting} onClick={sendVerificationCode}>
+                    Resend Code
+                  </Button>
+                </div>
+              )}
             </FormSection>
 
             <FormSection
@@ -410,7 +480,12 @@ function BecomeGuidePage() {
                     placeholder="10-digit mobile number"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                    required={!!isAuthenticated}
+                    disabled={
+                      (!isAuthenticated && otpSent) ||
+                      (isAuthenticated && !registered) ||
+                      submitting
+                    }
+                    required
                   />
                 </div>
                 <div>
@@ -419,7 +494,7 @@ function BecomeGuidePage() {
                     id="city"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
-                    required={!!isAuthenticated}
+                    required
                   />
                 </div>
                 <div>
@@ -478,7 +553,7 @@ function BecomeGuidePage() {
                     <li>Guide licence — private, reviewed by admins</li>
                     <li>Aadhaar — private, reviewed by admins</li>
                     <li className="list-none pt-2 text-xs text-slate-500">
-                      You&apos;ll attach these once your guide account exists.
+                      Verify your email above, then upload these files here.
                     </li>
                   </ul>
                 ) : (
@@ -547,14 +622,16 @@ function BecomeGuidePage() {
 
             <div className="flex items-center justify-end gap-4 bg-slate-50 px-6 py-4">
               {formError && <p className="text-sm text-red-600">{formError}</p>}
-              <Button type="submit" disabled={submitting || loading}>
+              <Button type="submit" disabled={submitting || loading || (!isAuthenticated && otpSent)}>
                 {submitting
                   ? "Please wait..."
                   : !isAuthenticated
-                    ? "Continue — create your guide account"
+                    ? otpSent
+                      ? "Verify email above to continue"
+                      : "Send Email Verification Code"
                     : registered
                       ? "Save Changes"
-                      : "Register & Pay Membership"}
+                      : "Submit Guide Application"}
               </Button>
             </div>
           </div>

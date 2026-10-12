@@ -6,9 +6,10 @@ stack: **Next.js (App Router)** frontend, **Express + TypeScript + Mongoose** ba
 Atlas**, **JWT-in-httpOnly-cookie** authentication, **Razorpay** payments, **Resend** transactional
 email.
 
-> This document describes the system as it exists today. Guide onboarding is **account-first**:
-> a single auth-gated form at `register-guide` handles both registration and later edits, and
-> takes the first 30-day membership payment. Tourist onboarding still has two generations that
+> This document describes the system as it exists today. Guide onboarding uses one
+> `register-guide` page for account details, inline email OTP verification, and guide-profile
+> submission. Eligible new guides receive a 40-day free trial only after approval; paid membership
+> is ₹399 for 30 days. Tourist onboarding still has two generations that
 > coexist: the original **anonymous, no-account** `register-tourist` flow and the newer
 > **account-based, OTP-verified** flow (`/signup` → `/verify-otp` → profile onboarding). Both are
 > explained in full below — that coexistence is the current, intentional state of the app.
@@ -114,7 +115,8 @@ Backend (`backend/.env`):
 
 Two money-related constants are **not** env-tunable and live in `config/const.ts`:
 `BOOKING_ADVANCE_RATE = 0.2` (the 20% advance taken up front on a split-payment booking) and
-`GUIDE_MEMBERSHIP_FEE = 500` / `GUIDE_MEMBERSHIP_DURATION_DAYS = 30`.
+`GUIDE_MEMBERSHIP_FEE = 399` / `GUIDE_MEMBERSHIP_DURATION_DAYS = 30`. The separate
+`GUIDE_MEMBERSHIP_TRIAL_DAYS = 40` constant defines the approval-triggered trial.
 
 Frontend (`frontend/.env`):
 
@@ -308,49 +310,32 @@ above. If you're looking for "why doesn't this page create a login," this is why
 Same situation as tourists: **two generations** of guide onboarding coexist. The distinction
 matters a lot here because the two have genuinely different monetization models.
 
-### 1. The current, account-based Guide registration + 30-day membership
+### 1. Unified Guide registration, verification, and membership
 
-**Frontend flow (steps 1–2 identical to tourist registration, above)** — `/signup` (account type =
-"Guide") → `/verify-otp` → real `Account` created with `role: 'guide'`. From here it diverges:
+**`/register-guide`** (`frontend/app/(website)/register-guide/page.tsx`) combines account creation,
+inline email OTP verification, and guide-profile submission. A logged-out visitor supplies their
+name, email, password, phone, and country code; the existing
+`POST /session/register/send-otp` and `/session/register/verify-otp` endpoints create the verified
+guide account. The same page then collects city, guide type, escort PAN where applicable,
+languages, profile photo, and identity documents. `PUT /guide/profile` independently checks
+`emailVerified`, so frontend state alone cannot complete an unverified registration. The existing
+guide-profile edit route and the existing sign-in, passwordless OTP, and recovery flows remain
+available.
 
-3. **`/dashboard/guide/profile`** (`frontend/app/(website)/dashboard/guide/profile/page.tsx`) — a
-   brand-new guide is nudged here (a non-blocking banner on `/dashboard/guide`, not a hard
-   redirect — see note on migration below) to fill in their public profile:
-   - **Languages** (multi-select, admin-managed list)
-   - **Experience** (free text, e.g. "5 years")
-   - **City / State / Country** (each a separate required text field — not a multi-location list)
-   - **Price per day** (₹, numeric)
-   - **About / Bio** (textarea)
-   - **Specialization** (comma-separated free text, e.g. "History, Adventure, Food Tours")
-   - **Available Days** (multi-select: Monday–Sunday)
-   - **Available Time** (free text, e.g. "9 AM – 6 PM")
-   - **Profile Photo** — single image upload, **required on first submission only**
-   - **Identity Proof(s)** — one or more PDF/image uploads (KYC documents), **required on first
-     submission only**
-   - **Gallery Images** — optional, multiple images
+Profile submission does not start a trial or charge a payment. An admin approval starts a 40-day
+trial only for an eligible account created through verified guide registration; pending and
+rejected applications have no active trial. Existing guide records are not made trial-eligible by
+schema defaults or by profile edits.
 
-   Submitting sends a `multipart/form-data` `PUT /guide/profile`. On the *first* successful
-   submission this creates the `Guide` document and sets `registrationCompleted: true`
-   (permanently — later edits can omit the file fields to keep whatever's already on record).
-   This step does **not** touch payment or visibility — a guide can have a fully complete profile
-   and still be invisible to the public until they pay.
+**`/dashboard/guide/buy-subscription`** is the shared paid renewal screen. The server creates
+₹399 Razorpay orders for 30-day membership, validates the payment signature and configured amount,
+and records each renewal separately. The paid checkout is disabled while a trial is active or an
+application is awaiting approval. There is no automatic recurring charge.
 
-4. **`/dashboard/guide/buy-subscription`**
-   (`frontend/app/(website)/dashboard/guide/buy-subscription/page.tsx`) — the membership payment
-   screen. Requires `registrationCompleted: true` on the `Guide` doc (button is disabled
-   otherwise, with an explanatory note). Clicking "Pay Membership Fee" (or "Renew Membership" /
-   "Renew Early" if already active):
-   - `POST /guide/membership/create-order` (idempotency-key protected) creates a Razorpay order.
-   - Opens the Razorpay checkout widget in-browser.
-   - On success, `POST /guide/membership/confirm-payment` verifies the Razorpay signature and
-     finalizes the membership (see [Guide Membership Lifecycle](#guide-membership-lifecycle)
-     below for the exact extension math and idempotency guarantees).
-
-5. Once paid **and approved by an admin**, the guide's `Guide` document has `isVisible: true`,
-   `approvalStatus: 'approved'` and an unexpired `membershipExpiryDate` — they now appear in the
-   public guide listing (`GET /guide/all`, consumed by `find-guides`, `guides`, etc.) and in
-   `GET /guide/:id`. Payment alone is no longer sufficient to be listed; see
-   [Phase 6](#guide-approval-earnings--payouts-phase-6).
+After approval, a guide is public only while the approval and account remain valid and the trial or
+paid membership expiry is in the future. Expiry immediately removes the guide from public search
+and blocks new direct bookings and admin assignments; login, renewal, profile editing, transaction
+history, and existing booking/assignment records remain available.
 
 **Backend (`backend/src/modules/guide/`, `backend/src/services/guide.ts`):**
 
@@ -359,8 +344,8 @@ GET  /guide/profile                          VerifySession                  → 
 PUT  /guide/profile                          VerifySession, guide-only      → upsert Guide profile (multipart)
 POST /guide/membership/create-order          VerifySession, guide-only, idempotency-protected
 POST /guide/membership/confirm-payment       VerifySession, guide-only      → finalize (see below)
-GET  /guide/all                              public                         → GuideDB-first query, isVisible + unexpired
-GET  /guide/:id                              public                         → single guide, NOT visibility-gated (bookings/history need it regardless)
+GET  /guide/all                              public                         → approved, visible, unexpired and active account
+GET  /guide/:id                              public                         → detail includes current bookability; booking APIs re-check eligibility
 ```
 
 **`Guide` collection** (`backend/src/mongo/repo/Guide.ts`):
@@ -373,26 +358,22 @@ registrationCompleted: boolean,
 paymentStatus: 'pending' | 'success' | 'failed',
 isVisible: boolean,
 membershipStartDate: Date | null,
-membershipExpiryDate: Date | null
+membershipExpiryDate: Date | null,
+membershipPlan: 'trial' | 'paid' | undefined,
+trialStartDate: Date | null, trialExpiryDate: Date | null, trialUsedAt: Date | null
 ```
 
 Indexed on `{ isVisible: 1, membershipExpiryDate: 1 }` — the exact filter the public listing runs
-on every request, so a membership lapsing removes the guide from search results automatically, on
-the very next read, with **no cron job**.
+on every request. The additive trial fields have no defaults, so existing records do not receive
+trials through hydration or backfill.
 
-### 2. `/register-guide` — the single, account-first guide registration form
+### 2. `/register-guide` — unified guide registration and profile form
 
-`frontend/app/(website)/register-guide/page.tsx` (component `BecomeGuidePage`) is now the **only**
-guide registration form. It is **auth-gated**: a logged-out visitor is redirected to `/signin`.
-
-1. A logged-in guide fills: Phone, City, Guide Type (normal/escort), PAN (escort only), Languages,
-   plus uploads: Photo, Licence, Aadhaar. Name and email come from the `Account` and are read-only.
-2. `PUT /guide/profile` — writes those fields onto the guide's own `Guide` document and flips
-   `registrationCompleted`. The profile is persisted **before** checkout opens, so a guide who
-   abandons payment keeps their registration and can pay later from the dashboard.
-3. The page then opens Razorpay for the **first 30-day membership** via the existing
-   `POST /guide/membership/create-order` + `/membership/confirm-payment` pair. There is exactly one
-   payment concept in the system: membership.
+Logged-out visitors create an account and verify their email inline before submitting a guide
+profile. The account and profile steps remain separate backend operations: OTP verification creates
+the account, then `PUT /guide/profile` creates the KYC profile and requires a verified account.
+Neither operation starts a membership period or launches checkout. Approval starts the trial only
+for eligible new accounts; all paid checkout happens later from the membership dashboard.
 
 The same page doubles as the **edit** form. A guide with `registrationCompleted: true` sees it
 prefilled, with the file inputs and the payment step gone, and saving issues a
@@ -442,16 +423,27 @@ there's no separate "renew" endpoint.
 > guide's KYC, and a rejection auto-refunds the fee. See
 > [Guide Approval, Earnings & Payouts](#guide-approval-earnings--payouts-phase-6).
 
-**Finalization math** (`GuideService.finalizeMembershipPaymentByGuideId`):
+**Trial and paid-period rules** (`GuideService.approveGuide` and
+`GuideService.finalizeMembershipPaymentByGuideId`):
+
+- The first 40-day trial starts at the server-generated approval timestamp and is recorded once in
+  `membershipHistory`; `trialUsedAt` prevents restarting it. Trial time uses elapsed UTC 24-hour
+  periods.
+- A paid period costs ₹399 and lasts 30 days. No paid order can be created during an active trial.
+- Early paid renewals extend from the current expiry; renewals after expiry start at payment
+  confirmation. Repeated callbacks for one transaction are applied once.
+- A successful signed checkout or webhook is required before a paid period is activated. There is
+  no automatic recurring charge.
 
 ```
 base = (membershipExpiryDate exists AND is in the future) ? membershipExpiryDate : now
 newExpiry = base + 30 days
 ```
 
-This means renewing *early* (while still active) extends from the **current expiry**, not from
-"now" — a guide never loses already-paid-for days by renewing ahead of expiry. `isVisible` is set
-`true` and `membershipStartDate` is set only if it was previously unset (first payment only).
+This means renewing *early* (after the trial ends and while a paid period is active) extends from
+the **current expiry**, not from "now" — a guide never loses already-paid-for days by renewing
+ahead of expiry. Trial eligibility, approval, and membership expiry all feed the shared public
+eligibility check.
 
 **Two independent paths can trigger finalization**, and both converge safely on the same guarded
 method:
@@ -464,11 +456,16 @@ method:
   'guide_membership'`) to the same `finalizeMembershipPaymentByGuideId` method. `reference_id` on
    those transactions is a **`Guide` document id**, not an `Account` id.
 
-Both paths check the `Transaction`'s status **before** finalizing — whichever one observes the
-transaction still `pending` first is the only one that flips it and extends the membership; the
-other sees it already finalized and just reports the current (already-updated) state. This
-prevents a renewal from accidentally being applied twice (e.g. +60 days instead of +30) if both
-paths fire for the same payment.
+Both paths converge on an atomic `membershipAppliedAt` claim on the transaction. Only one caller
+can extend the membership, append its history row, and create the invoice; the watcher retries
+recent unapplied confirmations. Payment callbacks whose stored amount/currency do not match the
+current ₹399 INR price are not activated and require administrative reconciliation.
+
+`notificationWatcher.ts` checks membership expiry against the stored timestamp and creates
+deduplicated in-app and email reminders at 5, 3, and 1 days before expiry and on the expiry date.
+The email uses Resend when `RESEND_API_KEY` is configured. Per-notification delivery state enables
+retry without duplicate in-app notifications; reminders are not sent to suspended or rejected
+guides.
 
 **Dashboard status** (`/dashboard/guide`): reads `GET /guide/profile`'s computed
 `membershipExpired` boolean and shows either a green "Membership Active — expires on {date}" card
@@ -829,7 +826,7 @@ service, distinguished only by `reference_id` / `reference_type` / `type` on the
 document. Signature verification (`verifyRazorpaySignature`, HMAC-SHA256 over
 `order_id|payment_id`) happens both on the synchronous confirm endpoints and independently via the
 webhook (`RAZORPAY_WEBHOOK_SECRET`-verified) — this dual-path design is intentional (see
-[Guide Membership Lifecycle](#guide-membership-lifecycle)).
+[Guide Membership Lifecycle](#guide-membership-lifecycle)).         
 
 ---
 
@@ -1325,15 +1322,16 @@ visible rather than silently lost, and `POST /refund/:id/retry` can re-drive jus
 ### KYC approval now gates listing — and starts the clock
 
 A guide paying the membership fee is no longer sufficient to be listed. `Guide.approvalStatus`
-(`pending` | `approved` | `rejected`) is reviewed by an admin, and **the 30-day membership window
-opens at approval, not at payment**. That's the point of the split between:
+(`pending` | `approved` | `rejected`) is reviewed by an admin. A verified, trial-eligible new guide
+starts their 40-day free trial at approval; a paid membership for a non-trial/legacy guide starts at
+approval if its payment was parked pending review. That's the point of the split between:
 
 - `membershipPaidAt` — when the fee was captured.
 - `membershipStartDate` — when the window actually opened.
 - `membershipPendingActivation` — paid, but still waiting on review.
 
 Without this, a guide stuck in a review queue for a week would silently burn a week of the
-membership they'd paid for.
+membership they'd paid for or their free trial.
 
 `approvalStatus` and `membershipPendingActivation` deliberately have **no schema default**. Rows
 written before this flow existed must stay distinguishable from a guide an admin has actually

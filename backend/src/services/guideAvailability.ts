@@ -1,6 +1,7 @@
 import { AccountDB, AssignmentDB, GuideDB, GuideLeaveDB, TripDB } from '@mongo';
 import IBooking from '@mongo/types/booking';
 import { DateRange, endOfDay, getBookingOccupiedRange, rangesOverlap, startOfDay } from '@utils/bookingOccupiedRange';
+import { isMembershipActive } from '@utils/guideMembership';
 import { Types } from 'mongoose';
 import { BadRequestError, ForbiddenError, NotFoundError } from 'node-be-utilities';
 
@@ -213,7 +214,7 @@ class GuideAvailabilityService {
 		const accountIds = guideAccounts.map((g) => g._id);
 
 		const guideProfiles = await GuideDB.find({ accountId: { $in: accountIds } })
-			.select('accountId city languages isVisible membershipExpiryDate')
+			.select('accountId city languages isVisible membershipExpiryDate approvalStatus')
 			.lean();
 		const profileByAccountId = new Map(guideProfiles.map((p) => [p.accountId.toString(), p]));
 
@@ -228,7 +229,7 @@ class GuideAvailabilityService {
 					phone: account.phone,
 					city: profile?.city ?? '',
 					languages: profile?.languages ?? [],
-					isVisible: profile?.isVisible ?? false,
+					isVisible: account.isActive && isMembershipActive(profile),
 					membershipExpiryDate: profile?.membershipExpiryDate ?? null,
 					isAvailable: !hasConflict,
 					conflicts,

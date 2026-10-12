@@ -25,9 +25,11 @@ import TransactionService from '@services/transaction';
 import GuideService from '@services/guide';
 
 const mockRefundPayment = TransactionService.refundPayment as jest.Mock;
+const mockCreateTransaction = TransactionService.createTransaction as jest.Mock;
 
 const DAY = 24 * 60 * 60 * 1000;
 const MEMBERSHIP_DAYS = 30;
+const TRIAL_DAYS = 40;
 
 let adminId: string;
 
@@ -172,6 +174,92 @@ describe('Guide membership: approval-gated subscription start', () => {
 	});
 
 	describe('approveGuide', () => {
+		it('does not finalize guide registration until email verification is complete', async () => {
+			const account = await AccountDB.create({
+				name: 'Unverified Guide',
+				email: 'unverified-guide@example.com',
+				phone: '+1234567800',
+				password: 'Password@123',
+				role: 'guide',
+				emailVerified: false,
+			});
+
+			await expect(
+				GuideService.upsertGuideProfile(
+					account._id.toString(),
+					{
+						languages: ['English'],
+						type: 'normal',
+						phone: account.phone,
+						city: 'Delhi',
+					},
+					{ profileImage: 'photo.jpg', identityProofs: ['licence.pdf'] }
+				)
+			).rejects.toThrow('Please verify your email');
+			expect(await GuideDB.countDocuments({ accountId: account._id })).toBe(0);
+		});
+
+		it('starts one 40-day trial only when an eligible new guide is approved', async () => {
+			const { account, guide } = await createRegisteredGuide();
+			await AccountDB.updateOne(
+				{ _id: account._id },
+				{ $set: { guideTrialEligible: true } }
+			);
+			await GuideDB.updateOne({ _id: guide._id }, { $set: { trialEligible: true } });
+
+			const approvedAtLowerBound = Date.now();
+			await GuideService.approveGuide(account._id.toString(), adminId);
+
+			const updated = await GuideDB.findById(guide._id);
+			expect(updated!.membershipPlan).toBe('trial');
+			expect(updated!.trialUsedAt).toBeInstanceOf(Date);
+			expect(updated!.trialStartDate!.getTime()).toBeGreaterThanOrEqual(
+				approvedAtLowerBound - 1000
+			);
+			expect(updated!.trialExpiryDate!.getTime() - updated!.trialStartDate!.getTime()).toBe(
+				TRIAL_DAYS * DAY
+			);
+			expect(updated!.membershipExpiryDate!.getTime()).toBe(updated!.trialExpiryDate!.getTime());
+			expect(updated!.isVisible).toBe(true);
+			expect(updated!.membershipHistory).toHaveLength(1);
+			expect(updated!.membershipHistory?.[0]?.plan).toBe('40-day free trial');
+
+			await expect(
+				GuideService.approveGuide(account._id.toString(), adminId)
+			).rejects.toThrow();
+			const afterRepeat = await GuideDB.findById(guide._id);
+			expect(afterRepeat!.trialStartDate!.getTime()).toBe(updated!.trialStartDate!.getTime());
+			expect(afterRepeat!.trialExpiryDate!.getTime()).toBe(updated!.trialExpiryDate!.getTime());
+			expect(afterRepeat!.membershipHistory).toHaveLength(1);
+		});
+
+		it('does not start a trial while an application is pending or rejected', async () => {
+			const pending = await createRegisteredGuide('pending-guide@example.com');
+			expect(pending.guide.membershipExpiryDate).toBeNull();
+			expect(pending.guide.trialUsedAt).toBeNull();
+
+			const rejected = await createRegisteredGuide('rejected-guide@example.com');
+			await AccountDB.updateOne(
+				{ _id: rejected.account._id },
+				{ $set: { guideTrialEligible: true } }
+			);
+			await GuideDB.updateOne(
+				{ _id: rejected.guide._id },
+				{ $set: { trialEligible: true } }
+			);
+			await GuideService.rejectGuide(
+				rejected.account._id.toString(),
+				'Documents need correction',
+				adminId
+			);
+
+			const rejectedGuide = await GuideDB.findById(rejected.guide._id);
+			expect(rejectedGuide!.approvalStatus).toBe('rejected');
+			expect(rejectedGuide!.membershipExpiryDate).toBeNull();
+			expect(rejectedGuide!.trialUsedAt).toBeNull();
+			expect(rejectedGuide!.membershipHistory).toHaveLength(0);
+		});
+
 		it('starts the 30-day subscription from the approval instant, not the payment date', async () => {
 			const { account, guide } = await createRegisteredGuide();
 			await GuideService.finalizeMembershipPaymentByGuideId(guide._id.toString(), 'success');
@@ -196,6 +284,41 @@ describe('Guide membership: approval-gated subscription start', () => {
 
 			// And exactly one membership period is on record for the one fee paid.
 			expect(updated!.membershipHistory).toHaveLength(1);
+		});
+
+		it('creates approved-guide renewals using the server-configured ₹399 price', async () => {
+			const { account, guide } = await createRegisteredGuide();
+			await GuideDB.updateOne({ _id: guide._id }, { $set: { approvalStatus: 'approved' } });
+
+			await GuideService.createMembershipOrder(account._id.toString());
+
+			expect(mockCreateTransaction).toHaveBeenCalledWith(
+				expect.any(Object),
+				399,
+				expect.objectContaining({
+					reference_type: 'guide_membership',
+				})
+			);
+		});
+
+		it('does not allow a paid checkout while a free trial is active', async () => {
+			const { account, guide } = await createRegisteredGuide();
+			await GuideDB.updateOne(
+				{ _id: guide._id },
+				{
+					$set: {
+						approvalStatus: 'approved',
+						isVisible: true,
+						membershipPlan: 'trial',
+						membershipExpiryDate: new Date(Date.now() + DAY),
+					},
+				}
+			);
+
+			await expect(
+				GuideService.createMembershipOrder(account._id.toString())
+			).rejects.toThrow('Your free trial is active');
+			expect(mockCreateTransaction).not.toHaveBeenCalled();
 		});
 
 		it('approves an unpaid guide without listing them', async () => {

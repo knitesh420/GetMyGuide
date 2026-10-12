@@ -1,24 +1,34 @@
 import IGuide from '@mongo/types/guide';
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+export const MEMBERSHIP_EXPIRY_REMINDER_DAYS = [5, 3, 1, 0] as const;
+
 type MembershipShape = Pick<
 	IGuide,
 	'isVisible' | 'membershipExpiryDate' | 'approvalStatus'
 >;
 
+export function dueMembershipReminderDays(expiryAt: Date, now: Date = new Date()): number[] {
+	const expiryTime = expiryAt.getTime();
+	const nowTime = now.getTime();
+	if (nowTime > expiryTime + 5 * DAY_MS) return [];
+
+	return MEMBERSHIP_EXPIRY_REMINDER_DAYS.filter(
+		(day) => nowTime >= expiryTime - day * DAY_MS
+	);
+}
+
 /**
  * The single source of truth for "is this guide currently entitled to a public
  * listing and to take new bookings?".
  *
- * Public visibility is driven entirely by the membership window, not by
- * Account.status: a guide's listing lapses automatically the instant their
- * 30-day membership expires, with no cron job, because this predicate is
- * evaluated on every read. Both halves of the rule matter:
+ * Public visibility is driven by approval and an active membership period.
+ * The period may be a one-time trial or a paid membership; a missing
+ * membershipPlan is treated as a legacy paid period for compatibility.
  *
- *   - `isVisible` is set true only once the guide is approved AND has paid (see
- *     finalizeMembershipPaymentByGuideId / approveGuide), and cleared on
- *     rejection. It is the "switched on" flag.
- *   - `membershipExpiryDate > now` is the "still paid up" clock. A renewal
- *     pushes it forward and the guide reappears with no manual action.
+ *   - `isVisible` is set true only after approval and membership activation.
+ *   - `membershipExpiryDate > now` is the active-period clock; expiry
+ *     automatically removes a guide from public results.
  *
  * The `approvalStatus !== 'rejected'` guard is a second line of defence: a guide
  * rejected after going live must be delisted even if some path forgot to clear
@@ -30,6 +40,7 @@ export function isMembershipActive(
 ): boolean {
 	if (!guide) return false;
 	if (guide.approvalStatus === 'rejected') return false;
+	if (guide.approvalStatus && guide.approvalStatus !== 'approved') return false;
 	return (
 		guide.isVisible === true &&
 		!!guide.membershipExpiryDate &&
@@ -50,6 +61,9 @@ export function activeMembershipFilter(now: Date = new Date()): Record<string, u
 	return {
 		isVisible: true,
 		membershipExpiryDate: { $gt: now },
-		approvalStatus: { $ne: 'rejected' },
+		$or: [
+			{ approvalStatus: 'approved' },
+			{ approvalStatus: { $exists: false } },
+		],
 	};
 }

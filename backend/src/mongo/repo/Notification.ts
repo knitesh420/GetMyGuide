@@ -63,6 +63,24 @@ const NotificationSchema = new mongoose.Schema<INotification>(
 			required: true,
 			unique: true,
 		},
+		emailStatus: {
+			type: String,
+			enum: ['pending', 'sending', 'sent', 'failed'],
+		},
+		emailAttemptedAt: {
+			type: Date,
+		},
+		emailSentAt: {
+			type: Date,
+		},
+		emailAttemptCount: {
+			type: Number,
+			min: 0,
+		},
+		emailLastError: {
+			type: String,
+			maxlength: 2000,
+		},
 		isRead: {
 			type: Boolean,
 			default: false,

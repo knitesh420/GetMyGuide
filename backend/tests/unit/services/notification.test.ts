@@ -70,6 +70,48 @@ describe('NotificationService', () => {
 		});
 	});
 
+	describe('membership reminders', () => {
+		it('creates one notification per dedupe key and returns the existing reminder', async () => {
+			const params = {
+				recipient: recipientId,
+				type: 'membership_expiring' as const,
+				title: 'Renew your membership',
+				message: 'Your membership expires soon.',
+				dedupeKey: 'membership_expiring:guide1:expiry:3',
+			};
+
+			const first = await NotificationService.getOrCreateMembershipReminder(params);
+			const second = await NotificationService.getOrCreateMembershipReminder(params);
+
+			expect(first?._id.toString()).toBe(second?._id.toString());
+			expect(await NotificationDB.countDocuments({ dedupeKey: params.dedupeKey })).toBe(1);
+		});
+
+		it('sends a reminder email once and retries a failed delivery', async () => {
+			const notification = await NotificationService.getOrCreateMembershipReminder({
+				recipient: recipientId,
+				type: 'membership_expiring',
+				title: 'Renew your membership',
+				message: 'Your membership expires soon.',
+				dedupeKey: 'membership_expiring:guide1:expiry:1',
+			});
+			const send = jest.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+			await NotificationService.deliverEmailOnce(notification!._id, send);
+			const failed = await NotificationDB.findById(notification!._id);
+			expect(failed!.emailStatus).toBe('failed');
+			expect(failed!.emailAttemptCount).toBe(1);
+
+			await NotificationService.deliverEmailOnce(notification!._id, send);
+			await NotificationService.deliverEmailOnce(notification!._id, send);
+
+			const sent = await NotificationDB.findById(notification!._id);
+			expect(sent!.emailStatus).toBe('sent');
+			expect(sent!.emailAttemptCount).toBe(2);
+			expect(send).toHaveBeenCalledTimes(2);
+		});
+	});
+
 	describe('getMyNotifications / getUnreadCount', () => {
 		it('scopes results to the recipient and supports unreadOnly', async () => {
 			await NotificationService.create({

@@ -14,6 +14,7 @@ import {
 	TripStartedTemplate,
 	TripCompletedTemplate,
 	InvoiceEmailTemplate,
+	GuideMembershipReminderTemplate,
 } from './templates';
 
 const resend = new Resend(RESEND_API_KEY);
@@ -330,6 +331,34 @@ export async function sendInvoiceEmail(
 		return true;
 	} catch (error) {
 		logError('Exception in sendInvoiceEmail', error);
+		return false;
+	}
+}
+
+export async function sendGuideMembershipReminderEmail(
+	to: string,
+	details: { name: string; expiryDate: string; renewalUrl: string },
+	idempotencyKey: string
+) {
+	try {
+		const { error } = await resend.emails.send(
+			{
+				from: 'Get My Guide <support@getmyguide.in>',
+				to: [to],
+				subject: 'Renew your Get My Guide membership',
+				html: GuideMembershipReminderTemplate(details),
+			},
+			{ idempotencyKey }
+		);
+
+		if (error) {
+			logError('Resend Error: Error Sending guide membership reminder email', error);
+			return false;
+		}
+
+		return true;
+	} catch (error) {
+		logError('Exception in sendGuideMembershipReminderEmail', error);
 		return false;
 	}
 }

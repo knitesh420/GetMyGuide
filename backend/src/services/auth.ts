@@ -412,6 +412,7 @@ class AuthService {
 			role: pending.accountType,
 			status: 'verified',
 			emailVerified: true,
+			guideTrialEligible: pending.accountType === 'guide',
 			isActive: true,
 		});
 		// passwordHash is already bcrypt-hashed at rest — skip the pre-save

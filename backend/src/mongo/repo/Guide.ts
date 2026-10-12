@@ -88,6 +88,27 @@ const GuideSchema = new mongoose.Schema<IGuide>(
 			type: Date,
 			default: null,
 		},
+		// These are additive and intentionally have no defaults: existing rows
+		// cannot become eligible for a trial through schema hydration or backfill.
+		membershipPlan: {
+			type: String,
+			enum: ['trial', 'paid'],
+		},
+		trialEligible: {
+			type: Boolean,
+		},
+		trialStartDate: {
+			type: Date,
+			default: null,
+		},
+		trialExpiryDate: {
+			type: Date,
+			default: null,
+		},
+		trialUsedAt: {
+			type: Date,
+			default: null,
+		},
 		// Human-facing business ID, e.g. "GU000001". Sparse for backward compat.
 		guideCode: {
 			type: String,

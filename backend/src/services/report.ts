@@ -8,6 +8,7 @@ import {
 	TransactionDB,
 	TripDB,
 } from '@mongo';
+import { activeMembershipFilter } from '@utils/guideMembership';
 import ActivityLogService from './activityLog';
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
@@ -43,7 +44,7 @@ class ReportService {
 				{ $match: { status: { $in: ['success', 'paid'] } } },
 				{ $group: { _id: null, total: { $sum: '$amount' } } },
 			]),
-			GuideDB.countDocuments({ isVisible: true, membershipExpiryDate: { $gte: now } }),
+			GuideDB.countDocuments(activeMembershipFilter(now)),
 			TouristDB.countDocuments({ registrationCompleted: true }),
 			AssignmentDB.countDocuments({ status: 'pending' }),
 			TripDB.countDocuments({}),

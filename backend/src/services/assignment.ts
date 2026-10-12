@@ -8,6 +8,7 @@ import {
 } from '@provider/email';
 import { JWTPayload } from '@services/jwt';
 import { getBookingOccupiedRange } from '@utils/bookingOccupiedRange';
+import { isMembershipActive } from '@utils/guideMembership';
 import { Types } from 'mongoose';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from 'node-be-utilities';
 import ActivityLogService from './activityLog';
@@ -54,6 +55,9 @@ async function assertGuideAccount(guideId: string) {
 	if (guide.role !== 'guide') {
 		throw new BadRequestError('Selected account is not a guide');
 	}
+	if (!guide.isActive) {
+		throw new BadRequestError('Selected guide is suspended and cannot receive new assignments');
+	}
 	return guide;
 }
 
@@ -82,6 +86,10 @@ class AssignmentService {
 		}
 
 		const guide = await assertGuideAccount(guideId);
+		const guideProfile = await GuideDB.findOne({ accountId: guide._id }).lean();
+		if (!isMembershipActive(guideProfile)) {
+			throw new BadRequestError('Selected guide is not currently eligible for new assignments');
+		}
 
 		// Guide must not already be occupied (another active assignment, an
 		// active leave, or a self-marked unavailable date) for this booking's
@@ -397,12 +405,12 @@ class AssignmentService {
 
 	async getAssignableGuides() {
 		const guideAccounts = await AccountDB.find({ role: 'guide', isActive: true })
-			.select('name email phone')
+			.select('name email phone isActive')
 			.lean();
 		const accountIds = guideAccounts.map((g) => g._id);
 
 		const guideProfiles = await GuideDB.find({ accountId: { $in: accountIds } })
-			.select('accountId guideCode city languages isVisible membershipExpiryDate')
+			.select('accountId guideCode city languages isVisible membershipExpiryDate approvalStatus')
 			.lean();
 		const profileByAccountId = new Map(guideProfiles.map((p) => [p.accountId.toString(), p]));
 
@@ -416,7 +424,7 @@ class AssignmentService {
 				phone: account.phone,
 				city: profile?.city ?? '',
 				languages: profile?.languages ?? [],
-				isVisible: profile?.isVisible ?? false,
+				isVisible: account.isActive && isMembershipActive(profile),
 				membershipExpiryDate: profile?.membershipExpiryDate ?? null,
 			};
 		});

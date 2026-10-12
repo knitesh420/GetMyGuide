@@ -162,10 +162,11 @@ export default function AdminGuideDetailPage() {
   const membershipState = useMemo(() => {
     if (!detail) return null;
     if (detail.membershipActive) {
+      const isTrial = detail.membershipPlan === "trial";
       return {
-        label: "Active",
+        label: isTrial ? "Free trial active" : "Paid membership active",
         tone: "success" as const,
-        detail: `Runs until ${shortDate(detail.membershipExpiryDate)}`,
+        detail: `${isTrial ? "Trial" : "Membership"} runs until ${shortDate(detail.membershipExpiryDate)}`,
       };
     }
     if (detail.membershipPendingActivation) {
@@ -268,6 +269,12 @@ export default function AdminGuideDetailPage() {
                   <dd className="font-medium text-slate-800">{dateTime(detail.membershipPaidAt)}</dd>
                 </div>
                 <div>
+                  <dt className="text-xs text-slate-400">Current plan</dt>
+                  <dd className="font-medium capitalize text-slate-800">
+                    {detail.membershipPlan ?? "—"}
+                  </dd>
+                </div>
+                <div>
                   <dt className="text-xs text-slate-400">Subscription started</dt>
                   <dd className="font-medium text-slate-800">{dateTime(detail.membershipStartDate)}</dd>
                 </div>
@@ -275,6 +282,14 @@ export default function AdminGuideDetailPage() {
                   <dt className="text-xs text-slate-400">Expires</dt>
                   <dd className="font-medium text-slate-800">{dateTime(detail.membershipExpiryDate)}</dd>
                 </div>
+                {detail.membershipPlan === "trial" && (
+                  <div>
+                    <dt className="text-xs text-slate-400">Trial started</dt>
+                    <dd className="font-medium text-slate-800">
+                      {dateTime(detail.trialStartDate ?? null)}
+                    </dd>
+                  </div>
+                )}
                 <div>
                   <dt className="text-xs text-slate-400">Approved</dt>
                   <dd className="font-medium text-slate-800">{dateTime(detail.approvedAt)}</dd>

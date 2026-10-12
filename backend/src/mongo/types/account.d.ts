@@ -11,6 +11,8 @@ export default interface IAccount extends Document {
 	isActive: boolean;
 	status: 'non_verified' | 'verified';
 	emailVerified: boolean;
+	/** Set only when a guide account is created through verified registration. */
+	guideTrialEligible?: boolean;
 	paymentStatus: 'pending' | 'success' | 'failed' | 'na';
 	unavailableDates: Date[];
 	tokenVersion: number;

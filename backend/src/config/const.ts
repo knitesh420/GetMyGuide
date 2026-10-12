@@ -53,12 +53,14 @@ export const RAZORPAY_API_SECRET = process.env.RAZORPAY_API_SECRET ?? 'RAZORPAY_
 export const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET ?? 'RAZORPAY_WEBHOOK_SECRET';
 
 export const RAZORPAY_CURRENCY = 'INR';
-export const RAZORPAY_GUIDE_ENROLLMENT_AMOUNT = 500;
 
-// Recurring guide membership (post-account, post-profile). Reuses the
-// existing one-time enrollment fee as a starting price point — change freely.
-export const GUIDE_MEMBERSHIP_FEE = 500;
+// Guide membership uses server-generated UTC timestamps and elapsed 24-hour
+// periods; calendar time zones do not affect eligibility or expiry.
+export const GUIDE_MEMBERSHIP_TRIAL_DAYS = 40;
+export const GUIDE_MEMBERSHIP_FEE = 399;
 export const GUIDE_MEMBERSHIP_DURATION_DAYS = 30;
+// Back-compat alias for callers still using the historical enrollment name.
+export const RAZORPAY_GUIDE_ENROLLMENT_AMOUNT = GUIDE_MEMBERSHIP_FEE;
 
 export const GUIDE_PAYMENT_LINK_BASE_URL =
 	process.env.GUIDE_PAYMENT_LINK_BASE_URL ?? 'localhost/system/guide-verification-payment';

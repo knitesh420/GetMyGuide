@@ -283,13 +283,20 @@ export interface GuideProfile {
   subscriptionExpiresAt?: Date;
   availabilityPeriods: AvailabilityPeriod[];
   unavailableDates: Date[];
-  // Membership (30-day recurring, replaces the old one-time enrollment fee)
+  // Membership state is server-authoritative; the trial and paid plan are distinct.
   registrationCompleted?: boolean;
   paymentStatus?: "pending" | "success" | "failed";
   isVisible?: boolean;
   membershipStartDate?: string | null;
   membershipExpiryDate?: string | null;
   membershipExpired?: boolean;
+  membershipPlan?: "trial" | "paid" | null;
+  membershipFee?: number;
+  membershipDurationDays?: number;
+  membershipTrialDays?: number;
+  trialStartDate?: string | null;
+  trialExpiryDate?: string | null;
+  trialUsedAt?: string | null;
   /**
    * Paid, but the 30-day clock has not started: the guide is still awaiting KYC
    * approval, and their subscription runs from the moment an admin approves
@@ -646,6 +653,10 @@ export interface AdminGuide {
   membershipActive: boolean;
   membershipStartDate: string | null;
   membershipExpiryDate: string | null;
+  membershipPlan?: "trial" | "paid" | null;
+  trialStartDate?: string | null;
+  trialExpiryDate?: string | null;
+  trialUsedAt?: string | null;
   profileImage: string;
   /**
    * Raw stored values — Cloudinary URLs for recent uploads, bare filenames for
@@ -737,9 +748,13 @@ export interface AdminGuideDetail {
   paymentStatus: "pending" | "success" | "failed";
   membershipStartDate: string | null;
   membershipExpiryDate: string | null;
+  membershipPlan?: "trial" | "paid" | null;
+  trialStartDate?: string | null;
+  trialExpiryDate?: string | null;
+  trialUsedAt?: string | null;
   membershipPaidAt: string | null;
   membershipPendingActivation: boolean;
-  membershipHistory: { startDate?: string; expiryDate?: string }[];
+  membershipHistory: { plan?: string; startDate?: string; expiryDate?: string }[];
 
   documents: GuideDocument[];
 

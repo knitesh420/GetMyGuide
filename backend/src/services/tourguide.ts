@@ -79,11 +79,16 @@ class TourGuideService {
 		if (!profile) {
 			throw new NotFoundError('Guide profile not found');
 		}
+		const account = await AccountDB.findOne({
+			_id: input.guideId,
+			role: 'guide',
+			isActive: true,
+		}).select('_id');
+		if (!account || !isMembershipActive(profile)) {
+			throw new BadRequestError('This guide is not currently accepting bookings. Their membership is inactive.');
+		}
 		if (!profile.pricing?.fullDay || profile.pricing.fullDay <= 0) {
 			throw new BadRequestError('This guide has not published their rates yet and cannot be booked directly');
-		}
-		if ((profile.approvalStatus ?? 'pending') !== 'approved') {
-			throw new BadRequestError('This guide is not approved for bookings yet');
 		}
 
 		const days = daysBetween(input.startDate, input.endDate);
@@ -109,6 +114,9 @@ class TourGuideService {
 		const guide = await AccountDB.findById(input.guideId);
 		if (!guide || guide.role !== 'guide') {
 			throw new NotFoundError('Guide not found');
+		}
+		if (!guide.isActive) {
+			throw new BadRequestError('This guide is not currently accepting bookings.');
 		}
 
 		if (input.endDate < input.startDate) {

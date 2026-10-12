@@ -83,6 +83,12 @@ export default interface IGuide extends Document {
 	isVisible: boolean;
 	membershipStartDate: Date | null;
 	membershipExpiryDate: Date | null;
+	/** Current period type; absent on historical paid memberships. */
+	membershipPlan?: 'trial' | 'paid';
+	trialEligible?: boolean;
+	trialStartDate?: Date | null;
+	trialExpiryDate?: Date | null;
+	trialUsedAt?: Date | null;
 	guideCode?: string;
 	membershipHistory?: {
 		plan?: string;

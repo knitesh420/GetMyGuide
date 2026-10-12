@@ -52,6 +52,12 @@ const AccountSchema = new mongoose.Schema<IAccount>(
 			type: Boolean,
 			default: false,
 		},
+		// Existing accounts remain ineligible unless created through the verified
+		// guide-registration flow after the trial policy is deployed.
+		guideTrialEligible: {
+			type: Boolean,
+			default: false,
+		},
 		paymentStatus: {
 			type: String,
 			enum: ['pending', 'success', 'failed', 'na'],

@@ -103,6 +103,22 @@ describe('AssignmentService', () => {
 			role: 'admin',
 		});
 		adminId = admin._id;
+
+		const activePeriod = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
+		await GuideDB.create([
+			{
+				accountId: guideAccountId,
+				approvalStatus: 'approved',
+				isVisible: true,
+				membershipExpiryDate: activePeriod,
+			},
+			{
+				accountId: otherGuideAccountId,
+				approvalStatus: 'approved',
+				isVisible: true,
+				membershipExpiryDate: activePeriod,
+			},
+		]);
 	});
 
 	describe('createAssignment', () => {
@@ -150,6 +166,23 @@ describe('AssignmentService', () => {
 					adminUserId: adminId.toString(),
 				})
 			).rejects.toThrow(NotFoundError);
+		});
+
+		it('blocks a guide with an expired membership from a new assignment', async () => {
+			await GuideDB.updateOne(
+				{ accountId: guideAccountId },
+				{ $set: { membershipExpiryDate: new Date(Date.now() - 1) } }
+			);
+			const booking = await BookingDB.create(bookingFixture({ linked_to: touristId }));
+
+			await expect(
+				AssignmentService.createAssignment({
+					bookingId: booking._id.toString(),
+					guideId: guideAccountId.toString(),
+					adminUserId: adminId.toString(),
+				})
+			).rejects.toThrow(BadRequestError);
+			expect(await AssignmentDB.countDocuments({ booking: booking._id })).toBe(0);
 		});
 
 		it('throws BadRequestError if the target account is not a guide', async () => {
@@ -314,6 +347,7 @@ describe('AssignmentService', () => {
 
 	describe('getAssignableGuides', () => {
 		it('merges Account and Guide profile fields for every active guide account', async () => {
+			await GuideDB.deleteMany({});
 			await GuideDB.create({
 				accountId: guideAccountId,
 				city: 'Jaipur',

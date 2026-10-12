@@ -23,6 +23,8 @@ export type NotificationType =
 	| 'membership_refunded'
 	| 'new_message';
 
+export type NotificationEmailStatus = 'pending' | 'sending' | 'sent' | 'failed';
+
 export default interface INotification extends Document {
 	_id: Types.ObjectId;
 	recipient: Types.ObjectId;
@@ -34,6 +36,11 @@ export default interface INotification extends Document {
 		id: string;
 	};
 	dedupeKey: string;
+	emailStatus?: NotificationEmailStatus;
+	emailAttemptedAt?: Date;
+	emailSentAt?: Date;
+	emailAttemptCount?: number;
+	emailLastError?: string;
 	isRead: boolean;
 	readAt?: Date;
 	createdAt: Date;

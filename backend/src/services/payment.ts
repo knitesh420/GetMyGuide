@@ -1,4 +1,8 @@
-import { RAZORPAY_WEBHOOK_SECRET } from '@config/const';
+import {
+	GUIDE_MEMBERSHIP_FEE,
+	RAZORPAY_CURRENCY,
+	RAZORPAY_WEBHOOK_SECRET,
+} from '@config/const';
 import { AccountDB, GuideDB, TransactionDB } from '@mongo';
 import WebhookEventDB from '@mongo/repo/WebhookEvent';
 import type ITransaction from '@mongo/types/transaction';
@@ -111,7 +115,7 @@ class PaymentService {
 		try {
 			switch (eventType) {
 				case 'payment.captured':
-					await this.handlePaymentCaptured(orderId, paymentId);
+					await this.handlePaymentCaptured(orderId, paymentId, paymentEntity);
 					break;
 
 				case 'payment.failed':
@@ -140,7 +144,11 @@ class PaymentService {
 	/**
 	 * Handle payment.captured — mark transaction as SUCCESS and update registration.
 	 */
-	private async handlePaymentCaptured(orderId: string, paymentId: string): Promise<void> {
+	private async handlePaymentCaptured(
+		orderId: string,
+		paymentId: string,
+		paymentEntity: Record<string, any>
+	): Promise<void> {
 		const transaction = await TransactionDB.findOne({ razorpay_order_id: orderId });
 
 		if (!transaction) {
@@ -158,6 +166,36 @@ class PaymentService {
 
 			info('Webhook: Transaction already marked success', {
 				transactionId: transaction.transaction_id,
+			});
+			return;
+		}
+
+		if (
+			transaction.reference_type === 'guide_membership' &&
+			(transaction.amount !== GUIDE_MEMBERSHIP_FEE ||
+				transaction.currency !== RAZORPAY_CURRENCY ||
+				paymentEntity.amount !== GUIDE_MEMBERSHIP_FEE * 100 ||
+				paymentEntity.currency !== RAZORPAY_CURRENCY)
+		) {
+			if (
+				transaction.status === 'pending_verification' &&
+				transaction.razorpay_payment_id &&
+				transaction.razorpay_payment_id !== paymentId
+			) {
+				await this.refundDuplicatePayment(paymentId, transaction.amount, orderId);
+				return;
+			}
+			transaction.razorpay_payment_id = paymentId;
+			transaction.status = 'pending_verification';
+			await transaction.save();
+			logError('Webhook: Membership payment does not match the current configured price', {
+				transactionId: transaction.transaction_id,
+				amount: transaction.amount,
+				currency: transaction.currency,
+				expectedAmount: GUIDE_MEMBERSHIP_FEE,
+				expectedCurrency: RAZORPAY_CURRENCY,
+				capturedAmount: paymentEntity.amount,
+				capturedCurrency: paymentEntity.currency,
 			});
 			return;
 		}
