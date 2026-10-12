@@ -14,6 +14,45 @@ email.
 > **account-based, OTP-verified** flow (`/signup` → `/verify-otp` → profile onboarding). Both are
 > explained in full below — that coexistence is the current, intentional state of the app.
 
+## Quick Start
+
+### Prerequisites
+
+- Node.js 20+
+- pnpm
+- MongoDB Atlas connection string for the backend
+- Razorpay, Resend, and Cloudinary credentials for payment, email, and media flows
+
+### Setup
+
+```bash
+# Copy the environment templates
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+
+# Install dependencies
+cd backend && pnpm install
+cd ../frontend && pnpm install
+```
+
+### Run locally
+
+```bash
+# Backend (Express API)
+cd backend
+pnpm dev
+# http://localhost:8000
+
+# Frontend (Next.js app)
+cd frontend
+pnpm dev
+# http://localhost:3000
+```
+
+The app is split into a monorepo: the backend exposes the API on port `8000` and the frontend runs on `3000`. Use the `.env.example` templates as the starting point for real credentials and never commit actual secrets.
+
+> Important: this workspace currently contains a production-oriented backend configuration on the machine where it is running. In practice, `backend/.env` may point to a live MongoDB Atlas instance and real payment/email providers; do not run scripts or local dev commands without confirming the intended environment.
+
 ---
 
 ## Table of Contents
