@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { BadRequestError } from 'node-be-utilities';
+import { cleanupGuideProfileUploads } from './guide.middleware';
 import { z } from 'zod';
 
 // ---- Guide profile (post-login, membership) --------------------------------
@@ -70,6 +71,11 @@ export async function GuideProfileValidator(req: Request, res: Response, next: N
 		.map((err) => `${err.path.join('.')}: ${err.message}`)
 		.join(', ');
 
+	try {
+		await cleanupGuideProfileUploads(req);
+	} catch (error) {
+		return next(error);
+	}
 	return next(new BadRequestError(message));
 }
 

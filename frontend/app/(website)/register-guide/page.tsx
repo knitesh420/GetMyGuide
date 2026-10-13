@@ -1,24 +1,20 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch } from "react-redux";
 import { toast } from "sonner";
 
-import { AppDispatch, RootState } from "@/lib/store";
+import { AppDispatch } from "@/lib/store";
 import {
   sendRegistrationOtp as sendRegistrationOtpThunk,
   verifyRegistrationOtp as verifyRegistrationOtpThunk,
 } from "@/lib/redux/authSlice";
-import {
-  getMyGuideProfile,
-  patchMyGuideProfile,
-  updateMyGuideProfile,
-} from "@/lib/redux/thunks/guide/guideThunk";
 import { useAuth } from "@/lib/hooks/useAuth";
 import RoleGuard from "@/components/auth/RoleGuard";
+import { validateUpload } from "@/lib/fileUpload";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,25 +42,24 @@ const COUNTRY_CODES = [
   { code: "+86", label: "China (+86)" },
 ];
 
-/** Keep a pre-authentication profile draft recoverable within this browser tab. */
-const DRAFT_KEY = "guideRegistrationDraft";
+const PENDING_EMAIL_KEY = "guideRegistrationPendingEmail";
 
-interface RegistrationDraft {
-  phone: string;
-  city: string;
-  pan: string;
-  guideType: "" | "normal" | "escort";
-  languages: string[];
+function subscribeToPendingRegistration(callback: () => void) {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener("guide-registration-pending-change", callback);
+  return () => window.removeEventListener("guide-registration-pending-change", callback);
 }
 
-function readDraft(): RegistrationDraft | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = sessionStorage.getItem(DRAFT_KEY);
-    return raw ? (JSON.parse(raw) as RegistrationDraft) : null;
-  } catch {
-    return null;
-  }
+function getPendingRegistrationEmail() {
+  return typeof window === "undefined"
+    ? ""
+    : sessionStorage.getItem(PENDING_EMAIL_KEY) || "";
+}
+
+function setPendingRegistrationEmail(email: string | null) {
+  if (email) sessionStorage.setItem(PENDING_EMAIL_KEY, email);
+  else sessionStorage.removeItem(PENDING_EMAIL_KEY);
+  window.dispatchEvent(new Event("guide-registration-pending-change"));
 }
 
 const LANGUAGE_OPTIONS: Option[] = [
@@ -105,10 +100,11 @@ function BecomeGuidePage() {
   const dispatch: AppDispatch = useDispatch();
   const router = useRouter();
   const { isAuthenticated, loading: authLoading, user } = useAuth();
-
-  const { myProfile, loading } = useSelector((state: RootState) => state.guide);
-
-  const registered = !!myProfile?.registrationCompleted;
+  const pendingEmail = useSyncExternalStore(
+    subscribeToPendingRegistration,
+    getPendingRegistrationEmail,
+    () => "",
+  );
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -116,7 +112,7 @@ function BecomeGuidePage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [otp, setOtp] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
+  const otpSent = !!pendingEmail;
   const [phone, setPhone] = useState("");
   const [city, setCity] = useState("");
   const [pan, setPan] = useState("");
@@ -133,92 +129,43 @@ function BecomeGuidePage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated) dispatch(getMyGuideProfile());
-  }, [dispatch, isAuthenticated]);
+    return () => {
+      if (profilePreview) URL.revokeObjectURL(profilePreview);
+    };
+  }, [profilePreview]);
 
-  // Restore anything typed before signing up (see DRAFT_KEY). Runs once, ahead
-  // of the profile prefill below, which only fills fields still left empty.
   useEffect(() => {
-    const draft = readDraft();
-    if (!draft) return;
-    sessionStorage.removeItem(DRAFT_KEY);
-    setPhone((p) => p || draft.phone);
-    setCity((c) => c || draft.city);
-    setPan((p) => p || draft.pan);
-    setGuideType((t) => t || draft.guideType);
-    setLanguages((l) => (l.length ? l : draft.languages));
-  }, []);
+    if (!isAuthenticated || !user) return;
+    router.replace(user.role === "admin" ? "/dashboard/admin" : "/dashboard/guide");
+  }, [isAuthenticated, router, user]);
 
-  // Prefill from whatever is already on record — the account phone for a new
-  // guide, the saved Guide fields for one coming back to edit.
-  useEffect(() => {
-    if (!myProfile) return;
-    setName((n) => n || myProfile.name || "");
-    setEmail((e) => e || myProfile.email || "");
-    setPhone((p) => p || myProfile.mobile || "");
-    setCity((c) => c || myProfile.city || "");
-    setPan((p) => p || myProfile.pan || "");
-    setGuideType((t) => t || myProfile.type || "");
-    setLanguages((l) => (l.length ? l : myProfile.languages || []));
-  }, [myProfile]);
+  const guideProfileReady =
+    !!city.trim() &&
+    !!guideType &&
+    languages.length > 0 &&
+    (guideType !== "escort" || !!pan.trim()) &&
+    !!profileFile &&
+    !!licenceFile &&
+    !!aadhaarFile &&
+    disclaimerAccepted;
 
   const handleProfileFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setProfileFile(file);
-      setProfilePreview(URL.createObjectURL(file));
-    }
-  };
-
-  /**
-   * A registered guide has already paid and already has documents on file, so
-   * this form drops to the four fields the PATCH route accepts. Everything else
-   * is fixed at registration.
-   */
-  const submitEdit = async () => {
-    const result = await dispatch(
-      patchMyGuideProfile({
-        phone,
-        city,
-        type: guideType as "normal" | "escort",
-        languages,
-      }),
-    );
-
-    if (patchMyGuideProfile.fulfilled.match(result)) {
-      toast.success("Profile updated.");
-      router.push("/dashboard/guide");
-    } else {
-      setFormError((result.payload as string) || "Could not update your profile.");
-    }
-    setSubmitting(false);
-  };
-
-  /**
-   * First-time registration submits the KYC application. Membership starts only
-   * after admin approval, when an eligible new guide receives the free trial.
-   */
-  const submitRegistration = async () => {
-    const submission = new FormData();
-    submission.append("phone", phone);
-    submission.append("city", city);
-    submission.append("type", guideType);
-    if (guideType === "escort") submission.append("pan", pan);
-    languages.forEach((l) => submission.append("languages[]", l));
-    submission.append("profileImage", profileFile!);
-    submission.append("identityProofs", licenceFile!);
-    submission.append("identityProofs", aadhaarFile!);
-
-    const saved = await dispatch(updateMyGuideProfile(submission));
-    if (!updateMyGuideProfile.fulfilled.match(saved)) {
-      setFormError((saved.payload as string) || "Registration failed.");
-      setSubmitting(false);
+    if (!file) {
+      setProfileFile(null);
+      setProfilePreview(null);
       return;
     }
-
-    toast.success("Your application has been submitted for review.");
-    setSubmitting(false);
-    router.push("/dashboard/guide");
+    const error = validateUpload(file, "image");
+    if (error) {
+      setProfileFile(null);
+      setProfilePreview(null);
+      setFormError(error);
+      e.target.value = "";
+      return;
+    }
+    setProfileFile(file);
+    setProfilePreview(URL.createObjectURL(file));
   };
 
   const sendVerificationCode = async () => {
@@ -232,26 +179,59 @@ function BecomeGuidePage() {
       return setFormError("Password must be at least 8 characters and include uppercase, lowercase, and a number.");
     }
     if (password !== confirmPassword) return setFormError("Passwords do not match.");
+    if (!city.trim()) return setFormError("City is required.");
+    if (!guideType) return setFormError("Please select a guide type.");
+    if (guideType === "escort" && !pan.trim()) return setFormError("PAN is required for escort guides.");
+    if (languages.length === 0) return setFormError("Please select at least one language.");
+    if (!profileFile) return setFormError("A profile photo is required to register.");
+    if (!licenceFile) return setFormError("Your guide licence is required to register.");
+    if (!aadhaarFile) return setFormError("Your Aadhaar document is required to register.");
+    const profileError = validateUpload(profileFile, "image");
+    const licenceError = validateUpload(licenceFile, "document");
+    const aadhaarError = validateUpload(aadhaarFile, "document");
+    if (profileError || licenceError || aadhaarError) {
+      return setFormError(profileError || licenceError || aadhaarError || "Invalid upload.");
+    }
+    if (!disclaimerAccepted) return setFormError("Please accept the disclaimer to proceed.");
 
     setSubmitting(true);
-    const result = await dispatch(
-      sendRegistrationOtpThunk({
-        name: name.trim(),
-        email: normalizedEmail,
-        phone,
-        countryCode,
-        password,
-        confirmPassword,
-        accountType: "guide",
-      }),
-    );
+    const submission = new FormData();
+    submission.append("name", name.trim());
+    submission.append("email", normalizedEmail);
+    submission.append("phone", phone);
+    submission.append("countryCode", countryCode);
+    submission.append("password", password);
+    submission.append("confirmPassword", confirmPassword);
+    submission.append("accountType", "guide");
+    submission.append("city", city.trim());
+    submission.append("type", guideType);
+    languages.forEach((language) => submission.append("languages", language));
+    if (guideType === "escort") submission.append("pan", pan.trim());
+    submission.append("profileImage", profileFile);
+    submission.append("identityProofs", licenceFile);
+    submission.append("identityProofs", aadhaarFile);
+    const result = await dispatch(sendRegistrationOtpThunk(submission));
     setSubmitting(false);
     if (sendRegistrationOtpThunk.fulfilled.match(result)) {
-      setOtpSent(true);
+      setPendingRegistrationEmail(normalizedEmail);
       setFormError("");
       toast.success("Verification code sent to your email.");
     } else {
       setFormError((result.payload as string) || "Could not send the verification code.");
+    }
+  };
+
+  const resendVerificationCode = async () => {
+    setSubmitting(true);
+    const result = await dispatch(
+      sendRegistrationOtpThunk({ email: (email || pendingEmail).trim().toLowerCase() }),
+    );
+    setSubmitting(false);
+    if (sendRegistrationOtpThunk.fulfilled.match(result)) {
+      setFormError("");
+      toast.success("A new verification code has been sent.");
+    } else {
+      setFormError((result.payload as string) || "Could not resend the verification code.");
     }
   };
 
@@ -262,15 +242,14 @@ function BecomeGuidePage() {
     }
     setSubmitting(true);
     const result = await dispatch(
-      verifyRegistrationOtpThunk({ email: email.trim().toLowerCase(), otp }),
+      verifyRegistrationOtpThunk({ email: (email || pendingEmail).trim().toLowerCase(), otp }),
     );
     setSubmitting(false);
     if (verifyRegistrationOtpThunk.fulfilled.match(result)) {
       setFormError("");
-      setOtpSent(false);
-      setPassword("");
-      setConfirmPassword("");
-      toast.success("Email verified. Complete and submit your guide application.");
+      setPendingRegistrationEmail(null);
+      toast.success("Registration submitted. Your application is pending review.");
+      router.push("/dashboard/guide");
     } else {
       setFormError((result.payload as string) || "Invalid or expired verification code.");
     }
@@ -279,65 +258,14 @@ function BecomeGuidePage() {
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormError("");
-
-    if (!isAuthenticated) {
-      if (otpSent) {
-        setFormError("Verify your email using the code sent to you before submitting.");
-        return;
-      }
-      await sendVerificationCode();
+    if (otpSent) {
+      setFormError("Enter the verification code below to complete registration.");
       return;
     }
-
-    if (phone.length !== 10) {
-      setFormError("Phone number must be exactly 10 digits.");
-      return;
-    }
-    if (!city.trim()) {
-      setFormError("City is required.");
-      return;
-    }
-    if (!guideType) {
-      setFormError("Please select a guide type.");
-      return;
-    }
-    if (guideType === "escort" && !pan.trim()) {
-      setFormError("PAN is required for escort guides.");
-      return;
-    }
-    if (languages.length === 0) {
-      setFormError("Please select at least one language.");
-      return;
-    }
-
-    if (!registered) {
-      if (!profileFile) {
-        setFormError("A profile photo is required to register.");
-        return;
-      }
-      if (!licenceFile) {
-        setFormError("Your guide licence is required to register.");
-        return;
-      }
-      if (!aadhaarFile) {
-        setFormError("Your Aadhaar document is required to register.");
-        return;
-      }
-      if (!disclaimerAccepted) {
-        setFormError("Please accept the disclaimer to proceed.");
-        return;
-      }
-    }
-
-    setSubmitting(true);
-    if (registered) await submitEdit();
-    else await submitRegistration();
+    await sendVerificationCode();
   };
 
-  // Hold the skeleton until we know whether this is a registration or an edit,
-  // so the file inputs never flash for a guide who has already registered. An
-  // anonymous visitor has no profile to wait on — show them the blank form.
-  if (authLoading || (isAuthenticated && loading && !myProfile)) {
+  if (authLoading) {
     return (
       <div className="mx-auto max-w-3xl space-y-4 px-4 py-10">
         <Skeleton className="h-20 rounded-2xl" />
@@ -345,18 +273,16 @@ function BecomeGuidePage() {
       </div>
     );
   }
+  if (isAuthenticated) return null;
 
   return (
     <>
       <div className="mx-auto max-w-3xl space-y-4 px-4 py-10">
         <header>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            {registered ? "Edit Your Guide Profile" : "Register as a Certified Guide"}
-          </h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Register as a Certified Guide</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {registered
-              ? "Your phone, city, guide type and languages stay editable. Everything else was fixed at registration."
-              : "Create your account, verify your email, and submit your guide profile in one place. Eligible approved guides receive a 40-day free trial."}
+            Submit your account details, guide profile, photo and required identity documents together.
+            Your application will be sent for review after email verification.
           </p>
         </header>
 
@@ -364,22 +290,18 @@ function BecomeGuidePage() {
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <FormSection
               title="Account"
-              description={
-                isAuthenticated
-                  ? "Managed by your verified guide account."
-                  : "Create your guide account and verify your email here."
-              }
+              description="Create your guide account and verify your email here."
             >
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div>
                   <Label htmlFor="name">Name</Label>
                   <Input
                     id="name"
-                    value={user?.name || name}
+                    value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Your full name"
-                    disabled={!!isAuthenticated || submitting}
-                    required={!isAuthenticated}
+                    disabled={otpSent || submitting}
+                    required
                   />
                 </div>
                 <div>
@@ -387,15 +309,14 @@ function BecomeGuidePage() {
                   <Input
                     id="email"
                     type="email"
-                    value={user?.email || email}
+                    value={email || pendingEmail}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
-                    disabled={!!isAuthenticated || submitting || otpSent}
-                    required={!isAuthenticated}
+                    disabled={otpSent || submitting}
+                    required
                   />
                 </div>
-                {!isAuthenticated && (
-                  <>
+                <>
                     <div>
                       <Label htmlFor="countryCode">Country Code</Label>
                       <Select value={countryCode} onValueChange={setCountryCode} disabled={otpSent || submitting}>
@@ -431,9 +352,8 @@ function BecomeGuidePage() {
                         required
                       />
                     </div>
-                  </>
-                )}
-                {!isAuthenticated && (
+                </>
+                {!otpSent && (
                   <div className="md:col-span-2">
                     <p className="text-sm text-slate-600">
                       Already registered? <Link href="/signin" className="font-semibold underline">Sign in</Link> to continue.
@@ -441,7 +361,7 @@ function BecomeGuidePage() {
                   </div>
                 )}
               </div>
-              {!isAuthenticated && otpSent && (
+              {otpSent && (
                 <div className="mt-5 flex flex-col gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 sm:flex-row sm:items-end">
                   <div className="flex-1">
                     <Label htmlFor="registrationOtp">Email verification code</Label>
@@ -456,9 +376,9 @@ function BecomeGuidePage() {
                     />
                   </div>
                   <Button type="button" disabled={submitting} onClick={verifyEmail}>
-                    Verify Email
+                    Verify OTP & Complete Registration
                   </Button>
-                  <Button type="button" variant="outline" disabled={submitting} onClick={sendVerificationCode}>
+                  <Button type="button" variant="outline" disabled={submitting} onClick={resendVerificationCode}>
                     Resend Code
                   </Button>
                 </div>
@@ -467,7 +387,7 @@ function BecomeGuidePage() {
 
             <FormSection
               title="Contact & Guide Type"
-              description="These stay editable after registration."
+              description="These profile details are included in your guide application."
             >
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div>
@@ -480,11 +400,7 @@ function BecomeGuidePage() {
                     placeholder="10-digit mobile number"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                    disabled={
-                      (!isAuthenticated && otpSent) ||
-                      (isAuthenticated && !registered) ||
-                      submitting
-                    }
+                    disabled={otpSent || submitting}
                     required
                   />
                 </div>
@@ -494,6 +410,7 @@ function BecomeGuidePage() {
                     id="city"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
+                    disabled={otpSent || submitting}
                     required
                   />
                 </div>
@@ -502,6 +419,7 @@ function BecomeGuidePage() {
                   <Select
                     value={guideType}
                     onValueChange={(v) => setGuideType(v as "normal" | "escort")}
+                    disabled={otpSent || submitting}
                   >
                     <SelectTrigger id="guideType" className="bg-white">
                       <SelectValue placeholder="Select guide type" />
@@ -520,8 +438,8 @@ function BecomeGuidePage() {
                       value={pan}
                       onChange={(e) => setPan(e.target.value.toUpperCase())}
                       placeholder="ABCDE1234F"
-                      disabled={registered}
-                      required={!!isAuthenticated}
+                      disabled={otpSent || submitting}
+                      required
                     />
                   </div>
                 )}
@@ -533,31 +451,16 @@ function BecomeGuidePage() {
                     selected={languages}
                     onChange={setLanguages}
                     placeholder="Select languages..."
+                    disabled={otpSent || submitting}
                   />
                 </div>
               </div>
             </FormSection>
 
-            {!registered && (
-              <FormSection
-                title="Photos & Documents"
-                description="Your photo is public. Your licence and Aadhaar are private and seen only by admins."
-              >
-                {/* A file picked before signing up can't be carried across the
-                    signup redirect (a File isn't serialisable), so list the
-                    uploads for anonymous visitors instead of collecting ones
-                    they'd only have to pick again. */}
-                {!isAuthenticated ? (
-                  <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600">
-                    <li>Profile photo — shown on your public guide listing</li>
-                    <li>Guide licence — private, reviewed by admins</li>
-                    <li>Aadhaar — private, reviewed by admins</li>
-                    <li className="list-none pt-2 text-xs text-slate-500">
-                      Verify your email above, then upload these files here.
-                    </li>
-                  </ul>
-                ) : (
-                  <>
+            <FormSection
+            title="Photos & Documents"
+            description="Your photo is public. Your licence and Aadhaar are private and seen only by admins."
+            >
                     <div className="grid grid-cols-1 items-start gap-8 md:grid-cols-2">
                       <div className="md:col-span-2">
                         <Label className="mb-2 block">Profile Photo (required)</Label>
@@ -574,7 +477,8 @@ function BecomeGuidePage() {
                           <Input
                             type="file"
                             onChange={handleProfileFileChange}
-                            accept="image/*"
+                            accept=".jpg,.jpeg,.png,.webp"
+                            disabled={otpSent || submitting}
                             required
                           />
                         </div>
@@ -583,8 +487,19 @@ function BecomeGuidePage() {
                         <Label className="mb-2 block">Guide Licence (required)</Label>
                         <Input
                           type="file"
-                          onChange={(e) => setLicenceFile(e.target.files?.[0] ?? null)}
-                          accept="image/*,.pdf"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] ?? null;
+                            const error = file ? validateUpload(file, "document") : null;
+                            if (error) {
+                              setLicenceFile(null);
+                              setFormError(error);
+                              e.target.value = "";
+                            } else {
+                              setLicenceFile(file);
+                            }
+                          }}
+                          accept=".jpg,.jpeg,.png,.webp,.pdf"
+                          disabled={otpSent || submitting}
                           required
                         />
                       </div>
@@ -592,8 +507,19 @@ function BecomeGuidePage() {
                         <Label className="mb-2 block">Aadhaar (required)</Label>
                         <Input
                           type="file"
-                          onChange={(e) => setAadhaarFile(e.target.files?.[0] ?? null)}
-                          accept="image/*,.pdf"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] ?? null;
+                            const error = file ? validateUpload(file, "document") : null;
+                            if (error) {
+                              setAadhaarFile(null);
+                              setFormError(error);
+                              e.target.value = "";
+                            } else {
+                              setAadhaarFile(file);
+                            }
+                          }}
+                          accept=".jpg,.jpeg,.png,.webp,.pdf"
+                          disabled={otpSent || submitting}
                           required
                         />
                       </div>
@@ -605,6 +531,7 @@ function BecomeGuidePage() {
                         className="mt-1"
                         checked={disclaimerAccepted}
                         onChange={(e) => setDisclaimerAccepted(e.target.checked)}
+                        disabled={otpSent || submitting}
                       />
                       <span>
                         I confirm the details and documents above are genuine, and I agree to
@@ -615,24 +542,15 @@ function BecomeGuidePage() {
                         .
                       </span>
                     </label>
-                  </>
-                )}
-              </FormSection>
-            )}
+            </FormSection>
 
             <div className="flex items-center justify-end gap-4 bg-slate-50 px-6 py-4">
               {formError && <p className="text-sm text-red-600">{formError}</p>}
-              <Button type="submit" disabled={submitting || loading || (!isAuthenticated && otpSent)}>
-                {submitting
-                  ? "Please wait..."
-                  : !isAuthenticated
-                    ? otpSent
-                      ? "Verify email above to continue"
-                      : "Send Email Verification Code"
-                    : registered
-                      ? "Save Changes"
-                      : "Submit Guide Application"}
-              </Button>
+              {!otpSent && (
+                <Button type="submit" disabled={submitting || !guideProfileReady}>
+                  {submitting ? "Submitting..." : "Submit Registration"}
+                </Button>
+              )}
             </div>
           </div>
         </form>
@@ -641,11 +559,8 @@ function BecomeGuidePage() {
   );
 }
 
-// Anonymous visitors may read and fill this form — it's the public "become a
-// guide" pitch, and turning them away at the door loses them. They're sent to
-// sign up when they submit, which is the first point an account is actually
-// needed. A signed-in tourist still can't register as a guide, so they get the
-// "Unauthorized Access" notice and a bounce to their own dashboard.
+// Registration is public; authenticated guides manage allowed profile changes
+// from their dashboard instead of editing this registration page.
 export default function BecomeGuidePageGuarded() {
   return (
     <RoleGuard allowRoles={["guide", "admin"]} redirectTo="/dashboard/user">

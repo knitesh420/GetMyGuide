@@ -1,5 +1,5 @@
 import bcrypt from 'bcrypt';
-import { randomInt } from 'crypto';
+import { createHash, randomInt } from 'crypto';
 import {
 	BadRequestError,
 	ConflictError,
@@ -8,13 +8,15 @@ import {
 	TooManyRequestsError,
 	UnauthorizedError,
 } from 'node-be-utilities';
-import { AccountDB, PendingRegistrationDB, StorageDB } from '@mongo';
+import { AccountDB, GuideDB, PendingRegistrationDB, StorageDB } from '@mongo';
+import { PendingGuideDraft } from '@mongo/types/pendingRegistration';
 import {
 	sendAdminOtpEmail,
 	sendPasswordResetOtpEmail,
 	sendRegistrationOtpEmail,
 } from '@provider/email';
 import JWTService, { JWTPayload } from '@services/jwt';
+import GuideService from '@services/guide';
 import {
 	OTP_MAX_VERIFY_ATTEMPTS,
 	OTP_TTL_SECONDS,
@@ -46,6 +48,11 @@ interface RegisterSendOtpData {
 	countryCode: string;
 	password: string;
 	accountType: 'tourist' | 'guide';
+	city?: string;
+	type?: 'normal' | 'escort';
+	languages?: string[];
+	pan?: string;
+	guideDraft?: PendingGuideDraft;
 }
 
 interface LoginData {
@@ -99,6 +106,11 @@ function issueTokens(user: any): TokenPair {
 }
 
 class AuthService {
+	private registrationPhoneKey(phone: string): string {
+		const phoneHash = createHash('sha256').update(phone).digest('hex');
+		return `registration-phone:${phoneHash}`;
+	}
+
 	/**
 	 * Internal signup — used by integration test helpers to seed fixture accounts.
 	 * The public HTTP endpoint POST /session/signup has been removed; new user
@@ -319,6 +331,19 @@ class AuthService {
 
 	async sendRegistrationOtp(data: RegisterSendOtpData): Promise<void> {
 		const email = data.email.toLowerCase();
+		if (data.accountType === 'guide') {
+			const draft = data.guideDraft;
+			if (
+				!draft?.city ||
+				!draft.type ||
+				draft.languages.length === 0 ||
+				!draft.profileImage ||
+				draft.identityProofs.length !== 2 ||
+				(draft.type === 'escort' && !draft.pan)
+			) {
+				throw new BadRequestError('Guide registration requires a complete profile, photo, licence, and Aadhaar');
+			}
+		}
 
 		const existingAccount = await AccountDB.findOne({
 			$or: [{ email }, { phone: data.phone }],
@@ -329,11 +354,14 @@ class AuthService {
 
 		const existingPending = await PendingRegistrationDB.findOne({ email });
 		if (existingPending) {
-			const secondsSinceLastSend =
-				(Date.now() - existingPending.lastSentAt.getTime()) / 1000;
-			if (secondsSinceLastSend < REGISTRATION_OTP_RESEND_COOLDOWN_SECONDS) {
-				const wait = Math.ceil(REGISTRATION_OTP_RESEND_COOLDOWN_SECONDS - secondsSinceLastSend);
-				throw new TooManyRequestsError(`Please wait ${wait}s before requesting another code`);
+			if (existingPending.expireAt <= new Date() && existingPending.status !== 'finalizing') {
+				await PendingRegistrationDB.deleteOne({ _id: existingPending._id });
+				await StorageDB.deleteOne({
+					key: this.registrationPhoneKey(existingPending.phone),
+					'object.email': email,
+				});
+			} else {
+			throw new ConflictError('A registration is already pending for this email; resend its verification code');
 			}
 		}
 
@@ -342,27 +370,93 @@ class AuthService {
 		const passwordHash = await bcrypt.hash(data.password, 10);
 		const now = new Date();
 
-		// Upsert — this IS the resend mechanism: a fresh send always overwrites
-		// the previous OTP/expiry/attempts, invalidating any prior code.
-		await PendingRegistrationDB.findOneAndUpdate(
-			{ email },
-			{
+		const phoneKey = this.registrationPhoneKey(data.phone);
+		try {
+			await StorageDB.create({
+				key: phoneKey,
+				object: { email },
+				expireAt: new Date(now.getTime() + PENDING_REGISTRATION_TTL_SECONDS * 1000),
+			});
+		} catch (error) {
+			if ((error as { code?: number }).code === 11000) {
+				const existingReservation = await StorageDB.findOne({ key: phoneKey });
+				if (existingReservation && existingReservation.expireAt <= now) {
+					await StorageDB.deleteOne({ _id: existingReservation._id });
+					return this.sendRegistrationOtp(data);
+				}
+				throw new ConflictError('A registration is already pending for this phone number');
+			}
+			throw error;
+		}
+
+		try {
+			await PendingRegistrationDB.create({
 				name: data.name,
 				email,
 				phone: data.phone,
 				countryCode: data.countryCode,
 				passwordHash,
 				accountType: data.accountType,
+				...(data.guideDraft ? { guideDraft: data.guideDraft } : {}),
 				otpHash,
 				otpExpiresAt: new Date(now.getTime() + REGISTRATION_OTP_TTL_SECONDS * 1000),
 				attempts: 0,
 				lastSentAt: now,
 				expireAt: new Date(now.getTime() + PENDING_REGISTRATION_TTL_SECONDS * 1000),
-			},
-			{ upsert: true, setDefaultsOnInsert: true }
-		);
+			});
+		} catch (error) {
+			await StorageDB.deleteOne({ key: phoneKey, 'object.email': email });
+			if ((error as { code?: number }).code === 11000) {
+				throw new ConflictError('A registration is already pending for this email');
+			}
+			throw error;
+		}
 
 		const emailSent = await sendRegistrationOtpEmail(email, otp);
+		if (!emailSent) {
+			throw new ServerError('Failed to send verification email');
+		}
+	}
+
+	async resendRegistrationOtp(email: string): Promise<void> {
+		const normalized = email.toLowerCase();
+		const now = new Date();
+		const otp = randomInt(0, 1_000_000).toString().padStart(6, '0');
+		const otpHash = await bcrypt.hash(otp, 10);
+		const cutoff = new Date(now.getTime() - REGISTRATION_OTP_RESEND_COOLDOWN_SECONDS * 1000);
+		const pending = await PendingRegistrationDB.findOneAndUpdate(
+			{ email: normalized, status: 'pending', lastSentAt: { $lte: cutoff } },
+			{
+				$set: {
+					otpHash,
+					otpExpiresAt: new Date(now.getTime() + REGISTRATION_OTP_TTL_SECONDS * 1000),
+					attempts: 0,
+					lastSentAt: now,
+					expireAt: new Date(now.getTime() + PENDING_REGISTRATION_TTL_SECONDS * 1000),
+				},
+			},
+			{ new: true }
+		);
+		if (!pending) {
+			const existing = await PendingRegistrationDB.findOne({ email: normalized });
+			if (!existing) {
+				throw new NotFoundError('No pending registration was found for this email');
+			}
+			if (existing.status !== 'pending') {
+				throw new ConflictError('Registration is being finalized');
+			}
+			const wait = Math.ceil(
+				REGISTRATION_OTP_RESEND_COOLDOWN_SECONDS -
+					(now.getTime() - existing.lastSentAt.getTime()) / 1000
+			);
+			throw new TooManyRequestsError(`Please wait ${Math.max(1, wait)}s before requesting another code`);
+		}
+		await StorageDB.updateOne(
+			{ key: this.registrationPhoneKey(pending.phone), 'object.email': normalized },
+			{ $set: { expireAt: pending.expireAt } }
+		);
+
+		const emailSent = await sendRegistrationOtpEmail(normalized, otp);
 		if (!emailSent) {
 			throw new ServerError('Failed to send verification email');
 		}
@@ -377,50 +471,118 @@ class AuthService {
 			throw new UnauthorizedError('Invalid or expired code');
 		}
 
-		if (pending.otpExpiresAt.getTime() < Date.now()) {
+		if (pending.status !== 'pending') {
+			throw new UnauthorizedError('Invalid or expired code');
+		}
+
+		if (pending.otpExpiresAt.getTime() <= Date.now()) {
 			throw new UnauthorizedError('Code has expired; request a new one');
 		}
 
 		if (pending.attempts >= OTP_MAX_VERIFY_ATTEMPTS) {
-			await PendingRegistrationDB.deleteOne({ _id: pending._id });
 			throw new UnauthorizedError('Too many incorrect attempts; request a new code');
 		}
 
 		const valid = await bcrypt.compare(otp, pending.otpHash);
 		if (!valid) {
-			pending.attempts += 1;
-			await pending.save();
+			await PendingRegistrationDB.updateOne(
+				{ _id: pending._id, status: 'pending', otpHash: pending.otpHash },
+				{ $inc: { attempts: 1 } }
+			);
 			throw new UnauthorizedError('Invalid code');
 		}
 
-		// Race guard: someone may have registered with this email/phone in the
-		// window between send-otp and verify-otp.
+		// Claim the pending record before creating either resource. Only one
+		// concurrent verifier can move it out of `pending`, so an OTP is single-use.
+		const claimed = await PendingRegistrationDB.findOneAndUpdate(
+			{
+				_id: pending._id,
+				status: 'pending',
+				otpHash: pending.otpHash,
+				otpExpiresAt: { $gt: new Date() },
+				attempts: { $lt: OTP_MAX_VERIFY_ATTEMPTS },
+			},
+			{ $set: { status: 'finalizing' } },
+			{ new: true }
+		).select('+passwordHash +otpHash');
+		if (!claimed) {
+			throw new UnauthorizedError('Invalid or expired code');
+		}
+
 		const existingAccount = await AccountDB.findOne({
-			$or: [{ email: normalized }, { phone: pending.phone }],
+			$or: [{ email: normalized }, { phone: claimed.phone }],
 		});
 		if (existingAccount) {
-			await PendingRegistrationDB.deleteOne({ _id: pending._id });
+			await PendingRegistrationDB.deleteOne({ _id: claimed._id });
+			await StorageDB.deleteOne({
+				key: this.registrationPhoneKey(claimed.phone),
+				'object.email': normalized,
+			});
 			throw new ConflictError('An account with this email or phone already exists');
 		}
 
 		const account = new AccountDB({
-			name: pending.name,
-			email: pending.email,
-			phone: pending.phone,
-			countryCode: pending.countryCode,
-			password: pending.passwordHash,
-			role: pending.accountType,
+			name: claimed.name,
+			email: claimed.email,
+			phone: claimed.phone,
+			countryCode: claimed.countryCode,
+			password: claimed.passwordHash,
+			role: claimed.accountType,
 			status: 'verified',
 			emailVerified: true,
-			guideTrialEligible: pending.accountType === 'guide',
-			isActive: true,
+			guideTrialEligible: claimed.accountType === 'guide',
+			isActive: claimed.accountType !== 'guide',
 		});
-		// passwordHash is already bcrypt-hashed at rest — skip the pre-save
-		// re-hash or login will never work again (see Account.ts's pre('save')).
 		account.$locals.skipPasswordHash = true;
-		await account.save();
+		try {
+			await account.save();
+			if (claimed.accountType === 'guide') {
+				const draft = claimed.guideDraft;
+				if (!draft || draft.identityProofs.length !== 2) {
+					throw new BadRequestError('The pending guide application is incomplete; request a new code');
+				}
+				await GuideService.upsertGuideProfile(
+					account._id.toString(),
+					{
+						city: draft.city,
+						type: draft.type,
+						languages: draft.languages,
+						pan: draft.pan,
+						phone: claimed.phone,
+					},
+					{ profileImage: draft.profileImage, identityProofs: draft.identityProofs }
+				);
+				const activated = await AccountDB.updateOne(
+					{ _id: account._id, isActive: false },
+					{ $set: { isActive: true } }
+				);
+				if (activated.matchedCount !== 1) {
+					throw new ServerError('Could not activate the completed guide registration');
+				}
+				account.isActive = true;
+			}
+		} catch (error) {
+			await GuideDB.deleteOne({ accountId: account._id });
+			await AccountDB.deleteOne({ _id: account._id });
+			await PendingRegistrationDB.updateOne(
+				{ _id: claimed._id, status: 'finalizing' },
+				{
+					$set: {
+						status: 'pending',
+						otpHash: await bcrypt.hash(randomInt(0, 1_000_000).toString(), 10),
+						otpExpiresAt: new Date(),
+						attempts: 0,
+					},
+				}
+			);
+			throw error;
+		}
 
-		await PendingRegistrationDB.deleteOne({ _id: pending._id });
+		await PendingRegistrationDB.deleteOne({ _id: claimed._id, status: 'finalizing' });
+		await StorageDB.deleteOne({
+			key: this.registrationPhoneKey(claimed.phone),
+			'object.email': normalized,
+		});
 
 		return { ...issueTokens(account), user: toPublicUser(account) };
 	}

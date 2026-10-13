@@ -1,9 +1,13 @@
 import AuthService from '@services/auth';
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
 import request from 'supertest';
 import configServer from '../../src/server-config';
 import { testSignupData, testUser } from '../helpers/fixtures';
 import { clearDatabase, connectTestDB, disconnectTestDB } from '../setup/db.setup';
+import { AccountDB, GuideDB, PendingRegistrationDB } from '@mongo';
+import { uploadMulterImage } from '@utils/cloudinaryUpload';
 
 // This suite asserts on what gets emailed (it reads the OTP back out of the
 // send call), so it declares its own email double rather than using the global
@@ -58,7 +62,36 @@ describe('Session API Integration Tests', () => {
 		(sendRegistrationOtpEmail as jest.Mock).mockResolvedValue(true);
 	});
 
-	/**
+		function submitRegistration(payload: typeof registration) {
+			const endpoint = request(app).post('/session/register/send-otp');
+			if (payload.accountType === 'tourist') return endpoint.send(payload);
+
+			return endpoint
+				.field('name', payload.name)
+				.field('email', payload.email)
+				.field('phone', payload.phone)
+				.field('countryCode', payload.countryCode)
+				.field('password', payload.password)
+				.field('confirmPassword', payload.password)
+				.field('accountType', payload.accountType)
+				.field('city', 'Jaipur')
+				.field('type', 'normal')
+				.field('languages', 'English')
+				.attach('profileImage', Buffer.from('profile'), {
+					filename: 'profile.jpg',
+					contentType: 'image/jpeg',
+				})
+				.attach('identityProofs', Buffer.from('%PDF licence'), {
+					filename: 'licence.pdf',
+					contentType: 'application/pdf',
+				})
+				.attach('identityProofs', Buffer.from('%PDF aadhaar'), {
+					filename: 'aadhaar.pdf',
+					contentType: 'application/pdf',
+				});
+		}
+
+		/**
 	 * Register through the real two-step flow and return the created account.
 	 * Registration is the only path that mints an email-verified account, which
 	 * password login requires.
@@ -66,7 +99,7 @@ describe('Session API Integration Tests', () => {
 	async function registerViaOtp(overrides: Partial<typeof registration> = {}) {
 		const payload = { ...registration, ...overrides };
 
-		await request(app).post('/session/register/send-otp').send(payload).expect(200);
+		await submitRegistration(payload).expect(200);
 
 		const verify = await request(app)
 			.post('/session/register/verify-otp')
@@ -123,6 +156,74 @@ describe('Session API Integration Tests', () => {
 			expect(response.status).toBe(400);
 		});
 
+		it('requires complete guide details and all three uploads on the backend', async () => {
+			const response = await request(app)
+				.post('/session/register/send-otp')
+				.send({ ...registration, accountType: 'guide' });
+
+			expect(response.status).toBe(400);
+			expect(sendRegistrationOtpEmail).not.toHaveBeenCalled();
+		});
+
+		it('cleans staged files when guide registration validation fails', async () => {
+			const uploadDirectory = path.join(global.__basedir, 'private-uploads');
+			const filesBefore = fs.existsSync(uploadDirectory)
+				? fs.readdirSync(uploadDirectory).sort()
+				: [];
+
+			await request(app)
+				.post('/session/register/send-otp')
+				.field('name', registration.name)
+				.field('email', registration.email)
+				.field('phone', registration.phone)
+				.field('countryCode', registration.countryCode)
+				.field('password', registration.password)
+				.field('accountType', 'guide')
+				.field('city', 'Jaipur')
+				.field('type', 'normal')
+				.field('languages', 'English')
+				.attach('profileImage', Buffer.from('profile'), {
+					filename: 'profile.jpg',
+					contentType: 'image/jpeg',
+				})
+				.expect(400);
+
+			expect(fs.readdirSync(uploadDirectory).sort()).toEqual(filesBefore);
+		});
+
+		it('persists the guide draft and uploads private identity documents before emailing OTP', async () => {
+			const payload = {
+				...registration,
+				email: 'newguide@example.com',
+				phone: '1234567893',
+				accountType: 'guide' as const,
+			};
+
+			await submitRegistration(payload).expect(200);
+
+			const pending = await PendingRegistrationDB.findOne({ email: payload.email });
+			expect(pending?.guideDraft).toMatchObject({
+				city: 'Jaipur',
+				type: 'normal',
+				languages: ['English'],
+				identityProofs: [
+					expect.stringContaining('identity-proofs'),
+					expect.stringContaining('identity-proofs'),
+				],
+			});
+			expect(uploadMulterImage).toHaveBeenCalledTimes(3);
+			expect(
+				(uploadMulterImage as jest.Mock).mock.calls.every(([file]) =>
+					!file.path.includes(path.join('static', 'misc'))
+				)
+			).toBe(true);
+			expect((uploadMulterImage as jest.Mock).mock.calls[0][2]).toBeUndefined();
+			expect((uploadMulterImage as jest.Mock).mock.calls.slice(1).map((call) => call[2])).toEqual([
+				{ type: 'authenticated' },
+				{ type: 'authenticated' },
+			]);
+		});
+
 		it('should return 409 when the email already has an account', async () => {
 			await registerViaOtp();
 
@@ -155,11 +256,20 @@ describe('Session API Integration Tests', () => {
 		it('should register a guide when accountType is guide', async () => {
 			const { user } = await registerViaOtp({
 				email: 'newguide@example.com',
-				phone: '+1234567893',
+				phone: '1234567893',
 				accountType: 'guide',
 			});
 
 			expect(user.role).toBe('guide');
+			expect(await GuideDB.findOne({ accountId: user.id })).toMatchObject({
+				registrationCompleted: true,
+				city: 'Jaipur',
+				identityProofs: [
+					expect.stringContaining('identity-proofs'),
+					expect.stringContaining('identity-proofs'),
+				],
+			});
+			expect(await AccountDB.findById(user.id)).toMatchObject({ isActive: true });
 		});
 
 		it('should return 401 for a wrong code', async () => {
@@ -173,6 +283,71 @@ describe('Session API Integration Tests', () => {
 				.send({ email: registration.email, otp: wrong });
 
 			expect(response.status).toBe(401);
+			expect(await PendingRegistrationDB.findOne({ email: registration.email })).not.toBeNull();
+		});
+
+		it('keeps an expired registration draft and allows a fresh OTP to finish it', async () => {
+			await request(app).post('/session/register/send-otp').send(registration).expect(200);
+			await PendingRegistrationDB.updateOne(
+				{ email: registration.email },
+				{ $set: { otpExpiresAt: new Date(Date.now() - 1000), lastSentAt: new Date(Date.now() - 61_000) } }
+			);
+
+			const expired = await request(app)
+				.post('/session/register/verify-otp')
+				.send({ email: registration.email, otp: lastOtp(sendRegistrationOtpEmail) });
+			expect(expired.status).toBe(401);
+			expect(await PendingRegistrationDB.findOne({ email: registration.email })).not.toBeNull();
+
+			await request(app)
+				.post('/session/register/send-otp')
+				.send({ email: registration.email })
+				.expect(200);
+			await request(app)
+				.post('/session/register/verify-otp')
+				.send({ email: registration.email, otp: lastOtp(sendRegistrationOtpEmail) })
+				.expect(201);
+		});
+
+		it('restores persisted guide details and uploads after a failed OTP attempt', async () => {
+			const payload = {
+				...registration,
+				email: 'restoreguide@example.com',
+				phone: '1234567894',
+				accountType: 'guide' as const,
+			};
+			await submitRegistration(payload).expect(200);
+			const wrong = lastOtp(sendRegistrationOtpEmail) === '000000' ? '111111' : '000000';
+			await request(app)
+				.post('/session/register/verify-otp')
+				.send({ email: payload.email, otp: wrong })
+				.expect(401);
+
+			const pending = await PendingRegistrationDB.findOne({ email: payload.email });
+			expect(pending?.guideDraft).toMatchObject({
+				city: 'Jaipur',
+				identityProofs: [
+					expect.stringContaining('identity-proofs'),
+					expect.stringContaining('identity-proofs'),
+				],
+			});
+			expect(await AccountDB.findOne({ email: payload.email })).toBeNull();
+		});
+
+		it('consumes an OTP once and prevents concurrent duplicate finalization', async () => {
+			await request(app).post('/session/register/send-otp').send(registration).expect(200);
+			const otp = lastOtp(sendRegistrationOtpEmail);
+			const [first, second] = await Promise.all([
+				request(app).post('/session/register/verify-otp').send({ email: registration.email, otp }),
+				request(app).post('/session/register/verify-otp').send({ email: registration.email, otp }),
+			]);
+
+			expect([first.status, second.status].sort()).toEqual([201, 401]);
+			expect(await AccountDB.countDocuments({ email: registration.email })).toBe(1);
+			await request(app)
+				.post('/session/register/verify-otp')
+				.send({ email: registration.email, otp })
+				.expect(401);
 		});
 
 		it('should return 400 for a malformed code', async () => {

@@ -8,8 +8,9 @@ import {
 } from '@config/const';
 import AuthService from '@services/auth';
 import { CookieOptions, NextFunction, Request, Response } from 'express';
-import { UnauthorizedError } from 'node-be-utilities';
+import { BadRequestError, UnauthorizedError } from 'node-be-utilities';
 import { Respond } from '@utils/respond';
+import { uploadMulterImage } from '@utils/cloudinaryUpload';
 import {
 	ForgotPasswordValidationResult,
 	LoginValidationResult,
@@ -112,11 +113,53 @@ async function resetPassword(req: Request, res: Response, next: NextFunction) {
 async function sendRegistrationOtp(req: Request, res: Response, next: NextFunction) {
 	try {
 		const data = req.locals.data as RegisterSendOtpValidationResult;
-		await AuthService.sendRegistrationOtp(data);
+		if (data.resendOnly) {
+			await AuthService.resendRegistrationOtp(data.email);
+		} else {
+			if (data.accountType === 'guide') {
+				const files = req.files as
+					| { [fieldname: string]: Express.Multer.File[] }
+					| undefined;
+				const city = data.city;
+				const type = data.type;
+				const languages = data.languages;
+				if (
+					!files?.profileImage?.[0] ||
+					files.identityProofs?.length !== 2 ||
+					!city ||
+					!type ||
+					!languages?.length
+				) {
+					throw new BadRequestError('Complete guide details, profile photo, licence, and Aadhaar are required');
+				}
+
+				const profileImage = await uploadMulterImage(files.profileImage[0], 'getmyguide/guides');
+				const identityProofs = await Promise.all(
+					files.identityProofs.map((file) =>
+						uploadMulterImage(file, 'getmyguide/guides/identity-proofs', {
+							type: 'authenticated',
+						})
+					)
+				);
+				data.guideDraft = {
+					city,
+					type,
+					languages,
+					pan: data.pan,
+					profileImage,
+					identityProofs,
+				};
+			}
+			await AuthService.sendRegistrationOtp(data);
+		}
 		return Respond({
 			res,
 			status: 200,
-			data: { message: 'A verification code has been sent to your email.' },
+			data: {
+				message: data.resendOnly
+					? 'A new verification code has been sent to your email.'
+					: 'A verification code has been sent to your email.',
+			},
 		});
 	} catch (error) {
 		return next(error);

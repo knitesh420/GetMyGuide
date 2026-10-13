@@ -138,6 +138,10 @@ export interface RegisterSendOtpRequest {
   password: string;
   confirmPassword?: string;
   accountType: "tourist" | "guide";
+  city?: string;
+  type?: "normal" | "escort";
+  languages?: string[];
+  pan?: string;
 }
 
 export interface RegisterVerifyOtpRequest {

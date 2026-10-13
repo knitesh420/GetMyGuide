@@ -1,5 +1,17 @@
 import mongoose from 'mongoose';
-import IPendingRegistration from '../types/pendingRegistration';
+import IPendingRegistration, { PendingGuideDraft } from '../types/pendingRegistration';
+
+const PendingGuideDraftSchema = new mongoose.Schema<PendingGuideDraft>(
+	{
+		city: { type: String, required: true, trim: true },
+		type: { type: String, enum: ['normal', 'escort'], required: true },
+		languages: { type: [String], required: true },
+		pan: { type: String, trim: true },
+		profileImage: { type: String, required: true, trim: true },
+		identityProofs: { type: [String], required: true },
+	},
+	{ _id: false }
+);
 
 const PendingRegistrationSchema = new mongoose.Schema<IPendingRegistration>(
 	{
@@ -35,10 +47,20 @@ const PendingRegistrationSchema = new mongoose.Schema<IPendingRegistration>(
 			enum: ['tourist', 'guide'],
 			required: true,
 		},
+		guideDraft: {
+			type: PendingGuideDraftSchema,
+			default: undefined,
+		},
 		otpHash: {
 			type: String,
 			required: true,
 			select: false,
+		},
+		status: {
+			type: String,
+			enum: ['pending', 'finalizing'],
+			default: 'pending',
+			required: true,
 		},
 		otpExpiresAt: {
 			type: Date,

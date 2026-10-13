@@ -64,6 +64,7 @@ export function Footer() {
                   src={IMAGES.logo}
                   alt="GetMyGuide"
                   fill
+                  sizes="56px"
                   className="object-contain rounded-lg"
                 />
               </div>

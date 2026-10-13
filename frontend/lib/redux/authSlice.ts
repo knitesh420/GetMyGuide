@@ -78,7 +78,10 @@ export const loginWithOtp = createAsyncThunk<AuthResponse, OtpLoginRequest>(
 );
 
 // Registration — step 1: send OTP to email
-export const sendRegistrationOtp = createAsyncThunk<any, RegisterSendOtpRequest>(
+export const sendRegistrationOtp = createAsyncThunk<
+  any,
+  RegisterSendOtpRequest | FormData | { email: string }
+>(
   "auth/sendRegistrationOtp",
   async (data, { rejectWithValue }) => {
     try {

@@ -24,6 +24,7 @@ interface MultiSelectProps {
   onChange: React.Dispatch<React.SetStateAction<string[]>>;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }
 
 export function MultiSelect({
@@ -32,7 +33,7 @@ export function MultiSelect({
   onChange,
   placeholder = "Select...",
   className,
-  ...props
+  disabled = false,
 }: MultiSelectProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [open, setOpen] = React.useState(false);
@@ -40,9 +41,9 @@ export function MultiSelect({
 
   const handleUnselect = React.useCallback(
     (value: string) => {
-      onChange(selected.filter((s) => s !== value));
+      if (!disabled) onChange(selected.filter((s) => s !== value));
     },
-    [onChange, selected]
+    [disabled, onChange, selected]
   );
 
   const handleKeyDown = React.useCallback(
@@ -69,7 +70,7 @@ export function MultiSelect({
   return (
     <Command
       onKeyDown={handleKeyDown}
-      className={`overflow-visible bg-transparent ${className ?? ""}`}
+      className={`overflow-visible bg-transparent ${disabled ? "pointer-events-none opacity-60" : ""} ${className ?? ""}`}
     >
       <div className="group rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm ring-offset-background transition-colors focus-within:border-slate-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
         <div className="flex flex-wrap gap-1">
@@ -79,6 +80,8 @@ export function MultiSelect({
               <Badge key={value} variant="secondary">
                 {option?.label}
                 <button
+                  type="button"
+                  disabled={disabled}
                   className="ml-1 rounded-full outline-none ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -98,6 +101,7 @@ export function MultiSelect({
           })}
           <CommandPrimitive.Input
             ref={inputRef}
+            disabled={disabled}
             value={inputValue}
             onValueChange={setInputValue}
             onBlur={() => setOpen(false)}

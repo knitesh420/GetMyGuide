@@ -343,16 +343,17 @@ class GuideService {
 		}
 
 		const existing = await GuideDB.findOne({ accountId: account._id });
+		if (existing?.registrationCompleted) {
+			throw new ConflictError('Guide registration has already been submitted');
+		}
 
-		// Profile image + identity proof are required on first submission only —
-		// edits to an already-completed profile can omit files to keep the ones
-		// already on record.
+		// A first-time submission must include the photo, licence, and Aadhaar.
 		if (!existing) {
 			if (!files.profileImage) {
 				throw new BadRequestError('Profile image is required');
 			}
-			if (!files.identityProofs || files.identityProofs.length === 0) {
-				throw new BadRequestError('At least one identity proof document is required');
+			if (!files.identityProofs || files.identityProofs.length !== 2) {
+				throw new BadRequestError('A guide licence and Aadhaar document are required');
 			}
 		}
 

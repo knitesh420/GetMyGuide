@@ -5,6 +5,7 @@ import {
 import express from 'express';
 import { rateLimit, VerifyMinLevel, VerifySession } from '../../middleware';
 import Controller from './session.controller';
+import { parseGuideProfileFormData } from '../guide/guide.middleware';
 import {
 	ForgotPasswordValidator,
 	LoginValidator,
@@ -84,7 +85,12 @@ router
 	.post(resetPasswordVerifyLimiter, ResetPasswordValidator, Controller.resetPassword);
 router
 	.route('/register/send-otp')
-	.post(registerOtpSendLimiter, RegisterSendOtpValidator, Controller.sendRegistrationOtp);
+	.post(
+		registerOtpSendLimiter,
+		parseGuideProfileFormData,
+		RegisterSendOtpValidator,
+		Controller.sendRegistrationOtp
+	);
 router
 	.route('/register/verify-otp')
 	.post(registerOtpVerifyLimiter, RegisterVerifyOtpValidator, Controller.verifyRegistrationOtp);

@@ -10,6 +10,8 @@
 // tests, but it cannot touch a plain function. A suite that needs to *assert*
 // on a specific email call still declares its own jest.mock('@provider/email'),
 // which overrides this module-level default for that file.
+import fs from 'fs';
+
 jest.mock('@provider/email', () => {
 	const sendStub = async () => true;
 	return new Proxy(
@@ -30,6 +32,7 @@ jest.mock('@provider/email', () => {
 jest.mock('@utils/cloudinaryUpload', () => ({
 	__esModule: true,
 	default: jest.fn(),
+	uploadMulterImage: jest.fn(),
 }));
 
 jest.mock('@config/cloudinary', () => ({
@@ -81,10 +84,11 @@ const isMock = (fn: unknown): fn is jest.Mock =>
 	typeof fn === 'function' && '_isMockFunction' in fn;
 
 beforeEach(() => {
-	/* eslint-disable @typescript-eslint/no-var-requires */
+	/* eslint-disable @typescript-eslint/no-require-imports */
 	const uploadToCloudinary = require('@utils/cloudinaryUpload').default;
+	const uploadMulterImage = require('@utils/cloudinaryUpload').uploadMulterImage;
 	const cloudinary = require('@config/cloudinary').default;
-	/* eslint-enable @typescript-eslint/no-var-requires */
+	/* eslint-enable @typescript-eslint/no-require-imports */
 
 	let counter = 0;
 	if (isMock(uploadToCloudinary)) {
@@ -94,6 +98,13 @@ beforeEach(() => {
 				secure_url: `https://res.cloudinary.com/test/${folder}/asset-${counter}.jpg`,
 				public_id: `${folder}/asset-${counter}`,
 			};
+		});
+	}
+	if (isMock(uploadMulterImage)) {
+		uploadMulterImage.mockImplementation(async (file: Express.Multer.File, folder: string) => {
+			if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+			counter += 1;
+			return `https://res.cloudinary.com/test/${folder}/asset-${counter}.jpg`;
 		});
 	}
 

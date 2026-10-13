@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/lib/hooks/useAuth";
 
 type Role = "tourist" | "guide" | "admin";
+
+const subscribeToHydration = () => () => {};
+const getHydratedSnapshot = () => true;
+const getServerSnapshot = () => false;
 
 interface RoleGuardProps {
   children: React.ReactNode;
@@ -35,10 +39,15 @@ export default function RoleGuard({
 }: RoleGuardProps) {
   const { user, isAuthenticated, fetchCurrentUser } = useAuth();
   const router = useRouter();
+  const hasMounted = useSyncExternalStore(
+    subscribeToHydration,
+    getHydratedSnapshot,
+    getServerSnapshot,
+  );
 
-  // isAuthenticated is null until the session has been resolved; treat that as
-  // pending so we neither flash the page nor redirect prematurely.
-  const pending = isAuthenticated === null;
+  // Keep server HTML and the first client render on the same loading UI even
+  // when the browser already has a resolved auth state from earlier navigation.
+  const pending = !hasMounted || isAuthenticated === null;
   const isAnonymous = isAuthenticated === false || !user;
   const roleAllowed = !isAnonymous && allowRoles.includes(user!.role as Role);
   const blockedForAuth = requireAuth && isAnonymous;

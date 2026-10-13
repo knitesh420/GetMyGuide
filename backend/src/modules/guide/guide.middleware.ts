@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import fs from 'fs';
 import { NextFunction, Request, RequestHandler, Response } from 'express';
 import multer from 'multer';
 import { BadRequestError } from 'node-be-utilities';
@@ -6,13 +7,30 @@ import path from 'path';
 
 const storage = multer.diskStorage({
 	destination: (req, file, cb) => {
-		const tempDir = path.join(global.__basedir, 'static', 'misc');
-		cb(null, tempDir);
+		const privateTempDir = path.join(global.__basedir, 'private-uploads');
+		fs.mkdirSync(privateTempDir, { recursive: true });
+		cb(null, privateTempDir);
 	},
 	filename: (req, file, cb) => {
 		cb(null, crypto.randomUUID() + path.extname(file.originalname));
 	},
 });
+
+export const cleanupGuideProfileUploads = async (req: Request): Promise<void> => {
+	const files = Object.values(
+		(req.files as { [fieldname: string]: Express.Multer.File[] } | undefined) ?? {}
+	).flat();
+
+	await Promise.all(
+		files.map(async ({ path: filePath }) => {
+			try {
+				await fs.promises.unlink(filePath);
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+			}
+		})
+	);
+};
 
 // ---- Guide profile (post-login, membership) form upload -------------------
 
@@ -29,7 +47,7 @@ const profileFileFilter = (
 		return cb(new Error('Only JPG, PNG, WEBP images are allowed'));
 	}
 	if (file.fieldname === 'identityProofs') {
-		const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+		const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
 		if (allowedTypes.includes(file.mimetype)) {
 			return cb(null, true);
 		}

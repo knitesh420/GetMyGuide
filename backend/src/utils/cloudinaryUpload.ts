@@ -2,6 +2,16 @@ import { UploadApiOptions, UploadApiResponse } from 'cloudinary';
 import fs from 'fs/promises';
 import cloudinary from '../config/cloudinary';
 
+class CloudinaryUploadCleanupError extends Error {
+	constructor(
+		readonly uploadError: unknown,
+		readonly cleanupError: unknown
+	) {
+		super('Cloudinary upload and temporary-file cleanup both failed');
+		this.name = 'CloudinaryUploadCleanupError';
+	}
+}
+
 const uploadToCloudinary = async (
 	file: string | Buffer,
 	folder: string = 'getmyguide',
@@ -42,9 +52,8 @@ const uploadToCloudinary = async (
 /**
  * Upload a multer disk-storage file to Cloudinary and return its secure URL.
  *
- * The guide upload middleware writes to `static/misc` first, so the temp file
- * is removed once Cloudinary has the bytes. A failed unlink is not fatal — the
- * image is already safely stored — so it must not fail the request.
+ * The guide upload middleware stages files outside the static web root, then
+ * removes the temporary file whether the Cloudinary upload succeeds or fails.
  *
  * `options` is passed straight through to Cloudinary. KYC uploads use
  * `{ type: 'authenticated' }` so the resulting asset is NOT publicly readable by
@@ -57,14 +66,27 @@ export const uploadMulterImage = async (
 	folder: string,
 	options: UploadApiOptions = {}
 ): Promise<string> => {
-	const result = await uploadToCloudinary(file.path, folder, options);
+	const removeTemporaryFile = async () => {
+		try {
+			await fs.unlink(file.path);
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+		}
+	};
 
+	let result: UploadApiResponse;
 	try {
-		await fs.unlink(file.path);
-	} catch {
-		// temp file left behind; harmless
+		result = await uploadToCloudinary(file.path, folder, options);
+	} catch (uploadError) {
+		try {
+			await removeTemporaryFile();
+		} catch (cleanupError) {
+			throw new CloudinaryUploadCleanupError(uploadError, cleanupError);
+		}
+		throw uploadError;
 	}
 
+	await removeTemporaryFile();
 	return result.secure_url;
 };
 

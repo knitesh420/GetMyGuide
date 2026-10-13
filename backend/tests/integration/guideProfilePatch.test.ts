@@ -2,7 +2,9 @@ import { AccountDB, GuideDB } from '@mongo';
 import AuthService from '@services/auth';
 import { uploadMulterImage } from '@utils/cloudinaryUpload';
 import express from 'express';
+import fs from 'fs';
 import mongoose from 'mongoose';
+import path from 'path';
 import request from 'supertest';
 import configServer from '../../src/server-config';
 import { clearDatabase, connectTestDB, disconnectTestDB } from '../setup/db.setup';
@@ -46,7 +48,10 @@ describe('Guide profile: one-time registration, then limited edits', () => {
 		await clearDatabase();
 		// jest.config sets `resetMocks: true`, which strips the implementation set
 		// at mock-declaration time, so re-arm it for every test.
-		(uploadMulterImage as jest.Mock).mockResolvedValue('https://cdn.example.com/photo.jpg');
+		(uploadMulterImage as jest.Mock).mockImplementation(async (file: Express.Multer.File) => {
+			if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+			return 'https://cdn.example.com/photo.jpg';
+		});
 		await AuthService.signup(GUIDE);
 		await AccountDB.updateOne(
 			{ email: GUIDE.email },
@@ -90,7 +95,8 @@ describe('Guide profile: one-time registration, then limited edits', () => {
 				.field('city', 'Delhi')
 				.field('languages[]', 'English')
 				.attach('profileImage', imageBuffer(), 'photo.jpg')
-				.attach('identityProofs', imageBuffer(), 'proof.jpg');
+				.attach('identityProofs', imageBuffer(), 'licence.jpg')
+				.attach('identityProofs', imageBuffer(), 'aadhaar.jpg');
 
 		it('registers the guide, storing type on Guide and phone on Account', async () => {
 			const res = await registrationRequest();
@@ -108,6 +114,14 @@ describe('Guide profile: one-time registration, then limited edits', () => {
 			expect((guide!.toObject() as unknown as Record<string, unknown>).phone).toBeUndefined();
 		});
 
+		it('rejects a second registration submission', async () => {
+			await registrationRequest().expect(200);
+
+			const duplicate = await registrationRequest();
+			expect(duplicate.status).toBe(409);
+			expect(duplicate.body.message).toMatch(/already been submitted/i);
+		});
+
 		it('unlocks the PATCH route that was rejected before registering', async () => {
 			await auth().send({ city: 'Agra' }).expect(400);
 
@@ -118,6 +132,11 @@ describe('Guide profile: one-time registration, then limited edits', () => {
 		});
 
 		it('requires the guide type', async () => {
+			const uploadDirectory = path.join(global.__basedir, 'private-uploads');
+			const filesBefore = fs.existsSync(uploadDirectory)
+				? fs.readdirSync(uploadDirectory).sort()
+				: [];
+
 			const res = await request(app)
 				.put('/guides/profile')
 				.set('Authorization', `Bearer ${token}`)
@@ -125,11 +144,13 @@ describe('Guide profile: one-time registration, then limited edits', () => {
 				.field('city', 'Delhi')
 				.field('languages[]', 'English')
 				.attach('profileImage', imageBuffer(), 'photo.jpg')
-				.attach('identityProofs', imageBuffer(), 'proof.jpg');
+				.attach('identityProofs', imageBuffer(), 'licence.jpg')
+				.attach('identityProofs', imageBuffer(), 'aadhaar.jpg');
 
 			expect(res.status).toBe(400);
 			expect(res.body.message).toMatch(/type/i);
 			expect(await GuideDB.findOne({ accountId })).toBeNull();
+			expect(fs.readdirSync(uploadDirectory).sort()).toEqual(filesBefore);
 		});
 
 		it('requires a PAN from escort guides but not from normal guides', async () => {
@@ -141,7 +162,8 @@ describe('Guide profile: one-time registration, then limited edits', () => {
 				.field('city', 'Delhi')
 				.field('languages[]', 'English')
 				.attach('profileImage', imageBuffer(), 'photo.jpg')
-				.attach('identityProofs', imageBuffer(), 'proof.jpg');
+				.attach('identityProofs', imageBuffer(), 'licence.jpg')
+				.attach('identityProofs', imageBuffer(), 'aadhaar.jpg');
 
 			expect(escortWithoutPan.status).toBe(400);
 			expect(escortWithoutPan.body.message).toMatch(/pan/i);
@@ -155,7 +177,8 @@ describe('Guide profile: one-time registration, then limited edits', () => {
 				.field('city', 'Delhi')
 				.field('languages[]', 'English')
 				.attach('profileImage', imageBuffer(), 'photo.jpg')
-				.attach('identityProofs', imageBuffer(), 'proof.jpg');
+				.attach('identityProofs', imageBuffer(), 'licence.jpg')
+				.attach('identityProofs', imageBuffer(), 'aadhaar.jpg');
 
 			expect(normalWithoutPan.status).toBe(200);
 			expect(await GuideDB.findOne({ accountId }).then((g) => g!.pan)).toBeUndefined();
