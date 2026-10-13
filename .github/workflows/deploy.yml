@@ -2,9 +2,14 @@
 #
 # Username and port are fixed (root, 22). Add these GitHub Actions secrets
 # before the first run; do not commit them:
-#   VPS_HOST         public IPv4 of the VPS (187.52.125.247)
-#   SSH_KEY          private key matching /root/.ssh/github_actions_deploy
-#   VPS_FINGERPRINT  SHA256:hRpeJUKLjODgIUHcQ2eIXSqs8oMHh230hd/EmZMH5Ig
+#   VPS_HOST  public IPv4 of the VPS (187.52.125.247)
+#   SSH_KEY   private key for /root/.ssh/github_actions_deploy.
+#             A normal OpenSSH PEM block, or that same key base64-encoded
+#             as a single line. Newlines in the PEM may be spaces.
+#
+# The host fingerprint is hardcoded. drone-ssh compares it with Go's
+# crypto/ssh client, which negotiates the ECDSA host key, not ed25519.
+#   SHA256:ITr4/I38vffPiNCNj2lRI0ZXN+LW88iZGKxgTdBM3dQ
 name: Deploy
 
 on:
@@ -22,13 +27,62 @@ jobs:
     name: Deploy on VPS
     runs-on: ubuntu-latest
     steps:
+      - name: Prepare SSH key
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+        run: |
+          python3 - <<'PY'
+          import os, re, base64, sys, textwrap
+
+          raw = os.environ.get("SSH_KEY", "")
+          raw = raw.replace("\r\n", "\n").replace("\r", "\n").strip().strip("`")
+          if "\\n" in raw and raw.count("\n") < 2:
+              raw = raw.replace("\\n", "\n")
+
+          path = os.path.join(os.environ["RUNNER_TEMP"], "deploy_key")
+
+          def write_pem(text):
+              match = re.search(
+                  r"-----BEGIN ([A-Z0-9 ]+)-----(.*)-----END \1-----",
+                  text,
+                  re.S,
+              )
+              if not match:
+                  return False
+              kind = match.group(1)
+              body = re.sub(r"\s+", "", match.group(2))
+              if not body:
+                  return False
+              wrapped = "\n".join(textwrap.wrap(body, 70))
+              with open(path, "w", encoding="utf-8") as handle:
+                  handle.write(f"-----BEGIN {kind}-----\n{wrapped}\n-----END {kind}-----\n")
+              os.chmod(path, 0o600)
+              return True
+
+          if write_pem(raw):
+              sys.exit(0)
+
+          compact = re.sub(r"\s+", "", raw)
+          try:
+              decoded = base64.b64decode(compact, validate=True).decode("utf-8")
+          except Exception:
+              decoded = ""
+          if decoded and write_pem(decoded):
+              sys.exit(0)
+
+          sys.exit(
+              "SSH_KEY is not an OpenSSH private key. "
+              "Paste the private key, or its base64 encoding, into the SSH_KEY secret."
+          )
+          PY
+
       - name: Run deploy script over SSH
         uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         with:
           host: ${{ secrets.VPS_HOST }}
           username: root
           port: 22
-          key: ${{ secrets.SSH_KEY }}
-          fingerprint: ${{ secrets.VPS_FINGERPRINT }}
+          key_path: ${{ runner.temp }}/deploy_key
+          fingerprint: SHA256:ITr4/I38vffPiNCNj2lRI0ZXN+LW88iZGKxgTdBM3dQ
           command_timeout: 30m
           script: bash -lc '/root/projects/GetMyGuide/script.sh'
