@@ -1,0 +1,34 @@
+# Deploy GetMyGuide to the VPS on every push to main.
+#
+# Username and port are fixed (root, 22). Add these GitHub Actions secrets
+# before the first run; do not commit them:
+#   VPS_HOST         public IPv4 of the VPS (187.52.125.247)
+#   SSH_KEY          private key matching /root/.ssh/github_actions_deploy
+#   VPS_FINGERPRINT  SHA256:hRpeJUKLjODgIUHcQ2eIXSqs8oMHh230hd/EmZMH5Ig
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy on VPS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run deploy script over SSH
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          port: 22
+          key: ${{ secrets.SSH_KEY }}
+          fingerprint: ${{ secrets.VPS_FINGERPRINT }}
+          command_timeout: 30m
+          script: bash -lc '/root/projects/GetMyGuide/script.sh'

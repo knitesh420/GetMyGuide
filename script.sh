@@ -15,37 +15,88 @@ log()  { echo -e "${GREEN}[DEPLOY]${NC} $1"; }
 warn() { echo -e "${YELLOW}[WARN]${NC}  $1"; }
 fail() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 
+require_pm2_online() {
+  local name="$1"
+  local status=""
+  local deadline=$((SECONDS + 30))
+
+  while (( SECONDS < deadline )); do
+    status=$(pm2 jlist 2>/dev/null | python3 -c '
+import json, sys
+name = sys.argv[1]
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    data = []
+for proc in data:
+    if proc.get("name") == name:
+        print(proc.get("pm2_env", {}).get("status", ""))
+        break
+else:
+    print("missing")
+' "$name" || true)
+    if [[ "$status" == "online" ]]; then
+      log "$name is online"
+      return 0
+    fi
+    sleep 2
+  done
+
+  fail "$name is not online (last status: ${status:-unknown})"
+}
+
+# Any HTTP status other than a connection failure counts. The API has no health route.
+require_http() {
+  local url="$1"
+  local code="000"
+  local deadline=$((SECONDS + 30))
+
+  while (( SECONDS < deadline )); do
+    code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 10 "$url" || true)
+    if [[ -n "$code" && "$code" != "000" ]]; then
+      log "$url responded with HTTP $code"
+      return 0
+    fi
+    sleep 3
+  done
+
+  fail "$url did not respond within 30 seconds (last code: ${code})"
+}
+
 log "Starting redeployment..."
 
-# Pull latest code
 log "Pulling latest code from origin/main..."
 cd "$PROJECT_DIR"
-git pull origin main || fail "Git pull failed"
+git pull --ff-only origin main || fail "Git pull failed"
 
-# Backend
 log "Installing backend dependencies..."
 cd "$BACKEND_DIR"
-pnpm install || fail "Backend pnpm install failed"
+pnpm install --frozen-lockfile || fail "Backend pnpm install failed"
 
 log "Building backend..."
 pnpm run build || fail "Backend build failed"
 
-log "Restarting backend (PM2: get-my-guide-be)..."
-pm2 restart get-my-guide-be || fail "Failed to restart backend"
-
-# Frontend
 log "Installing frontend dependencies..."
 cd "$FRONTEND_DIR"
-pnpm install || fail "Frontend pnpm install failed"
+pnpm install --frozen-lockfile || fail "Frontend pnpm install failed"
 
 log "Building frontend..."
 pnpm run build || fail "Frontend build failed"
+
+log "Restarting backend (PM2: get-my-guide-be)..."
+pm2 restart get-my-guide-be || fail "Failed to restart backend"
 
 log "Restarting frontend (PM2: get-my-guide-fe)..."
 pm2 restart get-my-guide-fe || fail "Failed to restart frontend"
 
 log "Saving PM2 process list..."
 pm2 save
+
+log "Checking process health..."
+require_pm2_online get-my-guide-be
+require_pm2_online get-my-guide-fe
+require_http "https://getmyguide.in"
+require_http "https://api.getmyguide.in"
 
 log "Redeployment complete!"
 pm2 list
