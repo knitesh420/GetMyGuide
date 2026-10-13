@@ -85,4 +85,4 @@ jobs:
           key_path: ${{ runner.temp }}/deploy_key
           fingerprint: SHA256:ITr4/I38vffPiNCNj2lRI0ZXN+LW88iZGKxgTdBM3dQ
           command_timeout: 30m
-          script: bash -lc '/root/projects/GetMyGuide/script.sh'
+          script: bash -lc 'export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; /root/projects/GetMyGuide/script.sh'

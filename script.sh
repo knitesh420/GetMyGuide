@@ -15,6 +15,16 @@ log()  { echo -e "${GREEN}[DEPLOY]${NC} $1"; }
 warn() { echo -e "${YELLOW}[WARN]${NC}  $1"; }
 fail() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 
+# SSH deploy runs non-interactively. ~/.bashrc returns before nvm is loaded
+# when PS1 is unset, so pnpm and pm2 are missing unless we load nvm here.
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+	# shellcheck disable=SC1091
+	. "$NVM_DIR/nvm.sh"
+fi
+command -v pnpm >/dev/null 2>&1 || fail "pnpm not found after loading nvm"
+command -v pm2 >/dev/null 2>&1 || fail "pm2 not found after loading nvm"
+
 require_pm2_online() {
   local name="$1"
   local status=""
