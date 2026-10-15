@@ -16,7 +16,7 @@ export default function RefundAndCancellationPage() {
               Refund & Cancellation Policy
             </h1>
             <p className="text-lg text-muted-foreground">
-              Last Updated: October 26, 2023
+              Last Updated: October 15, 2026
             </p>
           </header>
 

@@ -16,7 +16,7 @@ export default function PrivacyPolicyPage() {
               Privacy Policy
             </h1>
             <p className="text-lg text-muted-foreground">
-              Last Updated: October 26, 2023
+              Last Updated: October 15, 2026
             </p>
           </header>
 
@@ -74,7 +74,9 @@ export default function PrivacyPolicyPage() {
             <p>
               If you have any questions about this Privacy Policy, please
               contact us at{" "}
-              <a href="mailto:privacy@GetMyGuide.in">privacy@GetMyGuide.in</a>.
+              <a href="mailto:Contact@getmyguide.in">
+                <strong>Contact@getmyguide.in</strong>
+              </a>.
             </p>
           </div>
         </motion.div>

@@ -13,8 +13,8 @@ export function Footer() {
     { key: "nav_home", href: "/" },
     { key: "nav_about", href: "/about" },
     { key: "nav_tours", href: "/services" },
-    { key: "nav_find_guides", href: "/find-guides" },
-    { key: "nav_become_guide", href: "/guides" },
+    { key: "nav_find_guides", href: "/register-tourist" },
+    { key: "nav_become_guide", href: "/register-guide" },
     { key: "nav_guide_availability", href: "/guide-availability" },
     { key: "nav_contact", href: "/contact" },
   ];
