@@ -4,7 +4,6 @@
 import {
   useEffect,
   useMemo,
-  useRef,
   useState,
   ChangeEvent,
   FormEvent,
@@ -28,14 +27,9 @@ import type {
 } from "@/lib/data";
 import { SUPPORTED_LANGUAGES } from "@/lib/supportedLanguages";
 import { guideImageUrl } from "@/lib/images";
-import {
-  compressImage,
-  validateUpload,
-  formatBytes,
-  IMAGE_ACCEPT,
-  DOCUMENT_ACCEPT,
-} from "@/lib/fileUpload";
+import { compressImage } from "@/lib/fileUpload";
 
+import { FileUploadCard } from "@/components/FileUploadCard";
 import { MultiSelect, Option } from "@/components/ui/multi-select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -52,13 +46,6 @@ import { GuidePageHeader, GuidePanel } from "@/components/guide";
 import {
   BadgeInfo,
   Lock,
-  Upload,
-  Trash2,
-  FileText,
-  Image as ImageIcon,
-  Loader2,
-  Eye,
-  CheckCircle2,
 } from "lucide-react";
 
 type GuideType = "normal" | "escort";
@@ -126,13 +113,6 @@ const Field = ({
 const sameLanguages = (a: string[], b: string[]) =>
   a.length === b.length && [...a].sort().join("|") === [...b].sort().join("|");
 
-// `doc.url` is an API route with no file extension, so the stored mime type is
-// the reliable signal; `originalName` covers older rows that never recorded one.
-const isPdf = (doc: GuideIdentityDocumentInfo) =>
-  doc.mimeType === "application/pdf" ||
-  /\.pdf$/i.test(doc.originalName ?? "") ||
-  /\.pdf(\?|$)/i.test(doc.url);
-
 /**
  * Identity documents are streamed from the API behind the guide's session, not
  * served from Cloudinary — `doc.url` is a path relative to the API origin. The
@@ -151,51 +131,25 @@ function ProfilePhotoSection({
   currentUrl: string;
 }) {
   const dispatch: AppDispatch = useDispatch();
-  const inputRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState<"save" | "remove" | null>(null);
 
   const existing = guideImageUrl(currentUrl);
 
-  useEffect(() => {
-    // Revoke the object URL when the pending file changes or on unmount.
-    return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-    };
-  }, [previewUrl]);
-
-  const onPick = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-selecting the same file
-    if (!file) return;
-    const error = validateUpload(file, "image");
-    if (error) {
-      toast.error(error);
-      return;
-    }
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
+  const onChange = async (file: File | null) => {
     setPending(file);
-    setPreviewUrl(URL.createObjectURL(file));
-  };
+    if (!file) return;
 
-  const clearPending = () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPending(null);
-    setPreviewUrl(null);
-  };
-
-  const onSave = async () => {
-    if (!pending) return;
     setBusy("save");
-    const compressed = await compressImage(pending);
+    const compressed = await compressImage(file);
     const result = await dispatch(updateGuideProfilePhoto(compressed));
     setBusy(null);
     if (updateGuideProfilePhoto.fulfilled.match(result)) {
       toast.success("Profile photo updated.");
-      clearPending();
+      setPending(null);
     } else {
       toast.error((result.payload as string) || "Failed to upload photo.");
+      setPending(null);
     }
   };
 
@@ -210,94 +164,24 @@ function ProfilePhotoSection({
     }
   };
 
-  const shown = previewUrl || existing;
-
   return (
-    <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
-      <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-50">
-        {shown ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={shown} alt="Profile" className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <ImageIcon className="h-8 w-8 text-slate-300" />
-          </div>
-        )}
-      </div>
-
-      <div className="min-w-0 flex-1 space-y-3">
-        <input
-          ref={inputRef}
-          type="file"
-          accept={IMAGE_ACCEPT}
-          className="hidden"
-          onChange={onPick}
-        />
-
-        {pending ? (
-          <>
-            <p className="text-xs text-slate-500">
-              Preview of <span className="font-medium text-slate-700">{pending.name}</span> ·{" "}
-              {formatBytes(pending.size)}. Save to apply.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" size="sm" onClick={onSave} disabled={busy !== null}>
-                {busy === "save" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="h-4 w-4" />
-                )}
-                Save Photo
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={clearPending}
-                disabled={busy !== null}
-              >
-                Cancel
-              </Button>
-            </div>
-          </>
-        ) : (
-          <>
-            <p className="text-xs text-slate-500">
-              JPG, PNG or WebP, up to 10&nbsp;MB. Large images are compressed
-              automatically.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => inputRef.current?.click()}
-                disabled={busy !== null}
-              >
-                <Upload className="h-4 w-4" />
-                {existing ? "Replace Photo" : "Upload Photo"}
-              </Button>
-              {existing && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="text-red-600 hover:text-red-700"
-                  onClick={onRemove}
-                  disabled={busy !== null}
-                >
-                  {busy === "remove" ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-4 w-4" />
-                  )}
-                  Remove
-                </Button>
-              )}
-            </div>
-          </>
-        )}
-      </div>
+    <div className="space-y-2">
+      <FileUploadCard
+        label="Profile photo"
+        kind="image"
+        value={pending}
+        onChange={onChange}
+        existingPreviewUrl={existing || undefined}
+        existingFileName={existing ? "Current profile photo" : null}
+        onRemoveExisting={onRemove}
+        disabled={busy !== null}
+        captureSelfie
+      />
+      {busy && (
+        <p role="status" className="text-xs text-slate-500">
+          {busy === "save" ? "Uploading profile photo…" : "Removing profile photo…"}
+        </p>
+      )}
     </div>
   );
 }
@@ -317,18 +201,13 @@ function DocumentCard({
   doc: GuideIdentityDocumentInfo | null;
 }) {
   const dispatch: AppDispatch = useDispatch();
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState<File | null>(null);
   const [busy, setBusy] = useState<"upload" | "delete" | null>(null);
 
-  const onPick = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
+  const onChange = async (file: File | null) => {
+    setPending(file);
     if (!file) return;
-    const error = validateUpload(file, "document");
-    if (error) {
-      toast.error(error);
-      return;
-    }
+
     setBusy("upload");
     const prepared = await compressImage(file);
     const result = await dispatch(uploadGuideIdentityDocument({ type, file: prepared }));
@@ -338,6 +217,7 @@ function DocumentCard({
     } else {
       toast.error((result.payload as string) || `Failed to upload ${label}.`);
     }
+    setPending(null);
   };
 
   const onDelete = async () => {
@@ -352,100 +232,32 @@ function DocumentCard({
   };
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-900">{label}</p>
-          <p className="text-xs text-slate-500">{hint}</p>
-        </div>
-        {doc ? (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700 ring-1 ring-inset ring-green-200">
-            <CheckCircle2 className="h-3 w-3" /> Uploaded
-          </span>
-        ) : (
-          <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
-            Not uploaded
-          </span>
-        )}
-      </div>
-
-      {doc && (
-        <div className="mb-3 flex items-center gap-3 rounded-md border border-slate-100 bg-slate-50 p-2.5">
-          {isPdf(doc) ? (
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded bg-white ring-1 ring-slate-200">
-              <FileText className="h-6 w-6 text-slate-400" />
-            </div>
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={documentUrl(doc.url)}
-              crossOrigin="use-credentials"
-              alt={label}
-              className="h-12 w-12 shrink-0 rounded object-cover ring-1 ring-slate-200"
-            />
-          )}
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-medium text-slate-700">
-              {doc.originalName || "Document on file"}
-            </p>
-            <p className="text-[11px] text-slate-400">
-              {formatBytes(doc.size)}
-              {doc.uploadedAt
-                ? ` · ${new Date(doc.uploadedAt).toLocaleDateString("en-IN")}`
-                : ""}
-            </p>
-          </div>
-          <a
-            href={documentUrl(doc.url)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700"
-          >
-            <Eye className="h-3.5 w-3.5" /> View
-          </a>
-        </div>
-      )}
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept={DOCUMENT_ACCEPT}
-        className="hidden"
-        onChange={onPick}
+    <div className="space-y-2">
+      <FileUploadCard
+        label={label}
+        kind="document"
+        value={pending}
+        onChange={onChange}
+        existingFileName={doc?.originalName ?? (doc ? "Document on file" : null)}
+        existingFileSize={doc?.size}
+        onRemoveExisting={onDelete}
+        disabled={busy !== null}
       />
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => inputRef.current?.click()}
-          disabled={busy !== null}
+      {doc && (
+        <a
+          href={documentUrl(doc.url)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex rounded-md px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
         >
-          {busy === "upload" ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Upload className="h-4 w-4" />
-          )}
-          {doc ? "Replace" : "Upload"}
-        </Button>
-        {doc && (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="text-red-600 hover:text-red-700"
-            onClick={onDelete}
-            disabled={busy !== null}
-          >
-            {busy === "delete" ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Trash2 className="h-4 w-4" />
-            )}
-            Delete
-          </Button>
-        )}
-      </div>
+          View current {label}
+        </a>
+      )}
+      {busy && (
+        <p role="status" className="text-xs text-slate-500">
+          {busy === "upload" ? `Uploading ${label}…` : `Removing ${label}…`}
+        </p>
+      )}
     </div>
   );
 }
@@ -730,7 +542,7 @@ const GuideProfilePage = () => {
       <GuidePanel>
         <FormSection
           title="Identity Documents"
-          description="Upload your Aadhaar card and government-issued tourist guide licence. PDF, JPG, PNG or WebP, up to 10 MB each. Visible only to you and our verification team."
+          description="Upload your Aadhaar card and government-issued tourist guide licence. PDF, JPG or PNG, up to 5 MB each. Visible only to you and our verification team."
         >
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <DocumentCard

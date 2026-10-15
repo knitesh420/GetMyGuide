@@ -2,6 +2,7 @@ import { createAsyncThunk } from "@reduxjs/toolkit";
 import { apiService } from "@/lib/service/api";
 import {
   GuideDocument,
+  GuideIdentityDocumentInfo,
   GuideIdentityDocumentType,
   GuideProfile,
   GuideSubscriptionRecord,
@@ -362,14 +363,14 @@ export interface PendingApproval {
   languages: string[];
   pan: string;
   profileImage: string;
-  /**
-   * Raw stored values — filenames for older uploads, Cloudinary URLs for newer
-   * ones. NOT usable as an href: use `documents` below. Linking to these
-   * directly is exactly what made every document 404.
-   */
+  /** Safe display names only; never Cloudinary URLs. */
   identityProofs: string[];
   /** The same documents, as authenticated admin routes that serve the file. */
   documents: GuideDocument[];
+  identityDocuments: {
+    aadhaar: GuideIdentityDocumentInfo | null;
+    guideLicence: GuideIdentityDocumentInfo | null;
+  };
   submittedAt: string;
   /**
    * True when the guide has paid but their subscription has not started, waiting

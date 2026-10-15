@@ -58,12 +58,13 @@ export function documentMimeType(value: string): string {
 }
 
 /**
- * Turn the raw `identityProofs` array into something an admin UI can link to.
+ * Turn the raw `identityProofs` array into session-authenticated document paths.
  *
  * The bug this exists to kill: identity proofs are stored as bare filenames
  * ("4f2c….pdf"), and the admin panel used that string straight as an href. The
  * browser resolved it against the *frontend* origin, so every document 404'd.
- * Documents are now always addressed through the authenticated route below.
+ * The two known document types use the typed stream route; positional paths are
+ * retained only for any unexpected extra legacy slots.
  */
 export function describeGuideDocuments(
 	guideAccountId: string,
@@ -71,7 +72,10 @@ export function describeGuideDocuments(
 ): GuideDocument[] {
 	return (identityProofs ?? []).map((value, index) => {
 		const remote = isRemoteDocument(value);
-		const base = `/guide/${guideAccountId}/documents/${index}`;
+		const type = index === 0 ? 'guideLicence' : index === 1 ? 'aadhaar' : null;
+		const base = type
+			? `/guides/admin/${guideAccountId}/identity-documents/${type}`
+			: `/guides/${guideAccountId}/documents/${index}`;
 
 		return {
 			index,

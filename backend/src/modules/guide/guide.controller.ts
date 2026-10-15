@@ -1,7 +1,7 @@
 import GuideService from '@services/guide';
 import TourGuideService from '@services/tourguide';
 import { uploadMulterImage } from '@utils/cloudinaryUpload';
-import { originalDownloadUrl, signedDeliveryUrl } from '@utils/cloudinaryDelivery';
+import { originalDownloadUrl } from '@utils/cloudinaryDelivery';
 import { documentMimeType, localDocumentPath } from '@utils/guideDocuments';
 import axios from 'axios';
 import { NextFunction, Request, Response } from 'express';
@@ -457,12 +457,10 @@ async function updateAdminNotes(req: Request, res: Response, next: NextFunction)
  * server's local disk (older uploads). Neither is ever handed to the browser as
  * a URL:
  *
- *   - Cloudinary proofs are uploaded as `authenticated`, so their bare URL is a
- *     401, and even a signed one would sit in browser history readable by anyone
- *     who found it (`signedDeliveryUrl` mints no expiry). Streaming keeps the
- *     session as the only key.
+ *   - Cloudinary proofs are uploaded as `authenticated`, and a signed delivery
+ *     URL would expose a bearer link outside the caller's session.
  *   - PDFs cannot be fetched from the CDN at all while the account's "Allow
- *     delivery of PDF and ZIP files" setting is off — signed or not, it is 401.
+ *     delivery of PDF and ZIP files" setting is off.
  *     So we fetch through the Admin API download endpoint, which is not subject
  *     to that gate. See `originalDownloadUrl`.
  */
@@ -476,10 +474,14 @@ async function streamStoredDocument(
 	const disposition = `${asAttachment ? 'attachment' : 'inline'}; filename="${filename}"`;
 
 	if (document.storage === 'remote') {
-		// Prefer the download endpoint (works for PDFs regardless of the account
-		// delivery setting); fall back to a signed CDN URL for anything it cannot
-		// address, such as a stored value with no file extension.
-		const source = originalDownloadUrl(document.value) ?? signedDeliveryUrl(document.value);
+		// Never fall back to Cloudinary delivery: authenticated KYC assets must
+		// only be fetched server-side through the Admin API.
+		const source = originalDownloadUrl(document.value);
+		if (!source) {
+			return next(
+				new ServerError('The document store could not create a secure download for this document.')
+			);
+		}
 
 		let upstream;
 		try {

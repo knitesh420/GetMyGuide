@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { AdminPanel, EmptyState, PageHeader } from "@/components/admin/ui";
 import { SkeletonList } from "@/components/animations/Skeletons";
-import { GuideDocumentLinks } from "@/components/admin/GuideDocumentLinks";
+import { DocumentViewer } from "@/components/admin/DocumentViewer";
 
 const shortDate = (value?: string) =>
   value
@@ -182,8 +182,15 @@ export default function AdminGuideApprovalsPage() {
 
                   <div className="mt-4">
                     <p className="text-xs font-medium text-slate-400">Documents</p>
-                    <div className="mt-1">
-                      <GuideDocumentLinks documents={guide.documents ?? []} />
+                    <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                      <DocumentViewer
+                        label="Aadhaar Card"
+                        document={guide.identityDocuments?.aadhaar ?? null}
+                      />
+                      <DocumentViewer
+                        label="Guide Licence"
+                        document={guide.identityDocuments?.guideLicence ?? null}
+                      />
                     </div>
                   </div>
 

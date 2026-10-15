@@ -1,7 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useState, useSyncExternalStore } from "react";
-import Image from "next/image";
+import { FormEvent, useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useDispatch } from "react-redux";
@@ -15,11 +14,17 @@ import {
 import { useAuth } from "@/lib/hooks/useAuth";
 import RoleGuard from "@/components/auth/RoleGuard";
 import { validateUpload } from "@/lib/fileUpload";
+import {
+  GUIDE_MEMBERSHIP_DAYS,
+  GUIDE_MEMBERSHIP_FEE,
+  GUIDE_TRIAL_DAYS,
+} from "@/lib/guideMembership";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MultiSelect, Option } from "@/components/ui/multi-select";
+import { FileUploadCard } from "@/components/FileUploadCard";
 import {
   Select,
   SelectContent,
@@ -120,19 +125,12 @@ function BecomeGuidePage() {
   const [languages, setLanguages] = useState<string[]>([]);
 
   const [profileFile, setProfileFile] = useState<File | null>(null);
-  const [profilePreview, setProfilePreview] = useState<string | null>(null);
   const [licenceFile, setLicenceFile] = useState<File | null>(null);
   const [aadhaarFile, setAadhaarFile] = useState<File | null>(null);
 
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    return () => {
-      if (profilePreview) URL.revokeObjectURL(profilePreview);
-    };
-  }, [profilePreview]);
 
   useEffect(() => {
     if (!isAuthenticated || !user) return;
@@ -148,25 +146,10 @@ function BecomeGuidePage() {
     !!licenceFile &&
     !!aadhaarFile &&
     disclaimerAccepted;
-
-  const handleProfileFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) {
-      setProfileFile(null);
-      setProfilePreview(null);
-      return;
-    }
-    const error = validateUpload(file, "image");
-    if (error) {
-      setProfileFile(null);
-      setProfilePreview(null);
-      setFormError(error);
-      e.target.value = "";
-      return;
-    }
-    setProfileFile(file);
-    setProfilePreview(URL.createObjectURL(file));
-  };
+  const phoneError =
+    phone.length > 0 && phone.length !== 10
+      ? "Phone number must be exactly 10 digits."
+      : "";
 
   const sendVerificationCode = async () => {
     const normalizedEmail = email.trim().toLowerCase();
@@ -174,7 +157,7 @@ function BecomeGuidePage() {
     if (!/\S+@\S+\.\S+/.test(normalizedEmail)) {
       return setFormError("Please enter a valid email address.");
     }
-    if (phone.length !== 10) return setFormError("Phone number must be exactly 10 digits.");
+    if (phone.length !== 10) return;
     if (password.length < 8 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
       return setFormError("Password must be at least 8 characters and include uppercase, lowercase, and a number.");
     }
@@ -281,8 +264,7 @@ function BecomeGuidePage() {
         <header>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Register as a Certified Guide</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Submit your account details, guide profile, photo and required identity documents together.
-            Your application will be sent for review after email verification.
+            {`Submit your account details, guide profile, photo and required identity documents together. Verify your email to send your application for review. Once an admin approves it, you get a ${GUIDE_TRIAL_DAYS}-day free trial. After the trial ends, you need a membership of ₹${GUIDE_MEMBERSHIP_FEE} for ${GUIDE_MEMBERSHIP_DAYS} days to stay listed.`}
           </p>
         </header>
 
@@ -290,11 +272,11 @@ function BecomeGuidePage() {
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <FormSection
               title="Account"
-              description="Create your guide account and verify your email here."
+              description="Create your account using your full name and contact details."
             >
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div>
-                  <Label htmlFor="name">Name</Label>
+                  <Label htmlFor="name">Full name</Label>
                   <Input
                     id="name"
                     value={name}
@@ -305,7 +287,7 @@ function BecomeGuidePage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">Email address</Label>
                   <Input
                     id="email"
                     type="email"
@@ -316,94 +298,87 @@ function BecomeGuidePage() {
                     required
                   />
                 </div>
-                <>
-                    <div>
-                      <Label htmlFor="countryCode">Country Code</Label>
-                      <Select value={countryCode} onValueChange={setCountryCode} disabled={otpSent || submitting}>
-                        <SelectTrigger id="countryCode" className="bg-white">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {COUNTRY_CODES.map((item) => (
-                            <SelectItem key={item.code} value={item.code}>{item.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="accountPassword">Password</Label>
-                      <Input
-                        id="accountPassword"
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        disabled={otpSent || submitting}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="confirmPassword">Confirm Password</Label>
-                      <Input
-                        id="confirmPassword"
-                        type="password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        disabled={otpSent || submitting}
-                        required
-                      />
-                    </div>
-                </>
-                {!otpSent && (
-                  <div className="md:col-span-2">
-                    <p className="text-sm text-slate-600">
-                      Already registered? <Link href="/signin" className="font-semibold underline">Sign in</Link> to continue.
-                    </p>
-                  </div>
-                )}
-              </div>
-              {otpSent && (
-                <div className="mt-5 flex flex-col gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 sm:flex-row sm:items-end">
-                  <div className="flex-1">
-                    <Label htmlFor="registrationOtp">Email verification code</Label>
+                <div>
+                  <Label htmlFor="phone">Phone number</Label>
+                  <div className="mt-2 flex h-11 min-w-0 items-center overflow-hidden rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                    <select
+                      id="countryCode"
+                      aria-label="Country calling code"
+                      value={countryCode}
+                      onChange={(event) => setCountryCode(event.target.value)}
+                      disabled={otpSent || submitting}
+                      className="h-full w-[90px] shrink-0 border-0 bg-transparent px-3 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {COUNTRY_CODES.map((item) => (
+                        <option key={item.code} value={item.code}>
+                          {item.code}
+                        </option>
+                      ))}
+                    </select>
                     <Input
-                      id="registrationOtp"
+                      id="phone"
+                      type="tel"
                       inputMode="numeric"
-                      autoComplete="one-time-code"
-                      maxLength={6}
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                      placeholder="6-digit code"
+                      maxLength={10}
+                      placeholder="10-digit mobile number"
+                      value={phone}
+                      onChange={(event) =>
+                        setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))
+                      }
+                      disabled={otpSent || submitting}
+                      required
+                      aria-invalid={!!phoneError}
+                      aria-describedby={phoneError ? "phone-error" : undefined}
+                      className="h-full min-w-0 flex-1 rounded-none border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                     />
                   </div>
-                  <Button type="button" disabled={submitting} onClick={verifyEmail}>
-                    Verify OTP & Complete Registration
-                  </Button>
-                  <Button type="button" variant="outline" disabled={submitting} onClick={resendVerificationCode}>
-                    Resend Code
-                  </Button>
+                  {phoneError && (
+                    <p id="phone-error" role="alert" className="mt-1 text-sm text-red-600">
+                      {phoneError}
+                    </p>
+                  )}
                 </div>
-              )}
-            </FormSection>
-
-            <FormSection
-              title="Contact & Guide Type"
-              description="These profile details are included in your guide application."
-            >
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div>
-                  <Label htmlFor="phone">Phone Number</Label>
+                  <Label htmlFor="accountPassword">Password</Label>
                   <Input
-                    id="phone"
-                    type="tel"
-                    inputMode="numeric"
-                    maxLength={10}
-                    placeholder="10-digit mobile number"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    id="accountPassword"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     disabled={otpSent || submitting}
                     required
                   />
                 </div>
+                <div>
+                  <Label htmlFor="confirmPassword">Confirm password</Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    disabled={otpSent || submitting}
+                    required
+                  />
+                </div>
+                {!otpSent && (
+                  <div className="md:col-span-2">
+                    <p className="text-sm text-slate-600">
+                      Already registered?{" "}
+                      <Link href="/signin" className="font-semibold underline">
+                        Sign in
+                      </Link>{" "}
+                      to continue.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </FormSection>
+
+            <FormSection
+              title="Guide profile"
+              description="These profile details are included in your guide application."
+            >
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div>
                   <Label htmlFor="city">City</Label>
                   <Input
@@ -458,100 +433,100 @@ function BecomeGuidePage() {
             </FormSection>
 
             <FormSection
-            title="Photos & Documents"
-            description="Your photo is public. Your licence and Aadhaar are private and seen only by admins."
+              title="Photo and documents"
+              description="Your profile photo is public. Identity documents are private and visible only to admins."
             >
-                    <div className="grid grid-cols-1 items-start gap-8 md:grid-cols-2">
-                      <div className="md:col-span-2">
-                        <Label className="mb-2 block">Profile Photo (required)</Label>
-                        <div className="mt-2 flex items-center gap-4">
-                          {profilePreview && (
-                            <Image
-                              src={profilePreview}
-                              alt="Profile preview"
-                              width={80}
-                              height={80}
-                              className="h-20 w-20 rounded-full object-cover"
-                            />
-                          )}
-                          <Input
-                            type="file"
-                            onChange={handleProfileFileChange}
-                            accept=".jpg,.jpeg,.png,.webp"
-                            disabled={otpSent || submitting}
-                            required
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <Label className="mb-2 block">Guide Licence (required)</Label>
-                        <Input
-                          type="file"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0] ?? null;
-                            const error = file ? validateUpload(file, "document") : null;
-                            if (error) {
-                              setLicenceFile(null);
-                              setFormError(error);
-                              e.target.value = "";
-                            } else {
-                              setLicenceFile(file);
-                            }
-                          }}
-                          accept=".jpg,.jpeg,.png,.webp,.pdf"
-                          disabled={otpSent || submitting}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label className="mb-2 block">Aadhaar (required)</Label>
-                        <Input
-                          type="file"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0] ?? null;
-                            const error = file ? validateUpload(file, "document") : null;
-                            if (error) {
-                              setAadhaarFile(null);
-                              setFormError(error);
-                              e.target.value = "";
-                            } else {
-                              setAadhaarFile(file);
-                            }
-                          }}
-                          accept=".jpg,.jpeg,.png,.webp,.pdf"
-                          disabled={otpSent || submitting}
-                          required
-                        />
-                      </div>
-                    </div>
+              <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <FileUploadCard
+                    label="Profile photo"
+                    kind="image"
+                    value={profileFile}
+                    onChange={setProfileFile}
+                    required
+                    disabled={otpSent || submitting}
+                    captureSelfie
+                  />
+                </div>
+                <FileUploadCard
+                  label="Guide Licence"
+                  kind="document"
+                  value={licenceFile}
+                  onChange={setLicenceFile}
+                  required
+                  disabled={otpSent || submitting}
+                />
+                <FileUploadCard
+                  label="Aadhaar Card"
+                  kind="document"
+                  value={aadhaarFile}
+                  onChange={setAadhaarFile}
+                  required
+                  disabled={otpSent || submitting}
+                />
+              </div>
 
-                    <label className="mt-6 flex items-start gap-3 text-sm text-slate-600">
-                      <input
-                        type="checkbox"
-                        className="mt-1"
-                        checked={disclaimerAccepted}
-                        onChange={(e) => setDisclaimerAccepted(e.target.checked)}
-                        disabled={otpSent || submitting}
-                      />
-                      <span>
-                        I confirm the details and documents above are genuine, and I agree to
-                        GetMyGuide&apos;s{" "}
-                        <Link href="/terms" className="underline">
-                          terms
-                        </Link>
-                        .
-                      </span>
-                    </label>
+              <label className="mt-6 flex items-start gap-3 text-sm text-slate-600">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={disclaimerAccepted}
+                  onChange={(e) => setDisclaimerAccepted(e.target.checked)}
+                  disabled={otpSent || submitting}
+                />
+                <span>
+                  I confirm the details and documents above are genuine, and I agree to
+                  GetMyGuide&apos;s{" "}
+                  <Link href="/terms" className="underline">
+                    terms
+                  </Link>
+                  .
+                </span>
+              </label>
             </FormSection>
 
-            <div className="flex items-center justify-end gap-4 bg-slate-50 px-6 py-4">
-              {formError && <p className="text-sm text-red-600">{formError}</p>}
-              {!otpSent && (
-                <Button type="submit" disabled={submitting || !guideProfileReady}>
-                  {submitting ? "Submitting..." : "Submit Registration"}
-                </Button>
+            <FormSection
+              title="Email verification and submit"
+              description="Verify your email to send your application to the admin review queue."
+            >
+              {otpSent ? (
+                <div className="flex flex-col gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 sm:flex-row sm:items-end">
+                  <div className="flex-1">
+                    <Label htmlFor="registrationOtp">Email verification code</Label>
+                    <Input
+                      id="registrationOtp"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      placeholder="6-digit code"
+                    />
+                  </div>
+                  <Button type="button" disabled={submitting} onClick={verifyEmail}>
+                    Verify OTP &amp; Submit Application
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={submitting}
+                    onClick={resendVerificationCode}
+                  >
+                    Resend Code
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  {formError && <p role="alert" className="text-sm text-red-600">{formError}</p>}
+                  <Button type="submit" disabled={submitting || !guideProfileReady}>
+                    {submitting ? "Sending verification code..." : "Submit Registration"}
+                  </Button>
+                </div>
               )}
-            </div>
+              {otpSent && formError && (
+                <p role="alert" className="mt-3 text-sm text-red-600">{formError}</p>
+              )}
+            </FormSection>
           </div>
         </form>
       </div>

@@ -9,7 +9,11 @@ import { AccountDB, ContactInquiryDB, GuideDB, InvoiceDB, TransactionDB } from '
 import IGuide, { GuideIdentityDocument, GuideIdentityDocumentType } from '@mongo/types/guide';
 import ITransaction from '@mongo/types/transaction';
 import { displayApprovalStatus, isGuideApproved } from '@utils/guideApproval';
-import { describeGuideDocuments } from '@utils/guideDocuments';
+import {
+	describeGuideDocuments,
+	documentMimeType,
+	isRemoteDocument,
+} from '@utils/guideDocuments';
 import { activeMembershipFilter, isMembershipActive } from '@utils/guideMembership';
 import { verifyRazorpaySignature } from '@utils/paymentVerify';
 import { Types } from 'mongoose';
@@ -75,6 +79,50 @@ function publicIdentityDocument(
 		size: doc.size ?? null,
 		uploadedAt: doc.uploadedAt ?? null,
 	};
+}
+
+function publicLegacyIdentityDocument(
+	identityProofs: string[] | undefined,
+	type: GuideIdentityDocumentType,
+	viewPath: string
+) {
+	const legacyIndex = type === 'guideLicence' ? 0 : 1;
+	const value = identityProofs?.[legacyIndex];
+	if (!value) return null;
+
+	const filename = value.split(/[\\/]/).pop()?.split(/[?#]/)[0] ?? null;
+	return {
+		url: viewPath,
+		downloadUrl: `${viewPath}?download=1`,
+		mimeType: documentMimeType(value.split(/[?#]/)[0]),
+		originalName: filename,
+		size: null,
+		uploadedAt: null,
+	};
+}
+
+function guideIdentityDocuments(
+	guide: Pick<IGuide, 'identityDocuments' | 'identityProofs'> | null | undefined,
+	urlFor: (type: GuideIdentityDocumentType) => string
+) {
+	const identityDocument = (type: GuideIdentityDocumentType) =>
+		publicIdentityDocument(guide?.identityDocuments?.[type], urlFor(type)) ??
+		publicLegacyIdentityDocument(guide?.identityProofs, type, urlFor(type));
+
+	return {
+		aadhaar: identityDocument('aadhaar'),
+		guideLicence: identityDocument('guideLicence'),
+	};
+}
+
+function safeGuideDocuments(guideAccountId: string, identityProofs: string[] | undefined) {
+	return describeGuideDocuments(guideAccountId, identityProofs).map(({ value, ...document }) => document);
+}
+
+function publicIdentityProofNames(identityProofs: string[] | undefined) {
+	return (identityProofs ?? []).map((value) =>
+		isRemoteDocument(value) ? value.split(/[\\/]/).pop()?.split(/[?#]/)[0] ?? 'document' : value
+	);
 }
 
 interface GuideProfileData {
@@ -256,20 +304,14 @@ class GuideService {
 			city: guide?.city || '',
 			pan: guide?.pan || '',
 			profileImage: guide?.profileImage || '',
-			identityProofs: guide?.identityProofs || [],
+			identityProofs: publicIdentityProofNames(guide?.identityProofs),
 			// Structured, individually-managed KYC documents. Only the fields the
 			// guide's own UI needs (never the admin-only audit trail). `null` for a
 			// slot the guide has not uploaded yet.
-			identityDocuments: {
-				aadhaar: publicIdentityDocument(
-					guide?.identityDocuments?.aadhaar,
-					'/guides/profile/documents/aadhaar/view'
-				),
-				guideLicence: publicIdentityDocument(
-					guide?.identityDocuments?.guideLicence,
-					'/guides/profile/documents/guideLicence/view'
-				),
-			},
+			identityDocuments: guideIdentityDocuments(
+				guide,
+				(type) => `/guides/profile/documents/${type}/view`
+			),
 			// Legacy field names some existing frontend code still reads
 			serviceLocations: guide?.city ? [guide.city] : [],
 			photo: guide?.profileImage || '',
@@ -1169,12 +1211,7 @@ class GuideService {
 				membershipPaidAt: profile?.membershipPaidAt ?? null,
 				refundStatus: profile?.membershipRefund?.status ?? null,
 				profileImage: profile?.profileImage ?? '',
-				// [licence, aadhaar] in upload order. Raw stored values — filenames or
-				// Cloudinary URLs, NOT links. The admin table only counts them; the
-				// detail endpoint is what hands back openable `documents`, because
-				// describing one stats the disk and doing that for every guide on
-				// every list load buys nothing.
-				identityProofs: profile?.identityProofs ?? [],
+				identityProofs: publicIdentityProofNames(profile?.identityProofs),
 				// The notes themselves are only served by the detail endpoint; the
 				// table just needs to know whether there is anything to read.
 				hasAdminNotes: !!profile?.adminNotes,
@@ -1268,20 +1305,14 @@ class GuideService {
 			membershipHistory: guide?.membershipHistory ?? [],
 
 			// ---- Documents (admin-only links) ----
-			documents: describeGuideDocuments(account._id.toString(), guide?.identityProofs),
+			documents: safeGuideDocuments(account._id.toString(), guide?.identityProofs),
 			// Structured documents the guide manages themselves post-registration.
 			// Additive to `documents` above (the legacy positional store); admins
 			// see both so nothing a guide re-uploads is hidden from review.
-			identityDocuments: {
-				aadhaar: publicIdentityDocument(
-					guide?.identityDocuments?.aadhaar,
-					`/guides/admin/${account._id.toString()}/identity-documents/aadhaar`
-				),
-				guideLicence: publicIdentityDocument(
-					guide?.identityDocuments?.guideLicence,
-					`/guides/admin/${account._id.toString()}/identity-documents/guideLicence`
-				),
-			},
+			identityDocuments: guideIdentityDocuments(
+				guide,
+				(type) => `/guides/admin/${account._id.toString()}/identity-documents/${type}`
+			),
 
 			// ---- Internal notes (admin-only) ----
 			adminNotes: guide?.adminNotes ?? '',
@@ -1383,17 +1414,27 @@ class GuideService {
 	 */
 	private async resolveIdentityDocument(accountId: string, type: GuideIdentityDocumentType) {
 		const guide = await GuideDB.findOne({ accountId: new Types.ObjectId(accountId) })
-			.select('identityDocuments')
+			.select('identityDocuments identityProofs')
 			.lean();
 
 		const document = guide?.identityDocuments?.[type];
-		if (!document?.url) {
+		if (document?.url) {
+			return {
+				value: document.url,
+				storage: document.storage === 'remote' ? ('remote' as const) : ('local' as const),
+				label: IDENTITY_DOCUMENT_LABELS[type],
+			};
+		}
+
+		const legacyIndex = type === 'guideLicence' ? 0 : 1;
+		const legacyValue = guide?.identityProofs?.[legacyIndex];
+		if (!legacyValue) {
 			throw new NotFoundError(`No ${IDENTITY_DOCUMENT_LABELS[type]} has been uploaded`);
 		}
 
 		return {
-			value: document.url,
-			storage: document.storage === 'remote' ? ('remote' as const) : ('local' as const),
+			value: legacyValue,
+			storage: isRemoteDocument(legacyValue) ? ('remote' as const) : ('local' as const),
 			label: IDENTITY_DOCUMENT_LABELS[type],
 		};
 	}
@@ -1759,13 +1800,17 @@ class GuideService {
 				languages: profile.languages,
 				pan: profile.pan ?? '',
 				profileImage: profile.profileImage,
+				identityProofs: publicIdentityProofNames(profile.identityProofs),
 				// [licence, aadhaar] in upload order — this is what the admin reviews.
 				// Kept for backward compatibility, but these are raw filenames/URLs:
 				// link to `documents` below instead, which routes through the
 				// authenticated download endpoint. Using identityProofs as an href is
 				// what made every document 404.
-				identityProofs: profile.identityProofs,
-				documents: describeGuideDocuments(profile.accountId.toString(), profile.identityProofs),
+				documents: safeGuideDocuments(profile.accountId.toString(), profile.identityProofs),
+				identityDocuments: guideIdentityDocuments(
+					profile,
+					(type) => `/guides/admin/${profile.accountId.toString()}/identity-documents/${type}`
+				),
 				submittedAt: profile.createdAt,
 				// So the reviewer knows a rejection will trigger an automatic refund.
 				membershipPendingActivation: !!profile.membershipPendingActivation,

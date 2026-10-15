@@ -5,19 +5,18 @@
  * fast, and keep large phone photos from being rejected for size).
  */
 
-export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB — matches the backend multer limit.
+export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5MB — matches the guide multer limits.
 
 export const IMAGE_MIME_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 export const DOCUMENT_MIME_TYPES = [
   "image/jpeg",
   "image/jpg",
   "image/png",
-  "image/webp",
   "application/pdf",
 ];
 
 export const IMAGE_ACCEPT = ".jpg,.jpeg,.png,.webp";
-export const DOCUMENT_ACCEPT = ".jpg,.jpeg,.png,.webp,.pdf";
+export const DOCUMENT_ACCEPT = ".jpg,.jpeg,.png,.pdf";
 
 /** Human-readable file size, e.g. "2.4 MB". */
 export function formatBytes(bytes: number | null | undefined): string {
@@ -36,7 +35,7 @@ export function validateUpload(
   if (!allowed.includes(file.type)) {
     return kind === "image"
       ? "Please upload a JPG, PNG or WebP image."
-      : "Please upload a PDF, JPG, PNG or WebP file.";
+      : "Please upload a PDF, JPG or PNG file.";
   }
   if (file.size > MAX_UPLOAD_BYTES) {
     return `File is too large (max ${formatBytes(MAX_UPLOAD_BYTES)}).`;

@@ -268,6 +268,7 @@ export interface GuideProfile {
   license?: string;
   photo?: string;
   profileImage?: string;
+  /** Safe display names only; never Cloudinary URLs. */
   identityProofs?: string[];
   isApproved: boolean;
   profileComplete: boolean;
@@ -316,7 +317,7 @@ export interface GuideProfile {
   pricing?: GuidePricing | null;
   /**
    * Structured, individually-managed KYC documents (Aadhaar, Guide Licence).
-   * Each slot is null until the guide uploads it. Additive to `identityProofs`.
+   * Each slot is null until the guide uploads it.
    */
   identityDocuments?: {
     aadhaar: GuideIdentityDocumentInfo | null;
@@ -658,12 +659,7 @@ export interface AdminGuide {
   trialExpiryDate?: string | null;
   trialUsedAt?: string | null;
   profileImage: string;
-  /**
-   * Raw stored values — Cloudinary URLs for recent uploads, bare filenames for
-   * older ones. NOT linkable: use `documents` instead. Linking straight to these
-   * is what made every KYC document 404, because a filename resolves against the
-   * frontend origin.
-   */
+  /** Safe display names only; never Cloudinary URLs. */
   identityProofs?: string[];
   /** The same documents, as admin-only routes that actually serve the file. */
   documents?: GuideDocument[];
@@ -679,13 +675,12 @@ export interface AdminGuide {
 
 /**
  * A KYC document as the backend describes it. `url` / `downloadUrl` are paths
- * relative to the API origin (prefix them with NEXT_PUBLIC_API_URL) and require
- * an admin session — see GET /guide/:id/documents/:index.
+ * relative to the API origin and require an admin session. They never expose
+ * the stored Cloudinary URL.
  */
 export interface GuideDocument {
   index: number;
   label: string;
-  value: string;
   storage: "remote" | "local";
   url: string;
   downloadUrl: string;
@@ -757,6 +752,10 @@ export interface AdminGuideDetail {
   membershipHistory: { plan?: string; startDate?: string; expiryDate?: string }[];
 
   documents: GuideDocument[];
+  identityDocuments?: {
+    aadhaar: GuideIdentityDocumentInfo | null;
+    guideLicence: GuideIdentityDocumentInfo | null;
+  };
 
   adminNotes: string;
   adminNotesUpdatedAt: string | null;

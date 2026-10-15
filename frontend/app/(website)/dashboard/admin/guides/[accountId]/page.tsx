@@ -35,7 +35,7 @@ import {
   AdminTableHead,
   AdminTableRow,
 } from "@/components/admin/ui";
-import { GuideDocumentLinks } from "@/components/admin/GuideDocumentLinks";
+import { DocumentViewer } from "@/components/admin/DocumentViewer";
 import { CashPaymentPanel } from "@/components/admin/CashPaymentPanel";
 
 const rupees = new Intl.NumberFormat("en-IN", {
@@ -323,7 +323,14 @@ export default function AdminGuideDetailPage() {
         <AdminPanel>
           <AdminSection title="Identity documents" icon={FileText}>
             <div className="space-y-3">
-              <GuideDocumentLinks documents={detail.documents} />
+              <DocumentViewer
+                label="Aadhaar Card"
+                document={detail.identityDocuments?.aadhaar ?? null}
+              />
+              <DocumentViewer
+                label="Guide Licence"
+                document={detail.identityDocuments?.guideLicence ?? null}
+              />
               <p className="flex items-center gap-1.5 text-xs text-slate-400">
                 <Lock className="h-3 w-3" />
                 Only admins can open these.

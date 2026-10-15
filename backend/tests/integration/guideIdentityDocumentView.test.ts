@@ -1,12 +1,3 @@
-// tests/setup/mocks.ts replaces `cloudinary` and `@config/cloudinary` with
-// stubs for every other suite. This one must not get them: it asserts that the
-// route builds a *signed* Admin-API download URL, which only the real SDK can
-// produce — and the stub has no `config()` at all, so the beforeAll below died
-// with "cloudinary.config is not a function".
-jest.unmock('cloudinary');
-jest.unmock('@config/cloudinary');
-
-import cloudinary from '@config/cloudinary';
 import { AccountDB, GuideDB } from '@mongo';
 import AuthService from '@services/auth';
 import axios from 'axios';
@@ -23,12 +14,17 @@ jest.mock('@provider/email', () => ({
 
 // The route streams from Cloudinary; keep the test offline.
 jest.mock('axios');
+jest.mock('@utils/cloudinaryDelivery', () => ({
+	originalDownloadUrl: () =>
+		'https://api.cloudinary.com/v1_1/test/image/download?signature=test-signature',
+}));
 
 const CLOUDINARY_URL =
 	'https://res.cloudinary.com/dmpz3k4mb/image/upload/v1784403764/getmyguide/guides/identity-proofs/abc123.pdf';
 
 const GUIDE = { name: 'Doc Guide', email: 'docguide@example.com', phone: '9999999999', password: 'password123' };
 const OTHER = { name: 'Other Guide', email: 'other@example.com', phone: '9999999998', password: 'password123' };
+const ADMIN = { name: 'Doc Admin', email: 'docadmin@example.com', phone: '9999999997', password: 'password123' };
 
 /** A guide account with `identityDocuments.aadhaar` already uploaded. */
 async function seedGuide(creds: typeof GUIDE, withDocument = true) {
@@ -65,20 +61,19 @@ async function seedGuide(creds: typeof GUIDE, withDocument = true) {
 	return { token: login.accessToken, accountId: account!._id.toString() };
 }
 
+async function seedAdmin() {
+	const admin = await AuthService.signup({ ...ADMIN, role: 'admin' });
+	return admin.accessToken;
+}
+
 describe('Guide identity document streaming', () => {
 	let app: express.Application;
 	let token: string;
+	let adminToken: string;
+	let accountId: string;
 
 	beforeAll(async () => {
 		await connectTestDB();
-		// The test env carries no Cloudinary credentials, and signing a download
-		// URL needs one — without this the util degrades to a CDN URL and the
-		// assertions below would pass over the code path they exist to cover.
-		cloudinary.config({
-			cloud_name: 'test-cloud',
-			api_key: '000000000000000',
-			api_secret: 'test-secret',
-		});
 		app = express();
 		configServer(app as express.Express);
 	});
@@ -89,7 +84,8 @@ describe('Guide identity document streaming', () => {
 
 	beforeEach(async () => {
 		await clearDatabase();
-		({ token } = await seedGuide(GUIDE));
+		({ token, accountId } = await seedGuide(GUIDE));
+		adminToken = await seedAdmin();
 	});
 
 	/** Cloudinary answering with PDF bytes. */
@@ -142,6 +138,37 @@ describe('Guide identity document streaming', () => {
 		expect(url).toContain('/image/download');
 		expect(url).toContain('signature=');
 		expect(url).not.toContain('res.cloudinary.com');
+	});
+
+	it('lets an admin stream a typed KYC document with inline PDF headers', async () => {
+		mockUpstream();
+
+		const res = await request(app)
+			.get(`/guides/admin/${accountId}/identity-documents/aadhaar`)
+			.set('Authorization', `Bearer ${adminToken}`)
+			.expect(200);
+
+		expect(res.headers['content-type']).toContain('application/pdf');
+		expect(res.headers['content-disposition']).toContain('inline');
+		expect(res.headers['cache-control']).toBe('private, no-store');
+		expect(res.body.toString()).toBe('%PDF-1.4\n');
+		const [source] = (axios.get as jest.Mock).mock.calls[0];
+		expect(source).toContain('api.cloudinary.com');
+		expect(source).not.toContain('res.cloudinary.com');
+	});
+
+	it('forbids a non-admin from streaming another guide document', async () => {
+		await request(app)
+			.get(`/guides/admin/${accountId}/identity-documents/aadhaar`)
+			.set('Authorization', `Bearer ${token}`)
+			.expect(403);
+	});
+
+	it('returns 404 when a typed document slot is missing', async () => {
+		await request(app)
+			.get(`/guides/admin/${accountId}/identity-documents/guideLicence`)
+			.set('Authorization', `Bearer ${adminToken}`)
+			.expect(404);
 	});
 
 	it('honours ?download=1 with an attachment disposition', async () => {

@@ -16,6 +16,8 @@ const storage = multer.diskStorage({
 	},
 });
 
+export const GUIDE_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+
 export const cleanupGuideProfileUploads = async (req: Request): Promise<void> => {
 	const files = Object.values(
 		(req.files as { [fieldname: string]: Express.Multer.File[] } | undefined) ?? {}
@@ -47,7 +49,7 @@ const profileFileFilter = (
 		return cb(new Error('Only JPG, PNG, WEBP images are allowed'));
 	}
 	if (file.fieldname === 'identityProofs') {
-		const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+		const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
 		if (allowedTypes.includes(file.mimetype)) {
 			return cb(null, true);
 		}
@@ -60,7 +62,7 @@ const guideProfileMulterMiddleware = multer({
 	storage,
 	fileFilter: profileFileFilter,
 	limits: {
-		fileSize: 10 * 1024 * 1024, // 10MB per file
+		fileSize: GUIDE_UPLOAD_MAX_BYTES,
 	},
 }).fields([
 	{ name: 'profileImage', maxCount: 1 },
@@ -88,8 +90,8 @@ export const parseGuideProfileFormData = (req: Request, res: Response, next: Nex
 // single file under its own field name, so a mismatched field is simply ignored.
 
 const IMAGE_MIME_TYPES = ['image/png', 'image/webp', 'image/jpg', 'image/jpeg'];
-// Documents additionally allow PDF and WebP, per the profile spec.
-const DOCUMENT_MIME_TYPES = ['application/pdf', 'image/png', 'image/webp', 'image/jpg', 'image/jpeg'];
+// Identity documents support PDFs and common JPEG/PNG image scans.
+const DOCUMENT_MIME_TYPES = ['application/pdf', 'image/png', 'image/jpg', 'image/jpeg'];
 
 const profilePhotoMulter = multer({
 	storage,
@@ -97,16 +99,16 @@ const profilePhotoMulter = multer({
 		if (IMAGE_MIME_TYPES.includes(file.mimetype)) return cb(null, true);
 		return cb(new Error('Only JPG, PNG, WEBP images are allowed'));
 	},
-	limits: { fileSize: 10 * 1024 * 1024 },
+	limits: { fileSize: GUIDE_UPLOAD_MAX_BYTES },
 }).single('profileImage');
 
 const identityDocumentMulter = multer({
 	storage,
 	fileFilter: (req, file, cb) => {
 		if (DOCUMENT_MIME_TYPES.includes(file.mimetype)) return cb(null, true);
-		return cb(new Error('Only PDF, PNG, JPG, JPEG, WEBP files are allowed'));
+		return cb(new Error('Only PDF, PNG, JPG, JPEG files are allowed'));
 	},
-	limits: { fileSize: 10 * 1024 * 1024 },
+	limits: { fileSize: GUIDE_UPLOAD_MAX_BYTES },
 }).single('document');
 
 /** Shared error normaliser for the two single-file parsers below. */

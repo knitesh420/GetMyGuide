@@ -194,6 +194,11 @@ export const apiService = {
     config?: AxiosRequestConfig,
   ): Promise<ApiResponse<T>> =>
     apiClient.patch(url, data, config).then((res) => unwrap<T>(res.data)),
+
+  getBlob: (url: string, config?: AxiosRequestConfig): Promise<Blob> =>
+    apiClient
+      .get<Blob>(url, { ...config, responseType: "blob" })
+      .then((res) => res.data),
 };
 
 export const publicApiService = {

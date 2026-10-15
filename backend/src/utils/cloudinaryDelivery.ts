@@ -78,26 +78,6 @@ export function parseCloudinaryUrl(url: string): ParsedCloudinaryUrl | null {
 }
 
 /**
- * A signed delivery URL for a stored Cloudinary asset. Hands back the input
- * unchanged when it is not a parseable Cloudinary URL, so a legacy local
- * filename (which is served off disk, not from Cloudinary) passes through
- * without harm.
- */
-export function signedDeliveryUrl(url: string): string {
-	const parsed = parseCloudinaryUrl(url);
-	if (!parsed) return url;
-
-	return cloudinary.url(parsed.publicId, {
-		resource_type: parsed.resourceType,
-		type: parsed.deliveryType,
-		...(parsed.format ? { format: parsed.format } : {}),
-		...(parsed.version ? { version: parsed.version } : {}),
-		sign_url: true,
-		secure: true,
-	});
-}
-
-/**
  * A short-lived URL that serves the ORIGINAL asset bytes from Cloudinary's API
  * host rather than the CDN.
  *
@@ -114,14 +94,12 @@ export function signedDeliveryUrl(url: string): string {
  * can mint one (it needs the API secret), and it carries an expiry, so unlike a
  * signed delivery URL it stops working shortly after it is handed out.
  *
- * Returns null when this endpoint cannot address the asset, so callers fall back
- * to `signedDeliveryUrl`:
+ * Returns null when this endpoint cannot address the asset:
  *   - the stored value is not a Cloudinary URL;
  *   - it carries no file extension (the endpoint requires an explicit `format`);
  *   - signing is impossible because the API credentials are not configured, in
- *     which case the SDK throws "Must supply api_key". Degrading to the CDN URL
- *     keeps images working on a misconfigured server rather than turning every
- *     document into a 500.
+ *     which case the SDK throws "Must supply api_key". Callers must report that
+ *     the secure download is unavailable rather than falling back to delivery.
  */
 export function originalDownloadUrl(url: string, expiresInSeconds = 300): string | null {
 	const parsed = parseCloudinaryUrl(url);

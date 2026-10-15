@@ -13,6 +13,7 @@ import {
   fetchGuideSubscriptionHistory,
 } from "@/lib/redux/thunks/guide/guideThunk";
 import type { GuideSubscriptionRecord } from "@/lib/data";
+import { GUIDE_MEMBERSHIP_FEE } from "@/lib/guideMembership";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import PaymentStatusOverlay from "@/components/animations/PaymentStatusOverlay";
@@ -37,7 +38,6 @@ import {
 } from "@/components/guide";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const GUIDE_MEMBERSHIP_FEE = 399;
 
 const rupees = (amount: number) => `₹${(amount ?? 0).toLocaleString("en-IN")}`;
 
