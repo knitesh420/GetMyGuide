@@ -20,20 +20,24 @@ email.
 
 - Node.js 20+
 - pnpm
-- MongoDB Atlas connection string for the backend
+- MongoDB running locally, or a MongoDB connection string for the backend
 - Razorpay, Resend, and Cloudinary credentials for payment, email, and media flows
 
 ### Setup
 
 ```bash
-# Copy the environment templates
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
+# PowerShell: copy the environment templates from the repository root
+Copy-Item backend/.env.example backend/.env
+Copy-Item frontend/.env.example frontend/.env
 
 # Install dependencies
-cd backend && pnpm install
-cd ../frontend && pnpm install
+Set-Location backend
+pnpm install
+Set-Location ../frontend
+pnpm install
 ```
+
+In Bash, use `cp` instead of `Copy-Item` and `cd` instead of `Set-Location`.
 
 ### Run locally
 
@@ -49,9 +53,9 @@ pnpm dev
 # http://localhost:3000
 ```
 
-The app is split into a monorepo: the backend exposes the API on port `8000` and the frontend runs on `3000`. Use the `.env.example` templates as the starting point for real credentials and never commit actual secrets.
+The app is split into a monorepo: the backend exposes the API on port `8000` and the frontend runs on `3000`. Start each app in its own terminal. Use the `.env.example` templates as the starting point for configuration and never commit actual secrets.
 
-> Important: this workspace currently contains a production-oriented backend configuration on the machine where it is running. In practice, `backend/.env` may point to a live MongoDB Atlas instance and real payment/email providers; do not run scripts or local dev commands without confirming the intended environment.
+> **Database safety:** Before starting the backend or running scripts, verify that `DATABASE_URL` points to the intended database. The backend template defaults to local MongoDB; using a remote or production database can affect real data.
 
 ---
 
@@ -86,24 +90,24 @@ The app is split into a monorepo: the backend exposes the API on port `8000` and
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Frontend framework | Next.js 16 (App Router), React, TypeScript |
-| State management | Redux Toolkit (`createSlice`, `createAsyncThunk`) |
-| HTTP client | Axios (`lib/service/api.ts`), cookie-based, single-flight 401→refresh→retry |
-| UI components | shadcn/ui (Radix primitives) + Tailwind CSS |
-| Backend framework | Express 5 + TypeScript |
-| Database | MongoDB Atlas via Mongoose |
-| Auth | JWT (access + refresh) in **httpOnly cookies** — never localStorage |
-| Password hashing | bcrypt |
-| Payments | Razorpay (orders, webhooks, refunds) |
-| Email | Resend (transactional templates, plain HTML strings) |
-| File uploads | Multer (disk storage) + Cloudinary (some assets) |
-| Validation | Zod (backend request validators) |
-| Testing | Jest + mongodb-memory-server (unit/integration) |
-| Charts | Recharts, via the shadcn/ui `chart.tsx` wrapper — Phase 2 Reports & Analytics only |
-| PDF generation | PDFKit + QRCode — Phase 7 invoices, streamed through the session |
-| Dialogs | SweetAlert2 via `frontend/lib/swal.ts` (lazy-imported; replaces all native `alert`/`confirm`) |
+| Layer              | Technology                                                                                    |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| Frontend framework | Next.js 16 (App Router), React, TypeScript                                                    |
+| State management   | Redux Toolkit (`createSlice`, `createAsyncThunk`)                                             |
+| HTTP client        | Axios (`lib/service/api.ts`), cookie-based, single-flight 401→refresh→retry                   |
+| UI components      | shadcn/ui (Radix primitives) + Tailwind CSS                                                   |
+| Backend framework  | Express 5 + TypeScript                                                                        |
+| Database           | MongoDB Atlas via Mongoose                                                                    |
+| Auth               | JWT (access + refresh) in **httpOnly cookies** — never localStorage                           |
+| Password hashing   | bcrypt                                                                                        |
+| Payments           | Razorpay (orders, webhooks, refunds)                                                          |
+| Email              | Resend (transactional templates, plain HTML strings)                                          |
+| File uploads       | Multer (disk storage) + Cloudinary (some assets)                                              |
+| Validation         | Zod (backend request validators)                                                              |
+| Testing            | Jest + mongodb-memory-server (unit/integration)                                               |
+| Charts             | Recharts, via the shadcn/ui `chart.tsx` wrapper — Phase 2 Reports & Analytics only            |
+| PDF generation     | PDFKit + QRCode — Phase 7 invoices, streamed through the session                              |
+| Dialogs            | SweetAlert2 via `frontend/lib/swal.ts` (lazy-imported; replaces all native `alert`/`confirm`) |
 
 ---
 
@@ -136,21 +140,21 @@ other; both resolve identically.
 
 Backend (`backend/.env`):
 
-| Variable | Purpose |
-|---|---|
-| `NODE_ENV`, `PORT`, `OS` | Runtime config |
-| `DATABASE_URL` | MongoDB Atlas connection string |
-| `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` (falls back to `JWT_SECRET`) | Token signing |
-| `JWT_ACCESS_EXPIRE` / `JWT_REFRESH_EXPIRE` | Token lifetimes (default `1d` / `3d`) |
-| `RESEND_API_KEY` | Transactional email |
-| `RAZORPAY_API_KEY` / `RAZORPAY_API_SECRET` / `RAZORPAY_WEBHOOK_SECRET` | Payments |
-| `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Media hosting |
-| `COMPANY_*` (`NAME`/`ADDRESS`/`LOGO_URL`/`SUPPORT_EMAIL`/`SUPPORT_PHONE`/`WEBSITE`) | Branding shown in emails/invoices |
-| `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PHONE` / `ADMIN_PASSWORD` | Used only by `scripts/seedAdmin.ts` (password ≥ 12 chars) |
-| `NOTIFICATION_WATCHER_INTERVAL_MS` | Phase 2 notification-watcher poll interval (default 5 min) |
-| `PLATFORM_COMMISSION_RATE` | Platform's cut of a completed trip, in **percent** (default `20`) — Phase 6 earnings ledger |
-| `EARNING_HOLD_DAYS` | Days a guide's earning stays `pending` before becoming `payable` (default `3`) |
-| `GUIDE_PAYMENT_LINK_BASE_URL` | Legacy, unused email template reference |
+| Variable                                                                            | Purpose                                                                                     |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `NODE_ENV`, `PORT`                                                                  | Runtime config                                                                              |
+| `DATABASE_URL`                                                                      | MongoDB connection string (the template defaults to local MongoDB)                          |
+| `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` (falls back to `JWT_SECRET`)             | Token signing                                                                               |
+| `JWT_ACCESS_EXPIRE` / `JWT_REFRESH_EXPIRE`                                          | Token lifetimes (default `1d` / `3d`)                                                       |
+| `RESEND_API_KEY`                                                                    | Transactional email                                                                         |
+| `RAZORPAY_API_KEY` / `RAZORPAY_API_SECRET` / `RAZORPAY_WEBHOOK_SECRET`              | Payments                                                                                    |
+| `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET`            | Media hosting                                                                               |
+| `COMPANY_*` (`NAME`/`ADDRESS`/`LOGO_URL`/`SUPPORT_EMAIL`/`SUPPORT_PHONE`/`WEBSITE`) | Branding shown in emails/invoices                                                           |
+| `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PHONE` / `ADMIN_PASSWORD`                     | Used only by `scripts/seedAdmin.ts` (password ≥ 12 chars)                                   |
+| `NOTIFICATION_WATCHER_INTERVAL_MS`                                                  | Phase 2 notification-watcher poll interval (default 5 min)                                  |
+| `PLATFORM_COMMISSION_RATE`                                                          | Platform's cut of a completed trip, in **percent** (default `20`) — Phase 6 earnings ledger |
+| `EARNING_HOLD_DAYS`                                                                 | Days a guide's earning stays `pending` before becoming `payable` (default `3`)              |
+| `GUIDE_PAYMENT_LINK_BASE_URL`                                                       | Legacy, unused email template reference                                                     |
 
 Two money-related constants are **not** env-tunable and live in `config/const.ts`:
 `BOOKING_ADVANCE_RATE = 0.2` (the 20% advance taken up front on a split-payment booking) and
@@ -159,11 +163,11 @@ Two money-related constants are **not** env-tunable and live in `config/const.ts
 
 Frontend (`frontend/.env`):
 
-| Variable | Purpose |
-|---|---|
-| `NEXT_PUBLIC_API_URL` | Backend base URL (`http://localhost:8000` in dev) |
-| `NEXT_PUBLIC_RAZORPAY_KEY_ID` | Razorpay public key for the checkout widget |
-| `NEXT_PUBLIC_SITE_URL` | Canonical site URL (metadata, sitemap, OG tags) |
+| Variable                      | Purpose                                           |
+| ----------------------------- | ------------------------------------------------- |
+| `NEXT_PUBLIC_API_URL`         | Backend base URL (`http://localhost:8000` in dev) |
+| `NEXT_PUBLIC_RAZORPAY_KEY_ID` | Razorpay public key for the checkout widget       |
+| `NEXT_PUBLIC_SITE_URL`        | Canonical site URL (metadata, sitemap, OG tags)   |
 
 Both apps ship a committed **`.env.example`** template (`backend/.env.example`, `frontend/.env.example`)
 — copy it to `.env` and fill in real values. In production the backend runs `assertProductionEnv()`
@@ -206,7 +210,7 @@ changes without a manual rebuild + restart.
   localStorage or a JS-readable cookie.
 - `backend/src/services/jwt.ts` — `generateAccessToken` / `generateRefreshToken` /
   `verifyAccessToken` / `verifyRefreshToken`. Access token payload: `{ userId, role, email, name,
-  tokenVersion }`.
+tokenVersion }`.
 - `backend/src/middleware/VerifySession.ts` — the single source of truth for "who is this
   request." Reads the cookie (falls back to `Authorization: Bearer` for non-browser clients),
   verifies the JWT, then **re-checks `tokenVersion` against the DB** so that logout / password
@@ -277,7 +281,7 @@ This is what a tourist uses to create a real login-capable account with a saved 
 2. **`/verify-otp?email=...`** (`frontend/app/(auth)/verify-otp/page.tsx`) — 6-digit OTP input
    (reuses the shared `InputOTP` component), auto-submits at 6 digits, 60-second resend cooldown
    timer synced with the backend's own cooldown enforcement. "Resend" re-reads the stashed
-   `sessionStorage` payload and calls send-otp again (this *is* the resend mechanism — it's just
+   `sessionStorage` payload and calls send-otp again (this _is_ the resend mechanism — it's just
    another send-otp call, which overwrites the previous code). On success,
    `POST /session/register/verify-otp` creates the real `Account`, sets the auth cookies, and
    redirects based on role.
@@ -317,7 +321,7 @@ registrationCompleted: boolean
 
 **Registration OTP mechanics** (shared plumbing, also used by guide OTP registration — see below):
 
-- `PendingRegistration` collection stores the *unverified* signup attempt: name, email, phone,
+- `PendingRegistration` collection stores the _unverified_ signup attempt: name, email, phone,
   countryCode, **bcrypt-hashed** password, accountType, **bcrypt-hashed** OTP, `otpExpiresAt`
   (10 min), `attempts` (max 5, then the pending record is deleted and a new send-otp is required),
   `lastSentAt` (enforces the 60s resend cooldown server-side, in addition to a per-email rate
@@ -444,7 +448,7 @@ The `guideenrollments` **collection itself is not dropped** — it is left in Mo
 became an `Account` is still recoverable.
 
 The old flow had **no membership concept** — it was a flat one-time ₹500 fee, and a guide who paid
-through it stayed permanently `status: 'verified'` with no expiry, using the *old* visibility
+through it stayed permanently `status: 'verified'` with no expiry, using the _old_ visibility
 definition (`Account.status === 'verified'`). A one-time migration granted every such guide
 `isVisible: true` and a **fresh 30-day membership window starting from the day it ran** (a goodwill
 grace period, since they'd already paid once under the old model), with `registrationCompleted:
@@ -457,7 +461,7 @@ true` so they're never forced through the registration form as a blocking gate.
 The membership payment endpoints serve **both** the very first payment and every future renewal —
 there's no separate "renew" endpoint.
 
-> **Superseded in part by Phase 6.** The extension math below is unchanged, but a *first* payment no
+> **Superseded in part by Phase 6.** The extension math below is unchanged, but a _first_ payment no
 > longer starts the 30-day window on its own — the window opens when an admin **approves** the
 > guide's KYC, and a rejection auto-refunds the fee. See
 > [Guide Approval, Earnings & Payouts](#guide-approval-earnings--payouts-phase-6).
@@ -479,7 +483,7 @@ base = (membershipExpiryDate exists AND is in the future) ? membershipExpiryDate
 newExpiry = base + 30 days
 ```
 
-This means renewing *early* (after the trial ends and while a paid period is active) extends from
+This means renewing _early_ (after the trial ends and while a paid period is active) extends from
 the **current expiry**, not from "now" — a guide never loses already-paid-for days by renewing
 ahead of expiry. Trial eligibility, approval, and membership expiry all feed the shared public
 eligibility check.
@@ -490,7 +494,7 @@ method:
 1. **Synchronous**: the browser calls `POST /guide/membership/confirm-payment` right after
    Razorpay's checkout succeeds.
 2. **Asynchronous**: Razorpay's webhook (`POST /payment/webhook` → `PaymentService
-   .handleWebhookEvent` → `handlePaymentCaptured` → `updateRegistrationStatus`) independently
+.handleWebhookEvent` → `handlePaymentCaptured` → `updateRegistrationStatus`) independently
    confirms the same payment, and routes membership payments (`reference_type ===
   'guide_membership'`) to the same `finalizeMembershipPaymentByGuideId` method. `reference_id` on
    those transactions is a **`Guide` document id**, not an `Account` id.
@@ -535,7 +539,7 @@ one) — then clears both cookies.
    `tokenVersion` is bumped (forces re-login everywhere else), the OTP record is deleted, and the
    user is logged in immediately with fresh cookies.
 
-This is a genuine *replacement* of the original reset mechanism (which emailed a link containing a
+This is a genuine _replacement_ of the original reset mechanism (which emailed a link containing a
 random token). That change was intentional and confirmed — see the note in
 [Known Legacy / Dead Code](#known-legacy--dead-code).
 
@@ -543,32 +547,32 @@ random token). That change was intentional and confirmed — see the note in
 
 ## Database Models
 
-| Collection | Purpose |
-|---|---|
-| `Account` | Every user — tourist, guide, or admin. See [Authentication](#authentication--authorization) for fields. |
-| `PendingRegistration` | Transient, OTP-gated signup-in-progress (30-min TTL). |
-| `Guide` | The guide profile: KYC, identity documents, and 30-day membership state. Sole source of guide data. |
-| `Tourist` | New account-based tourist travel-preference profile. |
-| `Booking` | Tour-guide bookings (both guest and authenticated-tourist). |
-| `Transaction` | Generic, polymorphic Razorpay payment ledger — shared by guide enrollment, guide membership, and bookings (`reference_type`/`type` distinguish the purpose). |
-| `Storage` | Generic TTL key-value store — used for admin-OTP, password-reset-OTP, and rate-limiter counters. |
-| `WebhookEvent` | Razorpay webhook dedup log. |
-| `IdempotencyKey` | Request-replay protection for payment-adjacent POSTs. |
-| `Package`, `Blog`, `Advertisement`, `ContactInquiry` | Content/marketing collections, unrelated to auth. |
-| `Assignment` | Phase 2 — admin→guide proposal for a `Booking`, plus its accept/decline/reassign history. |
-| `Trip` | Phase 2 — on-the-ground trip execution, created only once a guide accepts an `Assignment`. |
-| `Review` | Phase 2 — tourist rating/feedback for a guide, allowed only after the `Trip` is `completed`. |
-| `Notification` | Phase 2 — in-app notification inbox; idempotent via a unique `dedupeKey` index. |
-| `ActivityLog` | Phase 2 — shared audit trail written by Assignment/Trip/Review actions and the notification watcher. |
-| `GuideLeave` | Phase 3 — a guide's self-declared vacation/emergency leave period (date range + reason). |
-| `Counter` | Phase 4 — atomic per-entity sequence source behind the human-facing business codes (`TO`/`GU`/`BK`/`TR`/`AS`/`PM`). |
-| `RefundRequest` | Phase 5 — tourist/guide cancellation request and its admin decision, plus the per-transaction Razorpay refund results. |
-| `Earning` | Phase 6 — one row per completed `Trip`: gross, commission, net, and payout state. Unique on `trip`. |
-| `Payout` | Phase 6 — an admin-recorded manual settlement covering a batch of `Earning` rows. |
-| `CashPayment` | Phase 6 — cash an admin records as collected on a guide's behalf, outside Razorpay entirely. |
-| `Message` | Phase 7 — in-app chat message scoped to a single `Booking` thread. |
-| `Invoice` | Phase 7 — immutable invoice document with party/booking snapshots; rendered to PDF on demand. |
-| `Location` | Phase 7 — admin-managed destination list (slug, city, image, popular flag) powering discovery. |
+| Collection                                           | Purpose                                                                                                                                                      |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Account`                                            | Every user — tourist, guide, or admin. See [Authentication](#authentication--authorization) for fields.                                                      |
+| `PendingRegistration`                                | Transient, OTP-gated signup-in-progress (30-min TTL).                                                                                                        |
+| `Guide`                                              | The guide profile: KYC, identity documents, and 30-day membership state. Sole source of guide data.                                                          |
+| `Tourist`                                            | New account-based tourist travel-preference profile.                                                                                                         |
+| `Booking`                                            | Tour-guide bookings (both guest and authenticated-tourist).                                                                                                  |
+| `Transaction`                                        | Generic, polymorphic Razorpay payment ledger — shared by guide enrollment, guide membership, and bookings (`reference_type`/`type` distinguish the purpose). |
+| `Storage`                                            | Generic TTL key-value store — used for admin-OTP, password-reset-OTP, and rate-limiter counters.                                                             |
+| `WebhookEvent`                                       | Razorpay webhook dedup log.                                                                                                                                  |
+| `IdempotencyKey`                                     | Request-replay protection for payment-adjacent POSTs.                                                                                                        |
+| `Package`, `Blog`, `Advertisement`, `ContactInquiry` | Content/marketing collections, unrelated to auth.                                                                                                            |
+| `Assignment`                                         | Phase 2 — admin→guide proposal for a `Booking`, plus its accept/decline/reassign history.                                                                    |
+| `Trip`                                               | Phase 2 — on-the-ground trip execution, created only once a guide accepts an `Assignment`.                                                                   |
+| `Review`                                             | Phase 2 — tourist rating/feedback for a guide, allowed only after the `Trip` is `completed`.                                                                 |
+| `Notification`                                       | Phase 2 — in-app notification inbox; idempotent via a unique `dedupeKey` index.                                                                              |
+| `ActivityLog`                                        | Phase 2 — shared audit trail written by Assignment/Trip/Review actions and the notification watcher.                                                         |
+| `GuideLeave`                                         | Phase 3 — a guide's self-declared vacation/emergency leave period (date range + reason).                                                                     |
+| `Counter`                                            | Phase 4 — atomic per-entity sequence source behind the human-facing business codes (`TO`/`GU`/`BK`/`TR`/`AS`/`PM`).                                          |
+| `RefundRequest`                                      | Phase 5 — tourist/guide cancellation request and its admin decision, plus the per-transaction Razorpay refund results.                                       |
+| `Earning`                                            | Phase 6 — one row per completed `Trip`: gross, commission, net, and payout state. Unique on `trip`.                                                          |
+| `Payout`                                             | Phase 6 — an admin-recorded manual settlement covering a batch of `Earning` rows.                                                                            |
+| `CashPayment`                                        | Phase 6 — cash an admin records as collected on a guide's behalf, outside Razorpay entirely.                                                                 |
+| `Message`                                            | Phase 7 — in-app chat message scoped to a single `Booking` thread.                                                                                           |
+| `Invoice`                                            | Phase 7 — immutable invoice document with party/booking snapshots; rendered to PDF on demand.                                                                |
+| `Location`                                           | Phase 7 — admin-managed destination list (slug, city, image, popular flag) powering discovery.                                                               |
 
 ---
 
@@ -580,87 +584,87 @@ admin).
 
 ### `/session` — auth
 
-| Method | Path | Auth | Notes |
-|---|---|---|---|
-| POST | `/session/register/send-otp` | public, rate-limited | Tourist/guide OTP-gated signup, step 1 |
-| POST | `/session/register/verify-otp` | public, rate-limited | Step 2 — creates Account, logs in |
-| POST | `/session/login` | public, rate-limited | Password login (blocks admin) |
-| POST | `/session/login/send-otp` | public, rate-limited | Admin OTP login, step 1 |
-| POST | `/session/login/verify-otp` | public, rate-limited | Admin OTP login, step 2 |
-| POST | `/session/forgot-password` | public, rate-limited | OTP-based reset, step 1 |
-| POST | `/session/reset-password` | public, rate-limited | OTP-based reset, step 2 |
-| POST | `/session/refresh` | public (needs refresh cookie) | Rotates tokens |
-| GET | `/session/validate-auth` | VerifySession | "Who am I" — source of truth for client auth state |
-| POST | `/session/logout` | VerifySession | Bumps tokenVersion, clears cookies |
-| POST | `/session/signup` | public | **Legacy**, unlinked from any frontend page |
+| Method | Path                           | Auth                          | Notes                                              |
+| ------ | ------------------------------ | ----------------------------- | -------------------------------------------------- |
+| POST   | `/session/register/send-otp`   | public, rate-limited          | Tourist/guide OTP-gated signup, step 1             |
+| POST   | `/session/register/verify-otp` | public, rate-limited          | Step 2 — creates Account, logs in                  |
+| POST   | `/session/login`               | public, rate-limited          | Password login (blocks admin)                      |
+| POST   | `/session/login/send-otp`      | public, rate-limited          | Admin OTP login, step 1                            |
+| POST   | `/session/login/verify-otp`    | public, rate-limited          | Admin OTP login, step 2                            |
+| POST   | `/session/forgot-password`     | public, rate-limited          | OTP-based reset, step 1                            |
+| POST   | `/session/reset-password`      | public, rate-limited          | OTP-based reset, step 2                            |
+| POST   | `/session/refresh`             | public (needs refresh cookie) | Rotates tokens                                     |
+| GET    | `/session/validate-auth`       | VerifySession                 | "Who am I" — source of truth for client auth state |
+| POST   | `/session/logout`              | VerifySession                 | Bumps tokenVersion, clears cookies                 |
+| POST   | `/session/signup`              | public                        | **Legacy**, unlinked from any frontend page        |
 
 ### `/guide` (aliased at `/guides`)
 
-| Method | Path | Auth | Notes |
-|---|---|---|---|
-| GET | `/guide/profile` | VerifySession | Own profile (Account + Guide) |
-| PUT | `/guide/profile` | VerifyMinLevel('guide') | One-time registration (multipart: KYC + files) |
-| PATCH | `/guide/profile` | VerifyMinLevel('guide') | Post-registration edit — phone/city/type/languages only |
-| PUT/DELETE | `/guide/profile/photo` | VerifyMinLevel('guide') | Replace or remove the profile photo on its own |
-| PUT/DELETE | `/guide/profile/documents/:type` | VerifyMinLevel('guide') | Replace or remove one identity document by type |
-| GET | `/guide/profile/documents/:type/view` | VerifyMinLevel('guide') | **Streams** the guide's own KYC doc through the session (never a raw Cloudinary link) |
-| PUT | `/guide/availability` | VerifySession | Unavailable dates |
-| GET | `/guide/subscription-history` | VerifyMinLevel('guide') | Past membership windows (`membershipHistory`) |
-| POST | `/guide/membership/create-order` | VerifyMinLevel('guide'), idempotency | Membership Razorpay order |
-| POST | `/guide/membership/confirm-payment` | VerifyMinLevel('guide') | Pay the fee — starts the window only if already approved (see [Phase 6](#guide-approval-earnings--payouts-phase-6)) |
-| PUT | `/guide/pricing` | VerifyMinLevel('guide') | Publish half-day / full-day rates — required before direct booking works |
-| PUT | `/guide/bank-details` | VerifyMinLevel('guide') | Payout destination (returned only to the owner and admins) |
-| GET | `/guide/my-bookings` | VerifyMinLevel('guide') | Own direct bookings |
-| GET | `/guide/my-bookings/:id` | VerifyMinLevel('guide') | One own booking |
-| GET | `/guide/all`, `/guide/all-guides` | public | Public listing — **approved** + visible + unexpired membership |
-| GET | `/guide/:id/pricing-details` | public | Published rates for the booking form |
-| GET | `/guide/admin/all` | VerifyMinLevel('admin') | Every guide (active + inactive) + profile, KYC, membership |
-| GET | `/guide/admin/pending-approvals` | VerifyMinLevel('admin') | The KYC review queue |
-| GET | `/guide/admin/:id` | VerifyMinLevel('admin') | Full admin detail view for one guide |
-| GET | `/guide/admin/:id/identity-documents/:type` | VerifyMinLevel('admin') | Streams a KYC doc to the reviewing admin |
-| PATCH | `/guide/:id/approve` | VerifyMinLevel('admin') | Approve KYC — **this is what starts the membership window** |
-| PATCH | `/guide/:id/reject` | VerifyMinLevel('admin') | Reject with a reason — auto-refunds the membership fee |
-| PATCH | `/guide/:id/reactivate` | VerifyMinLevel('admin') | Return a rejected/deactivated guide to review |
-| PUT | `/guide/:id/notes` | VerifyMinLevel('admin') | Internal admin notes (never exposed to the guide) |
-| GET | `/guide/:id/documents/:index` | VerifyMinLevel('admin') | Download a KYC document by index |
-| POST | `/guide/contact-inquiry` | public | Contact form |
-| GET | `/guide/contact-inquiries` | VerifyMinLevel('admin') | List contact inquiries |
-| GET | `/guide/:id` | public | Single guide profile, not visibility-gated |
-| DELETE | `/guide/:id` | VerifyMinLevel('admin') | Deactivate a guide account |
+| Method     | Path                                        | Auth                                 | Notes                                                                                                               |
+| ---------- | ------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| GET        | `/guide/profile`                            | VerifySession                        | Own profile (Account + Guide)                                                                                       |
+| PUT        | `/guide/profile`                            | VerifyMinLevel('guide')              | One-time registration (multipart: KYC + files)                                                                      |
+| PATCH      | `/guide/profile`                            | VerifyMinLevel('guide')              | Post-registration edit — phone/city/type/languages only                                                             |
+| PUT/DELETE | `/guide/profile/photo`                      | VerifyMinLevel('guide')              | Replace or remove the profile photo on its own                                                                      |
+| PUT/DELETE | `/guide/profile/documents/:type`            | VerifyMinLevel('guide')              | Replace or remove one identity document by type                                                                     |
+| GET        | `/guide/profile/documents/:type/view`       | VerifyMinLevel('guide')              | **Streams** the guide's own KYC doc through the session (never a raw Cloudinary link)                               |
+| PUT        | `/guide/availability`                       | VerifySession                        | Unavailable dates                                                                                                   |
+| GET        | `/guide/subscription-history`               | VerifyMinLevel('guide')              | Past membership windows (`membershipHistory`)                                                                       |
+| POST       | `/guide/membership/create-order`            | VerifyMinLevel('guide'), idempotency | Membership Razorpay order                                                                                           |
+| POST       | `/guide/membership/confirm-payment`         | VerifyMinLevel('guide')              | Pay the fee — starts the window only if already approved (see [Phase 6](#guide-approval-earnings--payouts-phase-6)) |
+| PUT        | `/guide/pricing`                            | VerifyMinLevel('guide')              | Publish half-day / full-day rates — required before direct booking works                                            |
+| PUT        | `/guide/bank-details`                       | VerifyMinLevel('guide')              | Payout destination (returned only to the owner and admins)                                                          |
+| GET        | `/guide/my-bookings`                        | VerifyMinLevel('guide')              | Own direct bookings                                                                                                 |
+| GET        | `/guide/my-bookings/:id`                    | VerifyMinLevel('guide')              | One own booking                                                                                                     |
+| GET        | `/guide/all`, `/guide/all-guides`           | public                               | Public listing — **approved** + visible + unexpired membership                                                      |
+| GET        | `/guide/:id/pricing-details`                | public                               | Published rates for the booking form                                                                                |
+| GET        | `/guide/admin/all`                          | VerifyMinLevel('admin')              | Every guide (active + inactive) + profile, KYC, membership                                                          |
+| GET        | `/guide/admin/pending-approvals`            | VerifyMinLevel('admin')              | The KYC review queue                                                                                                |
+| GET        | `/guide/admin/:id`                          | VerifyMinLevel('admin')              | Full admin detail view for one guide                                                                                |
+| GET        | `/guide/admin/:id/identity-documents/:type` | VerifyMinLevel('admin')              | Streams a KYC doc to the reviewing admin                                                                            |
+| PATCH      | `/guide/:id/approve`                        | VerifyMinLevel('admin')              | Approve KYC — **this is what starts the membership window**                                                         |
+| PATCH      | `/guide/:id/reject`                         | VerifyMinLevel('admin')              | Reject with a reason — auto-refunds the membership fee                                                              |
+| PATCH      | `/guide/:id/reactivate`                     | VerifyMinLevel('admin')              | Return a rejected/deactivated guide to review                                                                       |
+| PUT        | `/guide/:id/notes`                          | VerifyMinLevel('admin')              | Internal admin notes (never exposed to the guide)                                                                   |
+| GET        | `/guide/:id/documents/:index`               | VerifyMinLevel('admin')              | Download a KYC document by index                                                                                    |
+| POST       | `/guide/contact-inquiry`                    | public                               | Contact form                                                                                                        |
+| GET        | `/guide/contact-inquiries`                  | VerifyMinLevel('admin')              | List contact inquiries                                                                                              |
+| GET        | `/guide/:id`                                | public                               | Single guide profile, not visibility-gated                                                                          |
+| DELETE     | `/guide/:id`                                | VerifyMinLevel('admin')              | Deactivate a guide account                                                                                          |
 
 ### `/tourist`
 
-| Method | Path | Auth | Notes |
-|---|---|---|---|
-| GET | `/tourist/profile` | VerifyMinLevel('tourist') | Own profile |
-| PUT | `/tourist/profile` | VerifyMinLevel('tourist') | Create/update (free, no payment) |
+| Method | Path               | Auth                      | Notes                            |
+| ------ | ------------------ | ------------------------- | -------------------------------- |
+| GET    | `/tourist/profile` | VerifyMinLevel('tourist') | Own profile                      |
+| PUT    | `/tourist/profile` | VerifyMinLevel('tourist') | Create/update (free, no payment) |
 
 ### `/booking`
 
-| Method | Path | Auth | Notes |
-|---|---|---|---|
-| GET | `/booking/key` | public | Get Razorpay public key for checkout widget |
-| POST | `/booking/guest-booking` | public, rate-limited, idempotency | Guest booking creation (step 1) |
-| POST | `/booking/verify-guest-booking` | public, rate-limited | Verify Razorpay payment and finalize guest booking (step 2) |
-| POST | `/booking/customised-booking` | VerifyMinLevel('tourist'), idempotency | Authenticated tourist booking creation (step 1) |
-| POST | `/booking/verify-booking` | VerifyMinLevel('tourist') | Verify Razorpay payment and finalize tourist booking (step 2) |
-| GET | `/booking/my-bookings` | VerifyMinLevel('tourist') | Get own bookings (logged-in tourist) |
-| GET | `/booking/my-reservations` | VerifyMinLevel('guide') | Get own assigned reservations (logged-in guide) |
-| GET | `/booking/:id` | VerifySession | Get booking detail by ID (tourist owns booking, guide owns reservation, admin any) |
-| GET | `/booking/:id/transaction-status` | VerifySession | Get transaction status for a booking |
-| GET | `/booking` | VerifyMinLevel('admin') | Get all bookings (admin only) |
-| POST | `/booking/:id/allocate-guide` | VerifyMinLevel('admin') | Allocate a guide to a booking |
-| DELETE | `/booking/:id` | VerifyMinLevel('admin') | Delete a booking |
+| Method | Path                              | Auth                                   | Notes                                                                              |
+| ------ | --------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------- |
+| GET    | `/booking/key`                    | public                                 | Get Razorpay public key for checkout widget                                        |
+| POST   | `/booking/guest-booking`          | public, rate-limited, idempotency      | Guest booking creation (step 1)                                                    |
+| POST   | `/booking/verify-guest-booking`   | public, rate-limited                   | Verify Razorpay payment and finalize guest booking (step 2)                        |
+| POST   | `/booking/customised-booking`     | VerifyMinLevel('tourist'), idempotency | Authenticated tourist booking creation (step 1)                                    |
+| POST   | `/booking/verify-booking`         | VerifyMinLevel('tourist')              | Verify Razorpay payment and finalize tourist booking (step 2)                      |
+| GET    | `/booking/my-bookings`            | VerifyMinLevel('tourist')              | Get own bookings (logged-in tourist)                                               |
+| GET    | `/booking/my-reservations`        | VerifyMinLevel('guide')                | Get own assigned reservations (logged-in guide)                                    |
+| GET    | `/booking/:id`                    | VerifySession                          | Get booking detail by ID (tourist owns booking, guide owns reservation, admin any) |
+| GET    | `/booking/:id/transaction-status` | VerifySession                          | Get transaction status for a booking                                               |
+| GET    | `/booking`                        | VerifyMinLevel('admin')                | Get all bookings (admin only)                                                      |
+| POST   | `/booking/:id/allocate-guide`     | VerifyMinLevel('admin')                | Allocate a guide to a booking                                                      |
+| DELETE | `/booking/:id`                    | VerifyMinLevel('admin')                | Delete a booking                                                                   |
 
 ### `/lead`
 
-| Method | Path | Auth | Notes |
-|---|---|---|---|
-| POST | `/lead/contact` | public | Create a contact inquiry / custom tour request |
-| GET | `/lead/contact` | VerifyMinLevel('admin') | Get all contact inquiries / custom tour requests |
-| GET | `/lead/contact/:id` | VerifyMinLevel('admin') | Get details of a specific contact inquiry by ID |
-| PATCH | `/lead/contact/:id/status` | VerifyMinLevel('admin') | Update status, quote amount, or add admin comment for an inquiry |
-| DELETE | `/lead/contact/:id` | VerifyMinLevel('admin') | Delete a contact inquiry |
+| Method | Path                       | Auth                    | Notes                                                            |
+| ------ | -------------------------- | ----------------------- | ---------------------------------------------------------------- |
+| POST   | `/lead/contact`            | public                  | Create a contact inquiry / custom tour request                   |
+| GET    | `/lead/contact`            | VerifyMinLevel('admin') | Get all contact inquiries / custom tour requests                 |
+| GET    | `/lead/contact/:id`        | VerifyMinLevel('admin') | Get details of a specific contact inquiry by ID                  |
+| PATCH  | `/lead/contact/:id/status` | VerifyMinLevel('admin') | Update status, quote amount, or add admin comment for an inquiry |
+| DELETE | `/lead/contact/:id`        | VerifyMinLevel('admin') | Delete a contact inquiry                                         |
 
 ### `/payment`, `/package`, `/blog`, `/advertisement`, `/user`
 
@@ -670,69 +674,69 @@ bookings), dispatched internally by `reference_type`.
 
 ### `/assignment` — Phase 2
 
-| Method | Path | Auth | Notes |
-|---|---|---|---|
-| POST | `/assignment` | VerifyMinLevel('admin') | Propose a guide for a booking — reuses `BookingService.allocateGuide`. Blocked by a Phase 3 availability conflict unless `{ override: true, overrideReason }` is sent (see [Phase 3](#guide-availability--booking-conflict-system-phase-3)) |
-| GET | `/assignment` | VerifyMinLevel('admin') | Paginated list, filter by `status`/`guideId`/`bookingId` |
-| GET | `/assignment/guides` | VerifyMinLevel('admin') | Assignable-guide picker (Account + Guide profile merged) |
-| GET | `/assignment/my` | VerifyMinLevel('guide') | The calling guide's own assignments |
-| GET | `/assignment/:id` | VerifyMinLevel('guide') | Admin or the assigned guide only (service-layer check) |
-| PATCH | `/assignment/:id/respond` | VerifyMinLevel('guide') | `{ action: 'accept'\|'decline', declineReason? }` — accept auto-creates a `Trip` |
-| POST | `/assignment/:id/reassign` | VerifyMinLevel('admin') | Swap to a new guide; blocked once the current assignment is `accepted`. Same Phase 3 override gate as create |
+| Method | Path                       | Auth                    | Notes                                                                                                                                                                                                                                       |
+| ------ | -------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/assignment`              | VerifyMinLevel('admin') | Propose a guide for a booking — reuses `BookingService.allocateGuide`. Blocked by a Phase 3 availability conflict unless `{ override: true, overrideReason }` is sent (see [Phase 3](#guide-availability--booking-conflict-system-phase-3)) |
+| GET    | `/assignment`              | VerifyMinLevel('admin') | Paginated list, filter by `status`/`guideId`/`bookingId`                                                                                                                                                                                    |
+| GET    | `/assignment/guides`       | VerifyMinLevel('admin') | Assignable-guide picker (Account + Guide profile merged)                                                                                                                                                                                    |
+| GET    | `/assignment/my`           | VerifyMinLevel('guide') | The calling guide's own assignments                                                                                                                                                                                                         |
+| GET    | `/assignment/:id`          | VerifyMinLevel('guide') | Admin or the assigned guide only (service-layer check)                                                                                                                                                                                      |
+| PATCH  | `/assignment/:id/respond`  | VerifyMinLevel('guide') | `{ action: 'accept'\|'decline', declineReason? }` — accept auto-creates a `Trip`                                                                                                                                                            |
+| POST   | `/assignment/:id/reassign` | VerifyMinLevel('admin') | Swap to a new guide; blocked once the current assignment is `accepted`. Same Phase 3 override gate as create                                                                                                                                |
 
 ### `/trip` — Phase 2
 
-| Method | Path | Auth | Notes |
-|---|---|---|---|
-| GET | `/trip` | VerifyMinLevel('admin') | Paginated list, filter by `status`/`guideId` |
-| GET | `/trip/my` | VerifyMinLevel('guide') | The calling guide's own trips |
-| GET | `/trip/mine` | VerifyMinLevel('tourist') | The calling tourist's own trips (via their bookings) |
-| GET | `/trip/:id` | VerifyMinLevel('tourist') | Admin, the trip's guide, or the booking's tourist (service-layer check) |
-| PATCH | `/trip/:id/start` | VerifyMinLevel('guide') | Owning guide only; `not-started` → `in-progress` |
-| PATCH | `/trip/:id/complete` | VerifyMinLevel('guide') | Owning guide only; `in-progress` → `completed`, also flips `Booking.status` to `completed` |
-| PATCH | `/trip/:id/cancel` | VerifyMinLevel('admin') | Any non-terminal status → `cancelled` |
+| Method | Path                 | Auth                      | Notes                                                                                      |
+| ------ | -------------------- | ------------------------- | ------------------------------------------------------------------------------------------ |
+| GET    | `/trip`              | VerifyMinLevel('admin')   | Paginated list, filter by `status`/`guideId`                                               |
+| GET    | `/trip/my`           | VerifyMinLevel('guide')   | The calling guide's own trips                                                              |
+| GET    | `/trip/mine`         | VerifyMinLevel('tourist') | The calling tourist's own trips (via their bookings)                                       |
+| GET    | `/trip/:id`          | VerifyMinLevel('tourist') | Admin, the trip's guide, or the booking's tourist (service-layer check)                    |
+| PATCH  | `/trip/:id/start`    | VerifyMinLevel('guide')   | Owning guide only; `not-started` → `in-progress`                                           |
+| PATCH  | `/trip/:id/complete` | VerifyMinLevel('guide')   | Owning guide only; `in-progress` → `completed`, also flips `Booking.status` to `completed` |
+| PATCH  | `/trip/:id/cancel`   | VerifyMinLevel('admin')   | Any non-terminal status → `cancelled`                                                      |
 
 ### `/review` — Phase 2
 
-| Method | Path | Auth | Notes |
-|---|---|---|---|
-| POST | `/review` | VerifyMinLevel('tourist') | Only on a `completed` booking they own; one review per booking |
-| GET | `/review/guide/:guideId` | public | `{ reviews, average, total }` — computed live, never stored on `Guide` |
-| GET | `/review/my` | VerifyMinLevel('tourist') | Own submitted reviews |
-| GET | `/review/mine/guide` | VerifyMinLevel('guide') | Reviews received + rating summary |
-| GET | `/review` | VerifyMinLevel('admin') | Paginated, filter by `guideId`/`minRating`/`isHidden` |
-| PATCH | `/review/:id/hide` | VerifyMinLevel('admin') | Moderation — hide/unhide |
-| DELETE | `/review/:id` | VerifyMinLevel('admin') | Moderation — delete |
+| Method | Path                     | Auth                      | Notes                                                                  |
+| ------ | ------------------------ | ------------------------- | ---------------------------------------------------------------------- |
+| POST   | `/review`                | VerifyMinLevel('tourist') | Only on a `completed` booking they own; one review per booking         |
+| GET    | `/review/guide/:guideId` | public                    | `{ reviews, average, total }` — computed live, never stored on `Guide` |
+| GET    | `/review/my`             | VerifyMinLevel('tourist') | Own submitted reviews                                                  |
+| GET    | `/review/mine/guide`     | VerifyMinLevel('guide')   | Reviews received + rating summary                                      |
+| GET    | `/review`                | VerifyMinLevel('admin')   | Paginated, filter by `guideId`/`minRating`/`isHidden`                  |
+| PATCH  | `/review/:id/hide`       | VerifyMinLevel('admin')   | Moderation — hide/unhide                                               |
+| DELETE | `/review/:id`            | VerifyMinLevel('admin')   | Moderation — delete                                                    |
 
 ### `/notification` — Phase 2
 
-| Method | Path | Auth | Notes |
-|---|---|---|---|
-| GET | `/notification/my` | VerifySession | Own inbox, paginated, `unreadOnly` filter |
-| GET | `/notification/my/unread-count` | VerifySession | `{ count }` |
-| PATCH | `/notification/:id/read` | VerifySession | Must own the notification |
-| PATCH | `/notification/read-all` | VerifySession | Marks every unread notification read |
-| GET | `/notification` | VerifyMinLevel('admin') | Oversight, filter by `type`/`recipient` |
+| Method | Path                            | Auth                    | Notes                                     |
+| ------ | ------------------------------- | ----------------------- | ----------------------------------------- |
+| GET    | `/notification/my`              | VerifySession           | Own inbox, paginated, `unreadOnly` filter |
+| GET    | `/notification/my/unread-count` | VerifySession           | `{ count }`                               |
+| PATCH  | `/notification/:id/read`        | VerifySession           | Must own the notification                 |
+| PATCH  | `/notification/read-all`        | VerifySession           | Marks every unread notification read      |
+| GET    | `/notification`                 | VerifyMinLevel('admin') | Oversight, filter by `type`/`recipient`   |
 
 ### `/report` — Phase 2 (admin only, read-only aggregation)
 
-| Method | Path | Notes |
-|---|---|---|
-| GET | `/report/overview` | Revenue, active guides/tourists, pending assignments, trip counts, membership renewals, avg rating |
-| GET | `/report/bookings-trend?range=7d\|30d\|90d` | Daily booking count + revenue series |
-| GET | `/report/guide-performance` | Per-guide assignments/trips-completed/rating, ranked |
-| GET | `/report/activity-log` | Wraps `ActivityLogService.getAll` |
+| Method | Path                                        | Notes                                                                                              |
+| ------ | ------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| GET    | `/report/overview`                          | Revenue, active guides/tourists, pending assignments, trip counts, membership renewals, avg rating |
+| GET    | `/report/bookings-trend?range=7d\|30d\|90d` | Daily booking count + revenue series                                                               |
+| GET    | `/report/guide-performance`                 | Per-guide assignments/trips-completed/rating, ranked                                               |
+| GET    | `/report/activity-log`                      | Wraps `ActivityLogService.getAll`                                                                  |
 
 ### `/guide-availability` — Phase 3
 
-| Method | Path | Auth | Notes |
-|---|---|---|---|
-| POST | `/guide-availability/leave` | VerifyMinLevel('guide') | Create a vacation/emergency leave period |
-| GET | `/guide-availability/leave/my` | VerifyMinLevel('guide') | The calling guide's own leave history |
-| DELETE | `/guide-availability/leave/:id` | VerifyMinLevel('guide') | Cancel a leave (flips `status` to `cancelled`; not deleted) |
-| GET | `/guide-availability/calendar/me` | VerifyMinLevel('guide') | Own merged calendar: unavailable dates + active leaves + booked ranges |
-| GET | `/guide-availability/guides?startDate&endDate?` | VerifyMinLevel('admin') | Assignable guides annotated `isAvailable` + conflict reasons for a date (range) |
-| GET | `/guide-availability/calendar/:id` | VerifyMinLevel('admin') | Merged calendar for any guide |
+| Method | Path                                            | Auth                    | Notes                                                                           |
+| ------ | ----------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------- |
+| POST   | `/guide-availability/leave`                     | VerifyMinLevel('guide') | Create a vacation/emergency leave period                                        |
+| GET    | `/guide-availability/leave/my`                  | VerifyMinLevel('guide') | The calling guide's own leave history                                           |
+| DELETE | `/guide-availability/leave/:id`                 | VerifyMinLevel('guide') | Cancel a leave (flips `status` to `cancelled`; not deleted)                     |
+| GET    | `/guide-availability/calendar/me`               | VerifyMinLevel('guide') | Own merged calendar: unavailable dates + active leaves + booked ranges          |
+| GET    | `/guide-availability/guides?startDate&endDate?` | VerifyMinLevel('admin') | Assignable guides annotated `isAvailable` + conflict reasons for a date (range) |
+| GET    | `/guide-availability/calendar/:id`              | VerifyMinLevel('admin') | Merged calendar for any guide                                                   |
 
 ### `/tourguide` — Phase 5 (direct guide booking)
 
@@ -740,65 +744,65 @@ The tourist picks the guide themselves and pays a 20% advance against that guide
 rate; the balance is collected later. Distinct from `/booking`, where an admin allocates a guide
 after the fact. Every literal path is registered **before** the `/:id` matcher.
 
-| Method | Path | Auth | Notes |
-|---|---|---|---|
-| GET | `/tourguide/quote` | public | Server-computed price breakdown (total / advance / balance) |
-| POST | `/tourguide/create-order` | tourist or admin, idempotency | Advance Razorpay order; availability is checked here |
-| POST | `/tourguide/verify-and-create` | tourist or admin | Verify the advance and create the booking |
-| GET | `/tourguide/user-bookings` | tourist or admin | The caller's direct bookings |
-| GET | `/tourguide/all` | VerifyMinLevel('admin') | All direct bookings |
-| POST | `/tourguide/:id/create-final-order` | VerifySession, idempotency | Order for the outstanding balance |
-| POST | `/tourguide/:id/verify-final-payment` | VerifySession | Settle the balance |
-| POST | `/tourguide/:id/cancel` | VerifySession | Cancel (opens a `RefundRequest`) |
-| PATCH | `/tourguide/:id/status` | VerifyMinLevel('admin') | Move the booking's status |
-| PATCH | `/tourguide/:id/reassign-guide` | VerifyMinLevel('admin') | Swap the guide on a direct booking |
-| GET | `/tourguide/:id` | VerifySession | One booking (ownership checked in the service) |
+| Method | Path                                  | Auth                          | Notes                                                       |
+| ------ | ------------------------------------- | ----------------------------- | ----------------------------------------------------------- |
+| GET    | `/tourguide/quote`                    | public                        | Server-computed price breakdown (total / advance / balance) |
+| POST   | `/tourguide/create-order`             | tourist or admin, idempotency | Advance Razorpay order; availability is checked here        |
+| POST   | `/tourguide/verify-and-create`        | tourist or admin              | Verify the advance and create the booking                   |
+| GET    | `/tourguide/user-bookings`            | tourist or admin              | The caller's direct bookings                                |
+| GET    | `/tourguide/all`                      | VerifyMinLevel('admin')       | All direct bookings                                         |
+| POST   | `/tourguide/:id/create-final-order`   | VerifySession, idempotency    | Order for the outstanding balance                           |
+| POST   | `/tourguide/:id/verify-final-payment` | VerifySession                 | Settle the balance                                          |
+| POST   | `/tourguide/:id/cancel`               | VerifySession                 | Cancel (opens a `RefundRequest`)                            |
+| PATCH  | `/tourguide/:id/status`               | VerifyMinLevel('admin')       | Move the booking's status                                   |
+| PATCH  | `/tourguide/:id/reassign-guide`       | VerifyMinLevel('admin')       | Swap the guide on a direct booking                          |
+| GET    | `/tourguide/:id`                      | VerifySession                 | One booking (ownership checked in the service)              |
 
 ### `/refund` — Phase 5
 
-| Method | Path | Auth | Notes |
-|---|---|---|---|
-| POST | `/refund/request` | VerifySession | Open a cancellation request; one pending request per booking (partial unique index) |
-| GET | `/refund/my` | VerifySession | Own requests |
-| GET | `/refund` | VerifyMinLevel('admin') | All requests, filterable |
-| PATCH | `/refund/:id/approve` | VerifyMinLevel('admin') | Approve — issues the Razorpay refund(s) |
-| PATCH | `/refund/:id/reject` | VerifyMinLevel('admin') | Reject with a note |
-| POST | `/refund/:id/retry` | VerifyMinLevel('admin') | Retry a refund that came back `failed` |
-| GET | `/refund/:id` | VerifySession | One request |
+| Method | Path                  | Auth                    | Notes                                                                               |
+| ------ | --------------------- | ----------------------- | ----------------------------------------------------------------------------------- |
+| POST   | `/refund/request`     | VerifySession           | Open a cancellation request; one pending request per booking (partial unique index) |
+| GET    | `/refund/my`          | VerifySession           | Own requests                                                                        |
+| GET    | `/refund`             | VerifyMinLevel('admin') | All requests, filterable                                                            |
+| PATCH  | `/refund/:id/approve` | VerifyMinLevel('admin') | Approve — issues the Razorpay refund(s)                                             |
+| PATCH  | `/refund/:id/reject`  | VerifyMinLevel('admin') | Reject with a note                                                                  |
+| POST   | `/refund/:id/retry`   | VerifyMinLevel('admin') | Retry a refund that came back `failed`                                              |
+| GET    | `/refund/:id`         | VerifySession           | One request                                                                         |
 
 ### `/earning` and `/cash-payment` — Phase 6
 
-| Method | Path | Auth | Notes |
-|---|---|---|---|
-| GET | `/earning/my` | VerifyMinLevel('guide') | Own earnings ledger |
-| GET | `/earning/my/summary` | VerifyMinLevel('guide') | Pending / payable / paid totals |
-| GET | `/earning/my/payouts` | VerifyMinLevel('guide') | Own settlement history |
-| GET | `/earning` | VerifyMinLevel('admin') | All earnings |
-| GET | `/earning/payout-queue` | VerifyMinLevel('admin') | Guides with `payable` earnings awaiting settlement |
-| GET/POST | `/earning/payouts` | VerifyMinLevel('admin') | List / record a manual payout against a batch of earnings |
-| GET | `/cash-payment/my` | VerifyMinLevel('guide') | Cash recorded against the calling guide |
-| GET | `/cash-payment/guide/:id` | VerifyMinLevel('admin') | Cash for one guide |
-| GET/POST | `/cash-payment` | VerifyMinLevel('admin') | List / record a cash collection |
-| PATCH/DELETE | `/cash-payment/:id` | VerifyMinLevel('admin') | Correct, or **void** (soft, with a reason — never hard-deleted) |
+| Method       | Path                      | Auth                    | Notes                                                           |
+| ------------ | ------------------------- | ----------------------- | --------------------------------------------------------------- |
+| GET          | `/earning/my`             | VerifyMinLevel('guide') | Own earnings ledger                                             |
+| GET          | `/earning/my/summary`     | VerifyMinLevel('guide') | Pending / payable / paid totals                                 |
+| GET          | `/earning/my/payouts`     | VerifyMinLevel('guide') | Own settlement history                                          |
+| GET          | `/earning`                | VerifyMinLevel('admin') | All earnings                                                    |
+| GET          | `/earning/payout-queue`   | VerifyMinLevel('admin') | Guides with `payable` earnings awaiting settlement              |
+| GET/POST     | `/earning/payouts`        | VerifyMinLevel('admin') | List / record a manual payout against a batch of earnings       |
+| GET          | `/cash-payment/my`        | VerifyMinLevel('guide') | Cash recorded against the calling guide                         |
+| GET          | `/cash-payment/guide/:id` | VerifyMinLevel('admin') | Cash for one guide                                              |
+| GET/POST     | `/cash-payment`           | VerifyMinLevel('admin') | List / record a cash collection                                 |
+| PATCH/DELETE | `/cash-payment/:id`       | VerifyMinLevel('admin') | Correct, or **void** (soft, with a reason — never hard-deleted) |
 
 ### `/message`, `/invoice`, `/location`, `/dashboard` — Phase 7
 
-| Method | Path | Auth | Notes |
-|---|---|---|---|
-| GET | `/message/threads` | VerifySession | The caller's booking threads |
-| GET | `/message/unread-count` | VerifySession | `{ count }` |
-| GET/POST | `/message/booking/:id` | VerifySession | Read / post in one booking's thread |
-| PATCH | `/message/booking/:id/read` | VerifySession | Mark the thread read |
-| GET | `/invoice` | VerifySession | Own invoices (admins see all) |
-| GET | `/invoice/:id` | VerifySession | One invoice |
-| GET | `/invoice/:id/download` | VerifySession | Streams the rendered PDF |
-| POST | `/invoice/:id/resend` | VerifyMinLevel('admin') | Re-email the invoice |
-| GET | `/invoice/admin/export` | VerifyMinLevel('admin') | Bulk export for accounting |
-| GET | `/location` (also `/locations`) | public | Active destinations |
-| GET | `/location/:id` | public | One destination |
-| POST/PATCH/PUT/DELETE | `/location[/:id]` | VerifyMinLevel('admin') | Destination CRUD (multipart image upload) |
-| GET | `/location/admin/all` | VerifyMinLevel('admin') | Includes inactive/soft-deleted |
-| GET | `/dashboard/stats` | VerifySession | **Role-aware** summary tiles — the shape is chosen server-side from the session, so the frontend calls it without knowing the role |
+| Method                | Path                            | Auth                    | Notes                                                                                                                              |
+| --------------------- | ------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| GET                   | `/message/threads`              | VerifySession           | The caller's booking threads                                                                                                       |
+| GET                   | `/message/unread-count`         | VerifySession           | `{ count }`                                                                                                                        |
+| GET/POST              | `/message/booking/:id`          | VerifySession           | Read / post in one booking's thread                                                                                                |
+| PATCH                 | `/message/booking/:id/read`     | VerifySession           | Mark the thread read                                                                                                               |
+| GET                   | `/invoice`                      | VerifySession           | Own invoices (admins see all)                                                                                                      |
+| GET                   | `/invoice/:id`                  | VerifySession           | One invoice                                                                                                                        |
+| GET                   | `/invoice/:id/download`         | VerifySession           | Streams the rendered PDF                                                                                                           |
+| POST                  | `/invoice/:id/resend`           | VerifyMinLevel('admin') | Re-email the invoice                                                                                                               |
+| GET                   | `/invoice/admin/export`         | VerifyMinLevel('admin') | Bulk export for accounting                                                                                                         |
+| GET                   | `/location` (also `/locations`) | public                  | Active destinations                                                                                                                |
+| GET                   | `/location/:id`                 | public                  | One destination                                                                                                                    |
+| POST/PATCH/PUT/DELETE | `/location[/:id]`               | VerifyMinLevel('admin') | Destination CRUD (multipart image upload)                                                                                          |
+| GET                   | `/location/admin/all`           | VerifyMinLevel('admin') | Includes inactive/soft-deleted                                                                                                     |
+| GET                   | `/dashboard/stats`              | VerifySession           | **Role-aware** summary tiles — the shape is chosen server-side from the session, so the frontend calls it without knowing the role |
 
 ---
 
@@ -865,7 +869,7 @@ service, distinguished only by `reference_id` / `reference_type` / `type` on the
 document. Signature verification (`verifyRazorpaySignature`, HMAC-SHA256 over
 `order_id|payment_id`) happens both on the synchronous confirm endpoints and independently via the
 webhook (`RAZORPAY_WEBHOOK_SECRET`-verified) — this dual-path design is intentional (see
-[Guide Membership Lifecycle](#guide-membership-lifecycle)).         
+[Guide Membership Lifecycle](#guide-membership-lifecycle)).
 
 ---
 
@@ -901,22 +905,22 @@ Located in `backend/src/scripts/`, run via
   place but copied only `languages`, `city` and `photo`.)
 - **`backfillBusinessCodes.ts`** — Phase 4. Mints the human-facing codes (`TO`/`GU`/`BK`/`TR`/`AS`/
   `PM`) onto documents that predate the code fields. Computes its starting sequence from the highest
-  code already in use *plus* the `Counter`, so it can never collide with codes the schema hooks have
+  code already in use _plus_ the `Counter`, so it can never collide with codes the schema hooks have
   minted since deploy; oldest documents get the lowest numbers. **Dry run by default**, `--commit`
   to write.
 - **`backfillGuideApproval.ts`** — Phase 6. Sets `approvalStatus` on guides that predate the KYC
   review flow: `isVisible: true → 'approved'` (grandfathered — they were already live),
-  `isVisible: false → 'pending'`. Until this runs, `utils/guideApproval.ts` reads an *absent* status
+  `isVisible: false → 'pending'`. Until this runs, `utils/guideApproval.ts` reads an _absent_ status
   as approved-if-already-visible, so nobody gets delisted; the script just makes that inference
   explicit in the data. Only touches rows still lacking a status, so it can't overwrite a real admin
   decision. **Dry run by default**, `--commit` to write. ⚠️ **Not yet run against production.**
 - **`secureGuideIdentityProofs.ts`** — flips existing Cloudinary KYC assets from public `upload` to
   `access_mode: authenticated`, so a proof can only be delivered through a signed URL. The delivery
-  URL is unchanged, so **no database migration is involved**. Run it *before* enabling PDF/ZIP
+  URL is unchanged, so **no database migration is involved**. Run it _before_ enabling PDF/ZIP
   delivery in the Cloudinary console, so the image proofs are private before that setting makes the
   PDFs deliverable too. Idempotent (already-authenticated assets are skipped). **Dry run by
   default**, `--commit` to write.
-- **`seedAdmin.ts`** — the *only* supported way to create an admin account (reads
+- **`seedAdmin.ts`** — the _only_ supported way to create an admin account (reads
   `ADMIN_NAME/EMAIL/PHONE/PASSWORD` from env). Public signup can never create an admin.
 
 Every backfill script above is **dry-run by default and requires `--commit` to write**, deliberately:
@@ -1086,7 +1090,7 @@ HTTP client was introduced. New pages live under `dashboard/admin/**` (a fresh s
 existing `DashboardLayout`/`Sidebar`/`Header`), `dashboard/guide/**`, and `dashboard/user/**`, plus
 one shared `dashboard/notifications` page used by all three roles. `dashboard/admin/**` pages each
 carry their own client-side `role !== 'admin'` guard, since the shared `dashboard/layout.tsx` only
-checks *authentication*, not role — see [Frontend Route Map](#frontend-route-map).
+checks _authentication_, not role — see [Frontend Route Map](#frontend-route-map).
 
 The pre-existing `Sidebar.tsx` nav arrays gained new entries for all of the above (Assignments,
 Trips, Reviews, Reports, Activity Log, Notifications) — additive only; no existing entry was
@@ -1104,7 +1108,7 @@ Payment, Membership, Guide Profile, Booking, and Trip were **not rewritten**. Ex
 collection's shape changed (`ActivityLogTargetType` gained a `'GuideLeave'` member, additive), and
 the only behavioral change to existing code is that `AssignmentService.createAssignment` /
 `reassignGuide` now run a conflict check before assigning — everything else is new, additive
-code that only *reads* from `Booking`/`Assignment`/`Trip`.
+code that only _reads_ from `Booking`/`Assignment`/`Trip`.
 
 ### The data-model reality that shapes this feature
 
@@ -1147,7 +1151,7 @@ Guides" panel and the Assign-Guide modal's per-guide conflict badges.
 
 `AssignmentService.createAssignment` / `reassignGuide` both call the conflict check before
 assigning. If there's a conflict and the caller didn't pass `{ override: true, overrideReason }`,
-the request is rejected with a `ConflictError` listing the reasons. If the admin *does* override, the
+the request is rejected with a `ConflictError` listing the reasons. If the admin _does_ override, the
 assignment proceeds and an `assignment.conflict_overridden` entry is written to the existing
 `ActivityLog` (actor, conflicts, and the reason), so every forced double-booking is auditable.
 
@@ -1263,7 +1267,7 @@ Both codebases now typecheck clean (`tsc --noEmit` → 0 errors on each) and a f
 - A possible pricing double-count in `utils/priceCalculator.ts` (excursion allowance added to two
   buckets) is flagged but untouched pending product confirmation.
 
-> **Note**: the "known limitations" above describe the state *at the time of that pass*. The
+> **Note**: the "known limitations" above describe the state _at the time of that pass_. The
 > missing-backend domains listed there were subsequently built — see Phases 4–7 below.
 
 ---
@@ -1293,7 +1297,7 @@ Deleted rows therefore disappear from ordinary reads without every call site bei
 an admin or script can still reach them by naming `deletedAt` in the filter.
 
 **Gotcha worth knowing** (it cost real debugging time): in Mongoose, declaring a field as a bare
-`{}` produces a *phantom nested object* rather than a mixed-type field, and writes to it silently
+`{}` produces a _phantom nested object_ rather than a mixed-type field, and writes to it silently
 vanish. Nested schema fields in this layer are declared explicitly, field by field, for that reason.
 
 ### History trails
@@ -1313,11 +1317,11 @@ calling `/tourguide/*`, which had no backend at all.
 
 Two booking models now coexist, deliberately:
 
-| | `/booking` (pre-existing) | `/tourguide` (Phase 5) |
-|---|---|---|
-| Who picks the guide | An admin allocates one afterwards | The tourist picks from the guide's profile |
-| Price source | Package / quote pricing | The guide's **published day rate** (`Guide.pricing`) |
-| Payment | Full amount up front | 20% advance now, balance later |
+|                     | `/booking` (pre-existing)         | `/tourguide` (Phase 5)                               |
+| ------------------- | --------------------------------- | ---------------------------------------------------- |
+| Who picks the guide | An admin allocates one afterwards | The tourist picks from the guide's profile           |
+| Price source        | Package / quote pricing           | The guide's **published day rate** (`Guide.pricing`) |
+| Payment             | Full amount up front              | 20% advance now, balance later                       |
 
 ### Server-derived pricing — the security property
 
@@ -1374,8 +1378,8 @@ membership they'd paid for or their free trial.
 
 `approvalStatus` and `membershipPendingActivation` deliberately have **no schema default**. Rows
 written before this flow existed must stay distinguishable from a guide an admin has actually
-looked at — a default would erase that distinction. Reads treat an absent status as approved *if the
-guide is already visible* (grandfathering), which is exactly what `backfillGuideApproval.ts` then
+looked at — a default would erase that distinction. Reads treat an absent status as approved _if the
+guide is already visible_ (grandfathering), which is exactly what `backfillGuideApproval.ts` then
 makes explicit.
 
 **Rejection auto-refunds** the membership fee. The presence of `Guide.membershipRefund` is what
@@ -1401,12 +1405,12 @@ Two design decisions worth preserving:
 1. **`accrueForTrip` never throws.** A ledger failure must not roll back a trip the guide has
    already finished in the real world — it logs and moves on.
 2. **The unique index on `Earning.trip` is the idempotency guard**, not an application check. A
-   retry or double-complete hits a duplicate-key error, which is swallowed *by error code
-   specifically* (11000) and nothing else, making the accrual a no-op rather than paying twice.
+   retry or double-complete hits a duplicate-key error, which is swallowed _by error code
+   specifically_ (11000) and nothing else, making the accrual a no-op rather than paying twice.
 
 ### Manual payouts
 
-There is **no automated disbursement** — payouts are settled out-of-band and *recorded*. An admin
+There is **no automated disbursement** — payouts are settled out-of-band and _recorded_. An admin
 selects a batch of `payable` earnings and records a `Payout` with a method
 (`bank_transfer`/`upi`/`cash`/`other`) and a reference. `Payout.paidTo` is a **snapshot, not a
 ref**: if the guide later edits their bank details, the record of where money actually went must not
@@ -1454,7 +1458,7 @@ was world-readable to anyone who had it. They are now `access_mode: authenticate
 never hands out a Cloudinary link at all: `GET /guide/profile/documents/:type/view` (owner) and
 `GET /guide/admin/:id/identity-documents/:type` (admin) **stream the document through the session**.
 
-The 401 that made PDF proofs unviewable was *not* an auth bug in this codebase — it was Cloudinary's
+The 401 that made PDF proofs unviewable was _not_ an auth bug in this codebase — it was Cloudinary's
 account-level "Allow delivery of PDF and ZIP files" setting being off. The fix was to stop relying
 on delivery URLs entirely and download through the Admin API server-side, which bypasses that gate.
 `secureGuideIdentityProofs.ts` locks down the assets uploaded before this change.
